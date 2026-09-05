@@ -1,0 +1,63 @@
+﻿# ============================
+# NEXT.JS / NODE
+# ============================
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================
+# SPRING BOOT / JAVA
+# ============================
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# ============================
+# VARIABLES D'ENVIRONNEMENT
+# ============================
+.env
+.env.*
+!.env.example
+
+# ============================
+# IDE
+# ============================
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# ============================
+# LOGS
+# ============================
+*.log
+logs/
+
+# ============================
+# SYSTEME
+# ============================
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ============================
+# FICHIERS TEMPORAIRES
+# ============================
+*.tmp
+*.temp
+*.bak
+
+# Sauvegardes de configuration sensibles
+application.properties.backup
+
+# VS Code workspace
+*.code-workspace
