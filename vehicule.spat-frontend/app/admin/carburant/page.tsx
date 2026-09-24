@@ -1,26 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
 
-interface TransactionCarburant {
+interface Vehicule {
   id: number;
-  vehicule: string;
-  date: string;
-  litres: number;
-  montant: number;
-  station: string;
-  km: number;
+  immatriculation: string;
+  modeleType?: string | null;
+  categorie?: string | null;
+  statut?: string | null;
 }
 
-// --- Icônes SVG modernes ---
-const IconEdit = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    <path d="m15 5 4 4" />
-  </svg>
-);
+interface TransactionCarburant {
+  id: string;
+  vehicule?: Vehicule | null;
+  type: "DOTATION" | "CONSOMMATION" | string;
+  quantiteLitres: number;
+  dateOperation: string;
+  prixUnitaire?: number | null;
+  montantTotal?: number | null;
+  kilometrage?: number | null;
+  station?: string | null;
+  mission?: string | null;
+  justificatif?: string | null;
+  observation?: string | null;
+  agentEmail?: string | null;
+  dateCreation?: string | null;
+}
 
 const IconTrash = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -31,96 +40,189 @@ const IconTrash = () => (
   </svg>
 );
 
+function dateLocaleInput() {
+  const maintenant = new Date();
+  const decalage = maintenant.getTimezoneOffset() * 60_000;
+  return new Date(maintenant.getTime() - decalage).toISOString().slice(0, 10);
+}
+
 export default function CarburantPage() {
   const router = useRouter();
+  const API = process.env.NEXT_PUBLIC_API_URL;
+
   const [transactions, setTransactions] = useState<TransactionCarburant[]>([]);
+  const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [chargement, setChargement] = useState(true);
-
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
-  // =========================================================
-  // ROLE / LECTURE SEULE (DIRECTEUR_DFP)
-  // =========================================================
-
   const [role, setRole] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
+  const [formOuvert, setFormOuvert] = useState(false);
+  const [envoi, setEnvoi] = useState(false);
+
+  const [vehiculeId, setVehiculeId] = useState("");
+  const [type, setType] = useState<"DOTATION" | "CONSOMMATION">("CONSOMMATION");
+  const [quantiteLitres, setQuantiteLitres] = useState("");
+  const [dateOperation, setDateOperation] = useState(dateLocaleInput());
+  const [prixUnitaire, setPrixUnitaire] = useState("");
+  const [kilometrage, setKilometrage] = useState("");
+  const [station, setStation] = useState("");
+  const [mission, setMission] = useState("");
+  const [justificatif, setJustificatif] = useState("");
+  const [observation, setObservation] = useState("");
 
   useEffect(() => {
     setRole(localStorage.getItem("role"));
   }, []);
 
-  const lectureSeule = role === "DIRECTEUR_DFP";
+  const peutGerer =
+    role === "ADMIN" ||
+    role === "SUPER_ADMIN" ||
+    role === "CHEF_SERVICE_LOGISTIQUE" ||
+    role === "AGENT_FLOTTE";
 
-  const chargerTransactions = async () => {
-    setChargement(true);
+  const getToken = () => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("token");
+  };
+
+  const lireErreur = async (res: Response) => {
+    const texte = await res.text();
+    if (!texte) return `Erreur HTTP ${res.status}`;
+
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/carburant`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setTransactions(data);
+      const data = JSON.parse(texte);
+      return data.message || data.erreur || texte;
     } catch {
-      toast.error("Impossible de charger les transactions");
+      return texte;
+    }
+  };
+
+  const chargerDonnees = async () => {
+    if (!API) {
+      toast.error("NEXT_PUBLIC_API_URL n'est pas configurée.");
+      setChargement(false);
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setChargement(true);
+
+    try {
+      const [carburantRes, vehiculesRes] = await Promise.all([
+        fetch(`${API}/carburant`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-store",
+        }),
+        fetch(`${API}/vehicules`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          cache: "no-store",
+        }),
+      ]);
+
+      if (carburantRes.status === 401 || vehiculesRes.status === 401) {
+        toast.error("Votre session a expiré.");
+        router.replace("/login");
+        return;
+      }
+
+      if (!carburantRes.ok) throw new Error(await lireErreur(carburantRes));
+      if (!vehiculesRes.ok) throw new Error(await lireErreur(vehiculesRes));
+
+      const carburantData = await carburantRes.json();
+      const vehiculesData = await vehiculesRes.json();
+
+      setTransactions(Array.isArray(carburantData) ? carburantData : []);
+      setVehicules(Array.isArray(vehiculesData) ? vehiculesData : []);
+    } catch (error) {
+      console.error("Erreur chargement carburant :", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible de charger les données carburant."
+      );
     } finally {
       setChargement(false);
     }
   };
 
   useEffect(() => {
-    chargerTransactions();
+    chargerDonnees();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [formOuvert, setFormOuvert] = useState(false);
-  const [recherche, setRecherche] = useState("");
-  const [vehicule, setVehicule] = useState("V-102");
-  const [date, setDate] = useState("2026-08-11");
-  const [litres, setLitres] = useState(40);
-  const [montant, setMontant] = useState(3400);
-  const [station, setStation] = useState("SPAT Station");
-  const [km, setKm] = useState(450);
-
-  // Suivi du mode édition
-  const [transactionEnEdition, setTransactionEnEdition] = useState<TransactionCarburant | null>(null);
-
   const stats = useMemo(() => {
-    const totalLitres = transactions.reduce((acc, item) => acc + item.litres, 0);
-    const totalMontant = transactions.reduce((acc, item) => acc + item.montant, 0);
-    const totalKm = transactions.reduce((acc, item) => acc + item.km, 0);
-    const ratio = totalKm > 0 ? (totalLitres / totalKm) * 100 : 0;
-    return { totalLitres, totalMontant, totalKm, ratio };
+    const dotation = transactions
+      .filter((t) => String(t.type).toUpperCase() === "DOTATION")
+      .reduce((total, t) => total + Number(t.quantiteLitres || 0), 0);
+
+    const consommation = transactions
+      .filter((t) => String(t.type).toUpperCase() === "CONSOMMATION")
+      .reduce((total, t) => total + Number(t.quantiteLitres || 0), 0);
+
+    const depenses = transactions.reduce(
+      (total, t) => total + montantTransaction(t),
+      0
+    );
+
+    return {
+      dotation,
+      consommation,
+      solde: dotation - consommation,
+      depenses,
+    };
   }, [transactions]);
 
-  const transactionsFiltres = transactions.filter((item) => {
-    const terme = recherche.toLowerCase();
-    return [item.vehicule, item.date, item.station]
-      .some((valeur) => valeur.toLowerCase().includes(terme));
-  });
+  const transactionsFiltres = useMemo(() => {
+    const terme = recherche.trim().toLowerCase();
+    if (!terme) return transactions;
+
+    return transactions.filter((item) => {
+      const texte = [
+        item.vehicule?.immatriculation,
+        item.vehicule?.modeleType,
+        item.vehicule?.categorie,
+        item.type,
+        item.dateOperation,
+        item.station,
+        item.mission,
+        item.justificatif,
+        item.observation,
+        item.agentEmail,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return texte.includes(terme);
+    });
+  }, [transactions, recherche]);
 
   const resetFormulaire = () => {
-    setVehicule("V-102");
-    setDate("2026-08-11");
-    setLitres(40);
-    setMontant(3400);
-    setStation("SPAT Station");
-    setKm(450);
-    setTransactionEnEdition(null);
+    setVehiculeId("");
+    setType("CONSOMMATION");
+    setQuantiteLitres("");
+    setDateOperation(dateLocaleInput());
+    setPrixUnitaire("");
+    setKilometrage("");
+    setStation("");
+    setMission("");
+    setJustificatif("");
+    setObservation("");
   };
 
   const ouvrirCreation = () => {
-    if (lectureSeule) return;
+    if (!peutGerer) return;
     resetFormulaire();
-    setFormOuvert(true);
-  };
-
-  const ouvrirEdition = (item: TransactionCarburant) => {
-    if (lectureSeule) return;
-    setTransactionEnEdition(item);
-    setVehicule(item.vehicule);
-    setDate(item.date);
-    setLitres(item.litres);
-    setMontant(item.montant);
-    setStation(item.station);
-    setKm(item.km);
     setFormOuvert(true);
   };
 
@@ -129,316 +231,690 @@ export default function CarburantPage() {
     resetFormulaire();
   };
 
-  const handleSoumettre = async (e: React.FormEvent) => {
+  const handleSoumettre = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!peutGerer) return;
 
-    if (lectureSeule) return;
+    if (!API) {
+      toast.error("API non configurée.");
+      return;
+    }
 
-    const estEdition = transactionEnEdition !== null;
-    const url = estEdition
-      ? `${process.env.NEXT_PUBLIC_API_URL}/carburant/${transactionEnEdition!.id}`
-      : `${process.env.NEXT_PUBLIC_API_URL}/carburant`;
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!vehiculeId || !quantiteLitres || !dateOperation) {
+      toast.error("Véhicule, quantité et date sont obligatoires.");
+      return;
+    }
+
+    const quantite = Number(quantiteLitres);
+    if (!Number.isFinite(quantite) || quantite <= 0) {
+      toast.error("La quantité doit être supérieure à 0 litre.");
+      return;
+    }
+
+    const prix = prixUnitaire ? Number(prixUnitaire) : null;
+    if (prix !== null && (!Number.isFinite(prix) || prix < 0)) {
+      toast.error("Le prix unitaire est invalide.");
+      return;
+    }
+
+    const km = kilometrage ? Number(kilometrage) : null;
+    if (km !== null && (!Number.isFinite(km) || km < 0)) {
+      toast.error("Le kilométrage est invalide.");
+      return;
+    }
+
+    const montantTotal = prix !== null ? quantite * prix : null;
+
+    setEnvoi(true);
 
     try {
-      const res = await fetch(url, {
-        method: estEdition ? "PUT" : "POST",
+      const res = await fetch(`${API}/carburant`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ vehicule, date, litres, montant, station, km }),
+        body: JSON.stringify({
+          vehiculeId: Number(vehiculeId),
+          type,
+          quantiteLitres: quantite,
+          dateOperation,
+          prixUnitaire: prix,
+          montantTotal,
+          kilometrage: km,
+          station: station.trim() || null,
+          mission: mission.trim() || null,
+          justificatif: justificatif.trim() || null,
+          observation: observation.trim() || null,
+        }),
       });
 
       if (!res.ok) {
-        toast.error(estEdition ? "Erreur lors de la modification" : "Erreur lors de la création");
+        toast.error(await lireErreur(res));
         return;
       }
 
-      toast.success(estEdition ? "Transaction modifiée" : "Transaction carburant ajoutée");
+      toast.success(
+        type === "DOTATION"
+          ? "Dotation enregistrée avec succès."
+          : "Consommation enregistrée avec succès."
+      );
+
       fermerFormulaire();
-      chargerTransactions();
-    } catch {
-      toast.error("Impossible de contacter le serveur");
+      await chargerDonnees();
+    } catch (error) {
+      console.error("Erreur création carburant :", error);
+      toast.error("Impossible de contacter le serveur.");
+    } finally {
+      setEnvoi(false);
     }
   };
 
-  const handleSupprimer = async (id: number) => {
-    if (lectureSeule) return;
+  const handleSupprimer = async (id: string) => {
+    if (!peutGerer) return;
 
-    if (!window.confirm("Voulez-vous vraiment supprimer cette transaction ?")) return;
+    if (!window.confirm("Voulez-vous vraiment supprimer cette opération carburant ?")) {
+      return;
+    }
+
+    if (!API) return;
+
+    const token = getToken();
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/carburant/${id}`, {
+      const res = await fetch(`${API}/carburant/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
       });
 
       if (!res.ok) {
-        toast.error("Erreur lors de la suppression");
+        toast.error(await lireErreur(res));
         return;
       }
 
-      toast.success("Transaction supprimée");
-      chargerTransactions();
-    } catch {
-      toast.error("Impossible de contacter le serveur");
+      toast.success("Opération carburant supprimée.");
+      await chargerDonnees();
+    } catch (error) {
+      console.error("Erreur suppression carburant :", error);
+      toast.error("Impossible de contacter le serveur.");
     }
   };
+
+  const montantCalcule =
+    quantiteLitres !== "" &&
+    prixUnitaire !== "" &&
+    Number(quantiteLitres) > 0 &&
+    Number(prixUnitaire) >= 0
+      ? Number(quantiteLitres) * Number(prixUnitaire)
+      : null;
 
   return (
     <>
       <style jsx global>{`
+        * { box-sizing: border-box; }
         input, select, textarea {
           color: #111827;
           background-color: #ffffff;
-          border: 2px solid #111827;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+          border: 1px solid #94a3b8;
           font-size: 14px;
         }
-        input::placeholder, textarea::placeholder {
-          color: #4b5563;
-        }
+        input::placeholder, textarea::placeholder { color: #64748b; }
         input:focus, select:focus, textarea:focus {
           outline: 2px solid #dc2626;
           outline-offset: 1px;
         }
-        .search-bar {
-          border: 2px solid #111827;
-          background-color: #ffffff;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.16);
+        .carburant-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 16px;
         }
-        .search-button {
-          box-shadow: 0 2px 8px rgba(0,0,0,0.16);
+        .carburant-form-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
         }
-        .icon-btn {
-          transition: background-color 0.15s ease, transform 0.1s ease;
+        .carburant-row:hover { background-color: #f8fafc; }
+        @media (max-width: 900px) {
+          .carburant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .carburant-form-grid { grid-template-columns: 1fr; }
         }
-        .icon-btn:hover {
-          transform: translateY(-1px);
+        @media (max-width: 600px) {
+          .carburant-grid { grid-template-columns: 1fr; }
         }
       `}</style>
-      <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6", padding: 32 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, position: "relative" }}>
-          <div>
-            <button
-              onClick={() => router.push("/admin")}
-              style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", marginBottom: 8, fontSize: 14 }}
-            >
-              ← Retour
-            </button>
-          </div>
 
-          <h2 style={{ color: "#1e293b", margin: 0, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
-            Suivi carburant & consommation
-          </h2>
+      <EnTete afficherNotifications={false} afficherProfil={false} />
 
-          {!lectureSeule && (
-            <button
-              onClick={ouvrirCreation}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              + Ajouter une transaction
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16, marginBottom: 24 }}>
-          <StatCard titre="Litres total" valeur={`${stats.totalLitres.toFixed(1)} L`} />
-          <StatCard titre="Montant total" valeur={`${stats.totalMontant.toLocaleString()} FCFA`} />
-          <StatCard titre="Km total" valeur={`${stats.totalKm} km`} />
-          <StatCard titre="Ratio moyen" valeur={`${stats.ratio.toFixed(2)} L/100km`} />
-        </div>
-
-        {formOuvert && !lectureSeule && (
-          <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div style={{ backgroundColor: "white", borderRadius: 12, width: "100%", maxWidth: 760, padding: 28, boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h3 style={{ margin: 0, color: "#111827", fontSize: 22 }}>
-                  {transactionEnEdition ? "Modifier la transaction" : "Ajouter une transaction"}
-                </h3>
-                <button type="button" onClick={fermerFormulaire} style={{ border: "none", background: "transparent", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>
-                  ×
-                </button>
-              </div>
-
-              <form onSubmit={handleSoumettre} style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(220px, 1fr))", gap: 16 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Véhicule</label>
-                  <input type="text" value={vehicule} onChange={(e) => setVehicule(e.target.value)} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Litres</label>
-                  <input type="number" value={litres} onChange={(e) => setLitres(Number(e.target.value))} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Montant</label>
-                  <input type="number" value={montant} onChange={(e) => setMontant(Number(e.target.value))} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Station</label>
-                  <input type="text" value={station} onChange={(e) => setStation(e.target.value)} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6, fontWeight: 600 }}>Kilométrage</label>
-                  <input type="number" value={km} onChange={(e) => setKm(Number(e.target.value))} required style={{ padding: "10px 12px", border: "2px solid #111827", borderRadius: 8, width: "100%", fontSize: 14, color: "#111827", backgroundColor: "#ffffff" }} />
-                </div>
-                <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-                  <button type="button" onClick={fermerFormulaire} style={{ padding: "10px 16px", backgroundColor: "#e5e7eb", color: "#374151", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
-                    Annuler
-                  </button>
-                  <button type="submit" style={{ padding: "10px 16px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
-                    {transactionEnEdition ? "Enregistrer" : "Enregistrer"}
-                  </button>
-                </div>
-              </form>
+      <main style={pageStyle}>
+        <div style={containerStyle}>
+          <header style={headerStyle}>
+            <div>
+              <button type="button" onClick={() => router.push("/admin")} style={retourStyle}>
+                ← Retour
+              </button>
+              <h2 style={titreStyle}>Suivi carburant & consommation</h2>
+              
             </div>
-          </div>
-        )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <div style={{ position: "relative", flex: 1, maxWidth: 420 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" onClick={chargerDonnees} disabled={chargement} style={secondaireButton}>
+                Actualiser
+              </button>
+
+              {peutGerer && (
+                <button type="button" onClick={ouvrirCreation} style={primaryButton}>
+                  + Ajouter une opération
+                </button>
+              )}
+            </div>
+          </header>
+
+          <section className="carburant-grid" style={{ marginBottom: 24 }}>
+            <StatCard titre="Dotations" valeur={`${formatNombre(stats.dotation)} L`} />
+            <StatCard titre="Consommation" valeur={`${formatNombre(stats.consommation)} L`} />
+            <StatCard titre="Solde théorique" valeur={`${formatNombre(stats.solde)} L`} />
+            <StatCard titre="Montant total" valeur={formatMontant(stats.depenses)} />
+          </section>
+
+          <div style={barreRechercheStyle}>
             <input
               type="text"
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}
-              placeholder="Rechercher une transaction..."
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid #111827", borderRadius: 8, fontSize: 14, color: "#111827", backgroundColor: "#ffffff", outline: "none" }}
+              placeholder="Rechercher : véhicule, type, station, mission, justificatif, agent..."
+              style={rechercheStyle}
             />
           </div>
-          <button
-            type="button"
-            className="search-button"
-            onClick={() => {}}
-            style={{ padding: "10px 16px", backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-          >
-            Rechercher
-          </button>
-        </div>
 
-        <div style={{ backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ backgroundColor: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                <th style={thStyle}>Véhicule</th>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Litres</th>
-                <th style={thStyle}>Montant</th>
-                <th style={thStyle}>KM</th>
-                <th style={thStyle}>Ratio</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chargement ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#6b7280" }}>
-                    Chargement...
-                  </td>
-                </tr>
-              ) : transactionsFiltres.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: 20, textAlign: "center", color: "#6b7280" }}>
-                    Aucune transaction
-                  </td>
-                </tr>
-              ) : (
-                transactionsFiltres.map((item) => {
-                  const ratio = item.km > 0 ? (item.litres / item.km) * 100 : 0;
-                  return (
-                    <tr key={item.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                      <td style={tdStyle}>{item.vehicule}</td>
-                      <td style={tdStyle}>{item.date}</td>
-                      <td style={tdStyle}>{item.litres} L</td>
-                      <td style={tdStyle}>{item.montant.toLocaleString()} FCFA</td>
-                      <td style={tdStyle}>{item.km} km</td>
-                      <td style={tdStyle}>{ratio.toFixed(2)} L/100km</td>
-                      <td style={tdStyle}>
-                        {!lectureSeule && (
-                          <div style={{ display: "flex", gap: 8 }}>
+          <section style={tableCardStyle}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Véhicule</th>
+                    <th style={thStyle}>Type</th>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Quantité</th>
+                    <th style={thStyle}>Prix unitaire</th>
+                    <th style={thStyle}>Montant</th>
+                    <th style={thStyle}>Kilométrage</th>
+                    <th style={thStyle}>Station / Mission</th>
+                    <th style={thStyle}>Justificatif</th>
+                    <th style={thStyle}>Agent</th>
+                    {peutGerer && <th style={thStyle}>Actions</th>}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {chargement ? (
+                    <tr>
+                      <td colSpan={peutGerer ? 11 : 10} style={emptyStyle}>Chargement...</td>
+                    </tr>
+                  ) : transactionsFiltres.length === 0 ? (
+                    <tr>
+                      <td colSpan={peutGerer ? 11 : 10} style={emptyStyle}>Aucune opération carburant.</td>
+                    </tr>
+                  ) : (
+                    transactionsFiltres.map((item) => (
+                      <tr key={item.id} className="carburant-row">
+                        <td style={tdStyle}>
+                          <strong>{item.vehicule?.immatriculation || "—"}</strong>
+                          {(item.vehicule?.modeleType || item.vehicule?.categorie) && (
+                            <div style={secondaryTextStyle}>
+                              {item.vehicule?.modeleType || item.vehicule?.categorie}
+                            </div>
+                          )}
+                        </td>
+                        <td style={tdStyle}><TypeBadge type={item.type} /></td>
+                        <td style={tdStyle}>{formatDate(item.dateOperation)}</td>
+                        <td style={tdStyle}><strong>{formatNombre(item.quantiteLitres)} L</strong></td>
+                        <td style={tdStyle}>
+                          {item.prixUnitaire != null ? `${formatNombre(item.prixUnitaire)} Ar/L` : "—"}
+                        </td>
+                        <td style={tdStyle}>
+                          {formatMontant(
+                            montantTransaction(item),
+                            item.montantTotal == null && item.prixUnitaire == null
+                          )}
+                        </td>
+                        <td style={tdStyle}>
+                          {item.kilometrage != null ? `${formatNombre(item.kilometrage)} km` : "—"}
+                        </td>
+                        <td style={tdStyle}>
+                          {item.station || "—"}
+                          {item.mission && <div style={secondaryTextStyle}>Mission : {item.mission}</div>}
+                        </td>
+                        <td style={tdStyle}>
+                          {item.justificatif || "—"}
+                          {item.observation && <div style={secondaryTextStyle}>{item.observation}</div>}
+                        </td>
+                        <td style={tdStyle}>{item.agentEmail || "—"}</td>
+                        {peutGerer && (
+                          <td style={tdStyle}>
                             <button
-                              className="icon-btn"
-                              onClick={() => ouvrirEdition(item)}
-                              style={{
-                                width: 34,
-                                height: 34,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#eff6ff",
-                                color: "#2563eb",
-                                border: "1px solid #bfdbfe",
-                                borderRadius: 8,
-                                cursor: "pointer",
-                              }}
-                              aria-label={`Modifier ${item.vehicule}`}
-                            >
-                              <IconEdit />
-                            </button>
-                            <button
-                              className="icon-btn"
+                              type="button"
                               onClick={() => handleSupprimer(item.id)}
-                              style={{
-                                width: 34,
-                                height: 34,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#fef2f2",
-                                color: "#dc2626",
-                                border: "1px solid #fecaca",
-                                borderRadius: 8,
-                                cursor: "pointer",
-                              }}
-                              aria-label={`Supprimer ${item.vehicule}`}
+                              style={deleteButtonStyle}
+                              aria-label={`Supprimer l'opération ${item.id}`}
+                              title="Supprimer"
                             >
                               <IconTrash />
                             </button>
-                          </div>
+                          </td>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
-      </div>
+      </main>
+
+      {formOuvert && peutGerer && (
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <div>
+                <h3 style={modalTitleStyle}>Ajouter une opération carburant</h3>
+                <p style={modalSubtitleStyle}>
+                  Les données saisies sont enregistrées directement dans le module carburant.
+                </p>
+              </div>
+              <button type="button" onClick={fermerFormulaire} style={closeButtonStyle}>×</button>
+            </div>
+
+            <form onSubmit={handleSoumettre}>
+              <div className="carburant-form-grid">
+                <Champ label="Véhicule *">
+                  <select value={vehiculeId} onChange={(e) => setVehiculeId(e.target.value)} style={inputStyle} required>
+                    <option value="">Sélectionner un véhicule</option>
+                    {vehicules.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.immatriculation}{v.modeleType ? ` — ${v.modeleType}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </Champ>
+
+                <Champ label="Type *">
+                  <select value={type} onChange={(e) => setType(e.target.value as "DOTATION" | "CONSOMMATION")} style={inputStyle} required>
+                    <option value="CONSOMMATION">Consommation</option>
+                    <option value="DOTATION">Dotation</option>
+                  </select>
+                </Champ>
+
+                <Champ label="Quantité (L) *">
+                  <input type="number" min="0.1" step="0.1" value={quantiteLitres} onChange={(e) => setQuantiteLitres(e.target.value)} style={inputStyle} required />
+                </Champ>
+
+                <Champ label="Date de l'opération *">
+                  <input type="date" value={dateOperation} onChange={(e) => setDateOperation(e.target.value)} style={inputStyle} required />
+                </Champ>
+
+                <Champ label="Prix unitaire (Ar/L)">
+                  <input type="number" min="0" step="1" value={prixUnitaire} onChange={(e) => setPrixUnitaire(e.target.value)} style={inputStyle} />
+                </Champ>
+
+                <Champ label="Montant calculé">
+                  <div style={readOnlyStyle}>
+                    {montantCalcule != null ? formatMontant(montantCalcule) : "—"}
+                  </div>
+                </Champ>
+
+                <Champ label="Kilométrage">
+                  <input type="number" min="0" step="1" value={kilometrage} onChange={(e) => setKilometrage(e.target.value)} style={inputStyle} />
+                </Champ>
+
+                <Champ label="Station">
+                  <input value={station} onChange={(e) => setStation(e.target.value)} style={inputStyle} placeholder="Station-service" />
+                </Champ>
+
+                <Champ label="Mission">
+                  <input value={mission} onChange={(e) => setMission(e.target.value)} style={inputStyle} placeholder="Référence ou objet de mission" />
+                </Champ>
+
+                <Champ label="Justificatif">
+                  <input value={justificatif} onChange={(e) => setJustificatif(e.target.value)} style={inputStyle} placeholder="Ticket, facture, référence..." />
+                </Champ>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Champ label="Observation">
+                    <textarea
+                      value={observation}
+                      onChange={(e) => setObservation(e.target.value)}
+                      style={{ ...inputStyle, minHeight: 90, resize: "vertical", fontFamily: "inherit" }}
+                    />
+                  </Champ>
+                </div>
+              </div>
+
+              <div style={modalActionsStyle}>
+                <button type="button" onClick={fermerFormulaire} style={secondaireButton}>Annuler</button>
+                <button type="submit" disabled={envoi} style={{ ...primaryButton, opacity: envoi ? 0.65 : 1 }}>
+                  {envoi ? "Enregistrement..." : "Enregistrer"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function Champ({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: "block" }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
+    </label>
   );
 }
 
 function StatCard({ titre, valeur }: { titre: string; valeur: string }) {
   return (
-    <div style={{ backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 8, padding: 20 }}>
-      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{titre}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#1e293b" }}>{valeur}</div>
+    <div style={statCardStyle}>
+      <div style={statTitleStyle}>{titre}</div>
+      <div style={statValueStyle}>{valeur}</div>
     </div>
   );
 }
 
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "12px 16px",
-  fontSize: 13,
-  color: "#6b7280",
-  fontWeight: 600,
+function TypeBadge({ type }: { type: string }) {
+  const dotation = String(type || "").toUpperCase() === "DOTATION";
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "4px 9px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+        backgroundColor: dotation ? "#dbeafe" : "#dcfce7",
+        color: dotation ? "#1d4ed8" : "#166534",
+      }}
+    >
+      {dotation ? "Dotation" : "Consommation"}
+    </span>
+  );
+}
+
+function montantTransaction(item: TransactionCarburant) {
+  if (item.montantTotal != null) return Number(item.montantTotal);
+  if (item.prixUnitaire != null && item.quantiteLitres != null) {
+    return Number(item.prixUnitaire) * Number(item.quantiteLitres);
+  }
+  return 0;
+}
+
+function formatNombre(valeur: number) {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(Number(valeur || 0));
+}
+
+function formatMontant(valeur: number, absent = false) {
+  if (absent) return "—";
+  return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(Number(valeur || 0))} Ar`;
+}
+
+function formatDate(valeur: string) {
+  if (!valeur) return "—";
+  const date = new Date(`${valeur}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return valeur;
+  return new Intl.DateTimeFormat("fr-FR").format(date);
+}
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  backgroundColor: "#f3f4f6",
+  padding: "28px 18px",
 };
 
-const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  fontSize: 14,
-  color: "#374151",
+const containerStyle: CSSProperties = {
+  maxWidth: 1250,
+  margin: "0 auto",
 };
+
+const headerStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "space-between",
+  gap: 18,
+  marginBottom: 24,
+};
+
+const retourStyle: CSSProperties = {
+  padding: 0,
+  marginBottom: 8,
+  border: "none",
+  background: "transparent",
+  color: "#64748b",
+  cursor: "pointer",
+  fontSize: 13,
+};
+
+const titreStyle: CSSProperties = {
+  margin: 0,
+  color: "#172033",
+  fontSize: 26,
+};
+
+const sousTitreStyle: CSSProperties = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: 13,
+};
+
+const statCardStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 9,
+  padding: 18,
+};
+
+const statTitleStyle: CSSProperties = {
+  color: "#64748b",
+  fontSize: 12,
+  marginBottom: 7,
+};
+
+const statValueStyle: CSSProperties = {
+  color: "#111827",
+  fontSize: 21,
+  fontWeight: 800,
+};
+
+const barreRechercheStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  marginBottom: 16,
+};
+
+const rechercheStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: 580,
+  padding: "10px 12px",
+  border: "1px solid #94a3b8",
+  borderRadius: 8,
+  backgroundColor: "#ffffff",
+};
+
+const tableCardStyle: CSSProperties = {
+  overflow: "hidden",
+  backgroundColor: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 9,
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  minWidth: 1320,
+  borderCollapse: "collapse",
+};
+
+const thStyle: CSSProperties = {
+  padding: "11px 13px",
+  textAlign: "left",
+  backgroundColor: "#f8fafc",
+  color: "#64748b",
+  fontSize: 11,
+  fontWeight: 800,
+  borderBottom: "1px solid #e2e8f0",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: CSSProperties = {
+  padding: "12px 13px",
+  color: "#334155",
+  fontSize: 12,
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "top",
+};
+
+const secondaryTextStyle: CSSProperties = {
+  marginTop: 3,
+  color: "#64748b",
+  fontSize: 10,
+};
+
+const emptyStyle: CSSProperties = {
+  padding: 30,
+  textAlign: "center",
+  color: "#64748b",
+  fontSize: 13,
+};
+
+const primaryButton: CSSProperties = {
+  padding: "10px 16px",
+  border: "1px solid #dc2626",
+  borderRadius: 8,
+  backgroundColor: "#dc2626",
+  color: "#ffffff",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const secondaireButton: CSSProperties = {
+  padding: "10px 14px",
+  border: "1px solid #2563eb",
+  borderRadius: 8,
+  backgroundColor: "#2563eb",
+  color: "#ffffff",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const deleteButtonStyle: CSSProperties = {
+  width: 34,
+  height: 34,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid #fecaca",
+  borderRadius: 8,
+  backgroundColor: "#fef2f2",
+  color: "#dc2626",
+  cursor: "pointer",
+};
+
+const overlayStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1000,
+  padding: 20,
+  backgroundColor: "rgba(15,23,42,0.65)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflowY: "auto",
+};
+
+const modalStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: 800,
+  maxHeight: "92vh",
+  overflowY: "auto",
+  padding: 26,
+  borderRadius: 12,
+  backgroundColor: "#ffffff",
+  boxShadow: "0 20px 60px rgba(0,0,0,.25)",
+};
+
+const modalHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 15,
+  marginBottom: 20,
+};
+
+const modalTitleStyle: CSSProperties = {
+  margin: 0,
+  color: "#111827",
+  fontSize: 21,
+};
+
+const modalSubtitleStyle: CSSProperties = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: 12,
+};
+
+const closeButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#64748b",
+  cursor: "pointer",
+  fontSize: 24,
+};
+
+const labelStyle: CSSProperties = {
+  display: "block",
+  marginBottom: 6,
+  color: "#374151",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 11px",
+  border: "1px solid #94a3b8",
+  borderRadius: 8,
+  backgroundColor: "#ffffff",
+  color: "#111827",
+  fontSize: 13,
+};
+
+const readOnlyStyle: CSSProperties = {
+  ...inputStyle,
+  minHeight: 39,
+  backgroundColor: "#f8fafc",
+  color: "#475569",
+};
+
+const modalActionsStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 20,
+};
+

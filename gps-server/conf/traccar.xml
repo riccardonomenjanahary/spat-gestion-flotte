@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+
+<properties>
+
+    <entry key="config.default">./conf/default.xml</entry>
+
+    <!-- Traccar utilisé comme passerelle GPS -->
+    <entry key="database.memory">true</entry>
+
+    <!-- Accepter automatiquement les traceurs inconnus -->
+    <entry key="database.registerUnknown">true</entry>
+
+    <!-- Protocole GPS103 -->
+    <entry key="protocols.enable">gps103</entry>
+    <entry key="gps103.port">5001</entry>
+
+    <!-- Transfert des positions vers Spring Boot -->
+    <entry key="forward.type">json</entry>
+
+    <entry key="forward.url">http://host.docker.internal:8080/internal/gps/positions</entry>
+
+    <entry key="forward.retry.enable">true</entry>
+
+    <!-- Fonctions non nécessaires -->
+    <entry key="filter.enable">false</entry>
+    <entry key="geocoder.enable">false</entry>
+    <entry key="geolocation.enable">false</entry>
+    <entry key="speedLimit.enable">false</entry>
+
+    <entry key="server.statistics"></entry>
+
+</properties>

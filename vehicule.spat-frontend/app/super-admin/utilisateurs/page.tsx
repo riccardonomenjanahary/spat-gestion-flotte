@@ -8,11 +8,10 @@ import {
   Trash2,
   KeyRound,
   Search,
-  Power,
-  PowerOff,
   Mail,
 } from "lucide-react";
 import RoleGuard from "@/components/RoleGuard";
+import EnTete from "@/components/EnTete";
 import { ROLES } from "@/app/lib/roles";
 interface Utilisateur {
   id: number;
@@ -39,6 +38,11 @@ const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
     bg: "#e0f2fe",
     text: "#0369a1",
     label: "Chef de Direction des employés",
+  },
+  ASSISTANT_DIRECTION: {
+    bg: "#f3e8ff",
+    text: "#6b21a8",
+    label: "Assistant de Direction",
   },
   CHEF_SERVICE_LOGISTIQUE: {
     bg: "#dbeafe",
@@ -74,6 +78,10 @@ const DIRECTIONS_SPAT = [
   { id: 9, nom: "Direction des Ressources Humaines" },
   { id: 10, nom: "Direction Digitalisation et Innovation" },
 ] as const;
+
+function roleAvecDirection(role: string): boolean {
+  return role === ROLES.CHEF_DIRECTION || role === ROLES.ASSISTANT_DIRECTION;
+}
 
 function nomDirection(directionId?: number | null) {
   if (!directionId) return "—";
@@ -121,14 +129,10 @@ function SuperAdminUtilisateursContent() {
   const [confirmationMotDePasse, setConfirmationMotDePasse] = useState("");
   const [nouveauRole, setNouveauRole] = useState("AGENT_FLOTTE");
   const [directionId, setDirectionId] = useState("");
-  const [actif, setActif] = useState(true);
   const [resetOuvert, setResetOuvert] = useState(false);
   const [utilisateurReset, setUtilisateurReset] =
     useState<Utilisateur | null>(null);
-  const [motDePasseReset, setMotDePasseReset] = useState("");
-  const [confirmationReset, setConfirmationReset] = useState("");
   const [resetEnCours, setResetEnCours] = useState(false);
-  const [statutEnCours, setStatutEnCours] = useState<number | null>(null);
   const getToken = () => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("token");
@@ -199,6 +203,26 @@ function SuperAdminUtilisateursContent() {
   useEffect(() => {
     chargerUtilisateurs();
   }, []);
+
+  /*
+   * Lorsqu'une notification "mot de passe oublié" envoie vers :
+   * /super-admin/utilisateurs?matricule=XXXX
+   * la liste se filtre automatiquement sur le matricule concerné.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const matriculeNotification =
+      new URLSearchParams(window.location.search)
+        .get("matricule")
+        ?.trim();
+
+    if (matriculeNotification) {
+      setRecherche(matriculeNotification);
+    }
+  }, []);
   const resetForm = () => {
     setNom("");
     setPrenom("");
@@ -208,7 +232,6 @@ function SuperAdminUtilisateursContent() {
     setConfirmationMotDePasse("");
     setNouveauRole("AGENT_FLOTTE");
     setDirectionId("");
-    setActif(true);
     setModeEdition(false);
     setUtilisateurEnCours(null);
   };
@@ -230,7 +253,6 @@ function SuperAdminUtilisateursContent() {
     setEmail(u.email || "");
     setNouveauRole(u.role);
     setDirectionId(u.directionId ? String(u.directionId) : "");
-    setActif(u.actif);
     setNouveauMotDePasse("");
     setConfirmationMotDePasse("");
     setFormOuvert(true);
@@ -265,9 +287,9 @@ function SuperAdminUtilisateursContent() {
       toast.error("Veuillez saisir une adresse email valide");
       return;
     }
-    if (nouveauRole === ROLES.CHEF_DIRECTION && !directionId) {
+    if (roleAvecDirection(nouveauRole) && !directionId) {
       toast.error(
-        "Le Chef de Direction des employés doit être rattaché à une direction"
+        "Veuillez sélectionner la direction de rattachement de cet utilisateur."
       );
       return;
     }
@@ -300,10 +322,13 @@ function SuperAdminUtilisateursContent() {
         email: email.trim().toLowerCase(),
         role: nouveauRole,
         directionId:
-          nouveauRole === ROLES.CHEF_DIRECTION && directionId
+          roleAvecDirection(nouveauRole) && directionId
             ? Number(directionId)
             : null,
-        actif,
+        actif:
+          modeEdition && utilisateurEnCours
+            ? utilisateurEnCours.actif
+            : true,
       };
       if (!modeEdition) {
         body.motDePasse = nouveauMotDePasse;
@@ -350,73 +375,10 @@ function SuperAdminUtilisateursContent() {
       toast.error("Impossible de contacter le serveur");
     }
   };
-  const modifierStatutCompte = (u: Utilisateur) => {
-    const nouveauStatut = !u.actif;
-    toast(
-      nouveauStatut
-        ? `Activer le compte de ${u.nomComplet} ?`
-        : `Désactiver le compte de ${u.nomComplet} ?`,
-      {
-        description: nouveauStatut
-          ? "L'utilisateur pourra de nouveau se connecter au portail."
-          : "L'utilisateur ne pourra plus se connecter au portail.",
-        action: {
-          label: nouveauStatut ? "Activer" : "Désactiver",
-          onClick: async () => {
-            const token = getToken();
-            if (!API || !token) {
-              toast.error("Session ou configuration invalide");
-              return;
-            }
-            setStatutEnCours(u.id);
-            try {
-              const res = await fetch(
-                `${API}/admin/utilisateurs/${u.id}/actif?actif=${nouveauStatut}`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                }
-              );
-              if (res.status === 401) {
-                toast.error("Votre session a expiré");
-                router.replace("/login");
-                return;
-              }
-              if (res.status === 403) {
-                toast.error(
-                  "Le Super Admin n'est pas autorisé à modifier ce compte"
-                );
-                return;
-              }
-              if (!res.ok) {
-                toast.error(await lireErreur(res));
-                return;
-              }
-              toast.success(
-                nouveauStatut
-                  ? "Compte activé avec succès"
-                  : "Compte désactivé avec succès"
-              );
-              await chargerUtilisateurs();
-            } catch {
-              toast.error("Impossible de contacter le serveur");
-            } finally {
-              setStatutEnCours(null);
-            }
-          },
-        },
-        cancel: {
-          label: "Annuler",
-        },
-      }
-    );
-  };
   const handleSupprimer = (u: Utilisateur) => {
     toast(`Supprimer ${u.nomComplet} ?`, {
       description:
-        "Cette action est définitive. Privilégiez la désactivation lorsqu'un utilisateur a déjà utilisé le système.",
+        "Cette action est définitive. Vérifiez que ce compte peut réellement être supprimé.",
       action: {
         label: "Supprimer",
         onClick: async () => {
@@ -454,6 +416,7 @@ function SuperAdminUtilisateursContent() {
       },
       cancel: {
         label: "Annuler",
+        onClick: () => {},
       },
     });
   };
@@ -465,78 +428,80 @@ function SuperAdminUtilisateursContent() {
       return;
     }
     setUtilisateurReset(u);
-    setMotDePasseReset("");
-    setConfirmationReset("");
     setResetOuvert(true);
   };
   const fermerResetMotDePasse = () => {
     setResetOuvert(false);
     setUtilisateurReset(null);
-    setMotDePasseReset("");
-    setConfirmationReset("");
   };
-  const confirmerResetMotDePasse = async (
-    e: FormEvent<HTMLFormElement>
-  ) => {
-    e.preventDefault();
+  const confirmerResetMotDePasse = async () => {
     if (!utilisateurReset) return;
-    if (!motDePasseReset) {
-      toast.error("Veuillez saisir le nouveau mot de passe");
-      return;
-    }
-    if (motDePasseReset.length < 8) {
-      toast.error("Le mot de passe doit contenir au moins 8 caractères");
-      return;
-    }
-    if (motDePasseReset !== confirmationReset) {
-      toast.error("Les mots de passe ne correspondent pas");
-      return;
-    }
+
     const token = getToken();
+
     if (!API || !token) {
       toast.error("Session ou configuration invalide");
       return;
     }
+
     setResetEnCours(true);
+
     try {
       const res = await fetch(
         `${API}/admin/utilisateurs/${utilisateurReset.id}/reinitialiser-mot-de-passe`,
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            nouveauMotDePasse: motDePasseReset,
-          }),
         }
       );
+
       if (res.status === 401) {
         toast.error("Votre session a expiré");
         router.replace("/login");
         return;
       }
+
       if (res.status === 403) {
         toast.error(
           "Le Super Admin n'est pas autorisé à réinitialiser ce mot de passe"
         );
         return;
       }
+
       if (!res.ok) {
         toast.error(await lireErreur(res));
         return;
       }
+
+      const message = await res.text().catch(() => "");
+
       fermerResetMotDePasse();
-      toast.success(
-        "Mot de passe réinitialisé. Le nouveau mot de passe a été envoyé à l'utilisateur par email."
-      );
-    } catch {
+
+      if (
+        message
+          .toLowerCase()
+          .includes("email n'a pas pu être envoyé")
+      ) {
+        toast.warning(message);
+      } else {
+        toast.success(
+          message ||
+            `Un nouveau mot de passe a été généré automatiquement et envoyé à ${utilisateurReset.email}.`
+        );
+      }
+
+      await chargerUtilisateurs();
+    } catch (error) {
+      console.error(error);
       toast.error("Impossible de contacter le serveur");
     } finally {
       setResetEnCours(false);
     }
   };
+
   const termeRecherche = recherche.trim().toLowerCase();
   const utilisateursFiltres = utilisateurs.filter((u) => {
     if (!termeRecherche) return true;
@@ -567,6 +532,9 @@ function SuperAdminUtilisateursContent() {
           background: #f9fafb;
         }
       `}</style>
+
+      <EnTete afficherNotifications={false} afficherProfil={false} />
+
       <div
         style={{
           minHeight: "100vh",
@@ -615,21 +583,47 @@ function SuperAdminUtilisateursContent() {
             >
               Gestion des comptes utilisateurs
             </h2>
-            <button
-              type="button"
-              onClick={ouvrirCreation}
+            <div
               style={{
-                padding: "10px 20px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                fontWeight: 600,
-                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
               }}
             >
-              + Ajouter un utilisateur
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  router.push("/super-admin/chauffeurs-comptes")
+                }
+                style={{
+                  padding: "10px 16px",
+                  backgroundColor: "#ffffff",
+                  color: "#1e40af",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Comptes chauffeurs
+              </button>
+
+              <button
+                type="button"
+                onClick={ouvrirCreation}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                + Ajouter un utilisateur
+              </button>
+            </div>
           </div>
           <div
             style={{
@@ -761,6 +755,9 @@ function SuperAdminUtilisateursContent() {
                       <option value={ROLES.CHEF_DIRECTION}>
                         Chef de Direction des employés
                       </option>
+                      <option value={ROLES.ASSISTANT_DIRECTION}>
+                        Assistant de Direction
+                      </option>
                       <option value="CHEF_SERVICE_LOGISTIQUE">
                         Chef Service Logistique
                       </option>
@@ -775,7 +772,7 @@ function SuperAdminUtilisateursContent() {
                       </option>
                     </select>
                   </div>
-                  {nouveauRole === ROLES.CHEF_DIRECTION && (
+                  {roleAvecDirection(nouveauRole) && (
                     <div>
                       <label style={labelStyle}>
                         Direction SPAT *
@@ -845,58 +842,7 @@ function SuperAdminUtilisateursContent() {
                       </div>
                     </>
                   )}
-                  <div
-                    style={{
-                      gridColumn: "1 / -1",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 0",
-                    }}
-                  >
-                    <input
-                      id="utilisateurActif"
-                      type="checkbox"
-                      checked={actif}
-                      onChange={(e) =>
-                        setActif(e.target.checked)
-                      }
-                      style={{
-                        width: 18,
-                        height: 18,
-                        cursor: "pointer",
-                      }}
-                    />
-                    <label
-                      htmlFor="utilisateurActif"
-                      style={{
-                        fontSize: 14,
-                        color: "#374151",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Compte actif
-                    </label>
-                  </div>
-                  {!modeEdition && (
-                    <div
-                      style={{
-                        gridColumn: "1 / -1",
-                        padding: 12,
-                        borderRadius: 8,
-                        backgroundColor: "#eff6ff",
-                        color: "#1e40af",
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Le mot de passe temporaire sera
-                      enregistré de manière chiffrée et les
-                      informations de connexion seront
-                      envoyées à l'adresse email renseignée.
-                    </div>
-                  )}
+                  
                   <div
                     style={{
                       gridColumn: "1/-1",
@@ -993,44 +939,30 @@ function SuperAdminUtilisateursContent() {
                     {utilisateurReset.email}
                   </div>
                 </div>
-                <form
-                  onSubmit={confirmerResetMotDePasse}
-                >
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>
-                      Nouveau mot de passe temporaire *
-                    </label>
-                    <input
-                      type="password"
-                      value={motDePasseReset}
-                      onChange={(e) =>
-                        setMotDePasseReset(e.target.value)
-                      }
-                      minLength={8}
-                      required
-                      style={inputStyle}
-                      autoComplete="new-password"
-                    />
-                    <div style={helpStyle}>
-                      Minimum 8 caractères.
+                <div>
+                  <div
+                    style={{
+                      padding: 14,
+                      backgroundColor: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: 8,
+                      color: "#1e40af",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      marginBottom: 14,
+                    }}
+                  >
+                    <strong>
+                      Génération automatique du nouveau mot de passe
+                    </strong>
+
+                    <div style={{ marginTop: 6 }}>
+                      Le système va générer automatiquement un nouveau mot de
+                      passe sécurisé et l&apos;envoyer à l&apos;adresse email
+                      de l&apos;utilisateur.
                     </div>
                   </div>
-                  <div style={{ marginBottom: 20 }}>
-                    <label style={labelStyle}>
-                      Confirmer le mot de passe *
-                    </label>
-                    <input
-                      type="password"
-                      value={confirmationReset}
-                      onChange={(e) =>
-                        setConfirmationReset(e.target.value)
-                      }
-                      minLength={8}
-                      required
-                      style={inputStyle}
-                      autoComplete="new-password"
-                    />
-                  </div>
+
                   <div
                     style={{
                       padding: 12,
@@ -1043,11 +975,13 @@ function SuperAdminUtilisateursContent() {
                       marginBottom: 20,
                     }}
                   >
-                    Après confirmation, l'ancien mot de
-                    passe ne fonctionnera plus. Le nouveau
-                    mot de passe temporaire sera envoyé à
-                    l'utilisateur par email.
+                    Après confirmation, l&apos;ancien mot de passe ne
+                    fonctionnera plus. Le nouveau mot de passe ne sera pas
+                    temporaire : il restera valable jusqu&apos;à ce que
+                    l&apos;utilisateur le change ou qu&apos;une nouvelle
+                    réinitialisation soit effectuée.
                   </div>
+
                   <div
                     style={{
                       display: "flex",
@@ -1063,8 +997,10 @@ function SuperAdminUtilisateursContent() {
                     >
                       Annuler
                     </button>
+
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={confirmerResetMotDePasse}
                       disabled={resetEnCours}
                       style={{
                         ...btnPrimary,
@@ -1072,11 +1008,11 @@ function SuperAdminUtilisateursContent() {
                       }}
                     >
                       {resetEnCours
-                        ? "Réinitialisation..."
-                        : "Réinitialiser"}
+                        ? "Génération et envoi..."
+                        : "Générer et envoyer"}
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
           )}
@@ -1106,20 +1042,27 @@ function SuperAdminUtilisateursContent() {
                   <th style={thStyle}>Email</th>
                   <th style={thStyle}>Rôle</th>
                   <th style={thStyle}>Direction</th>
-                  <th style={thStyle}>Statut</th>
-                  <th style={thStyle}>Actions</th>
+                  <th
+                    style={{
+                      ...thStyle,
+                      textAlign: "center",
+                      minWidth: 170,
+                    }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {chargement ? (
                   <tr>
-                    <td colSpan={7} style={emptyStyle}>
+                    <td colSpan={6} style={emptyStyle}>
                       Chargement...
                     </td>
                   </tr>
                 ) : utilisateursFiltres.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={emptyStyle}>
+                    <td colSpan={6} style={emptyStyle}>
                       Aucun utilisateur
                     </td>
                   </tr>
@@ -1137,7 +1080,6 @@ function SuperAdminUtilisateursContent() {
                         style={{
                           borderBottom:
                             "1px solid #f3f4f6",
-                          opacity: u.actif ? 1 : 0.72,
                         }}
                       >
                         <td style={tdStyle}>
@@ -1220,49 +1162,24 @@ function SuperAdminUtilisateursContent() {
                           </span>
                         </td>
                         <td style={tdStyle}>
-                          {u.role === ROLES.CHEF_DIRECTION
+                          {roleAvecDirection(u.role)
                             ? nomDirection(u.directionId)
                             : "—"}
                         </td>
-                        <td style={tdStyle}>
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              backgroundColor: u.actif
-                                ? "#dcfce7"
-                                : "#fee2e2",
-                              color: u.actif
-                                ? "#166534"
-                                : "#991b1b",
-                              padding: "5px 9px",
-                              borderRadius: 20,
-                              fontWeight: 600,
-                              fontSize: 12,
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: 7,
-                                height: 7,
-                                borderRadius: "50%",
-                                backgroundColor: u.actif
-                                  ? "#16a34a"
-                                  : "#dc2626",
-                              }}
-                            />
-                            {u.actif
-                              ? "Actif"
-                              : "Inactif"}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            minWidth: 170,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           <div
                             style={{
                               display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                               gap: 7,
-                              flexWrap: "wrap",
+                              flexWrap: "nowrap",
                             }}
                           >
                             <button
@@ -1294,48 +1211,6 @@ function SuperAdminUtilisateursContent() {
                               aria-label={`Réinitialiser le mot de passe de ${u.nomComplet}`}
                             >
                               <KeyRound size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={
-                                statutEnCours === u.id
-                              }
-                              onClick={() =>
-                                modifierStatutCompte(u)
-                              }
-                              style={{
-                                ...iconBtn(
-                                  u.actif
-                                    ? "#fff7ed"
-                                    : "#f0fdf4",
-                                  u.actif
-                                    ? "#c2410c"
-                                    : "#15803d",
-                                  u.actif
-                                    ? "#fed7aa"
-                                    : "#bbf7d0"
-                                ),
-                                opacity:
-                                  statutEnCours === u.id
-                                    ? 0.5
-                                    : 1,
-                              }}
-                              title={
-                                u.actif
-                                  ? "Désactiver le compte"
-                                  : "Activer le compte"
-                              }
-                              aria-label={
-                                u.actif
-                                  ? `Désactiver ${u.nomComplet}`
-                                  : `Activer ${u.nomComplet}`
-                              }
-                            >
-                              {u.actif ? (
-                                <PowerOff size={15} />
-                              ) : (
-                                <Power size={15} />
-                              )}
                             </button>
                             <button
                               type="button"
@@ -1472,4 +1347,5 @@ const iconBtn = (
   border: `1px solid ${border}`,
   borderRadius: 8,
   cursor: "pointer",
+  flexShrink: 0,
 });

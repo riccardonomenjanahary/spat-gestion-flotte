@@ -1,4 +1,5 @@
-package com.vehicule.Spat.vehicule.spat_backend.controller;
+
+        package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.dto.CreateReservationRequest;
 import com.vehicule.Spat.vehicule.spat_backend.dto.DecisionReservationRequest;
@@ -6,6 +7,7 @@ import com.vehicule.Spat.vehicule.spat_backend.dto.DisponibiliteReservationRespo
 
 import com.vehicule.Spat.vehicule.spat_backend.model.Chauffeur;
 import com.vehicule.Spat.vehicule.spat_backend.model.Reservation;
+import com.vehicule.Spat.vehicule.spat_backend.model.Maintenance;
 import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
 import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
 
@@ -14,7 +16,10 @@ import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
 
+import com.vehicule.Spat.vehicule.spat_backend.service.ChauffeurAutoService;
 import com.vehicule.Spat.vehicule.spat_backend.service.DisponibiliteReservationService;
+import com.vehicule.Spat.vehicule.spat_backend.service.MaintenanceService;
+import com.vehicule.Spat.vehicule.spat_backend.service.NotificationService;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,7 +28,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Locale;
+import java.util.Map;
 
 // =========================================================
 // CONTROLLER RESERVATIONS
@@ -39,37 +46,58 @@ public class ReservationController {
 
     private final ChauffeurRepository chauffeurRepository;
 
+    private final ChauffeurAutoService chauffeurAutoService;
+
     private final UtilisateurRepository utilisateurRepository;
 
     private final DisponibiliteReservationService disponibiliteReservationService;
 
-    // =====================================================
-    // CONSTRUCTEUR
-    // =====================================================
+    private final MaintenanceService maintenanceService;
+
+    private final NotificationService notificationService;
+
 
     public ReservationController(
             ReservationRepository reservationRepository,
             VehiculeRepository vehiculeRepository,
             ChauffeurRepository chauffeurRepository,
+            ChauffeurAutoService chauffeurAutoService,
             UtilisateurRepository utilisateurRepository,
-            DisponibiliteReservationService disponibiliteReservationService
+            DisponibiliteReservationService disponibiliteReservationService,
+            MaintenanceService maintenanceService,
+            NotificationService notificationService
     ) {
-        this.reservationRepository = reservationRepository;
-        this.vehiculeRepository = vehiculeRepository;
-        this.chauffeurRepository = chauffeurRepository;
-        this.utilisateurRepository = utilisateurRepository;
+
+        this.reservationRepository =
+                reservationRepository;
+
+        this.vehiculeRepository =
+                vehiculeRepository;
+
+        this.chauffeurRepository =
+                chauffeurRepository;
+
+        this.chauffeurAutoService =
+                chauffeurAutoService;
+
+        this.utilisateurRepository =
+                utilisateurRepository;
+
         this.disponibiliteReservationService =
                 disponibiliteReservationService;
+
+        this.maintenanceService =
+                maintenanceService;
+
+        this.notificationService =
+                notificationService;
     }
+
 
     // =========================================================
     // UTILISATEUR CONNECTE
     // =========================================================
 
-    /**
-     * Spring Security utilise actuellement
-     * le matricule comme identifiant utilisateur.
-     */
     private Utilisateur utilisateurCourant() {
 
         if (SecurityContextHolder
@@ -79,26 +107,35 @@ public class ReservationController {
             return null;
         }
 
+
         String matricule =
                 SecurityContextHolder
                         .getContext()
                         .getAuthentication()
                         .getName();
 
-        if (matricule == null || matricule.isBlank()) {
+
+        if (matricule == null
+                || matricule.isBlank()) {
+
             return null;
         }
 
+
         return utilisateurRepository
-                .findByMatricule(matricule)
+                .findByMatricule(
+                        matricule
+                )
                 .orElse(null);
     }
+
 
     // =========================================================
     // CREER UNE DEMANDE DE VEHICULE
     // =========================================================
 
     @PostMapping
+    @Transactional
     public ResponseEntity<?> creerReservation(
             @RequestBody CreateReservationRequest request
     ) {
@@ -119,6 +156,15 @@ public class ReservationController {
                     );
         }
 
+        if (request == null) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Les informations de la mission sont obligatoires."
+                    );
+        }
+
         // -----------------------------------------------------
         // 2. DATES
         // -----------------------------------------------------
@@ -133,8 +179,66 @@ public class ReservationController {
                     );
         }
 
+        if (!request
+                .getDateFin()
+                .isAfter(
+                        request.getDateDebut()
+                )) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "La date de retour doit être après la date de départ"
+                    );
+        }
+
+        LocalDateTime maintenant =
+                LocalDateTime.now();
+
+        if (request
+                .getDateDebut()
+                .isBefore(
+                        maintenant
+                )) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "La date de départ ne peut pas être dans le passé"
+                    );
+        }
+
         // -----------------------------------------------------
-        // 3. OBJET DE LA MISSION
+        // 3. ZONE DE MISSION
+        // -----------------------------------------------------
+
+        String zoneMission =
+                request.getZoneMission() == null
+                        ? ""
+                        : request
+                        .getZoneMission()
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
+
+        if (!"VILLE_TOAMASINA".equals(zoneMission)
+                && !"HORS_TOAMASINA".equals(zoneMission)) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Veuillez préciser si la mission est dans Toamasina ou hors Toamasina."
+                    );
+        }
+
+        boolean missionHorsToamasina =
+                "HORS_TOAMASINA".equals(
+                        zoneMission
+                );
+
+        // -----------------------------------------------------
+        // 4. OBJET / BENEFICIAIRE / TRAJET / PASSAGERS
         // -----------------------------------------------------
 
         if (request.getMotif() == null
@@ -146,10 +250,6 @@ public class ReservationController {
                             "L'objet de la mission est obligatoire"
                     );
         }
-
-        // -----------------------------------------------------
-        // 4. BENEFICIAIRE
-        // -----------------------------------------------------
 
         if (request.getDemandeurNom() == null
                 || request.getDemandeurNom().isBlank()) {
@@ -201,10 +301,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 5. MISSION
-        // -----------------------------------------------------
-
         if (request.getDestination() == null
                 || request.getDestination().isBlank()) {
 
@@ -225,10 +321,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 6. PASSAGERS
-        // -----------------------------------------------------
-
         if (request.getNombrePassagers() == null
                 || request.getNombrePassagers() <= 0) {
 
@@ -240,85 +332,112 @@ public class ReservationController {
         }
 
         // -----------------------------------------------------
-        // 7. CHAUFFEUR
+        // 5. AFFECTATION DES RESSOURCES
+        // -----------------------------------------------------
+        //
+        // IMPORTANT :
+        // Le demandeur ne choisit ni véhicule ni chauffeur.
+        //
+        // La disponibilité et l'affectation sont réalisées
+        // ensuite par le Chef du Service Logistique via
+        // le circuit de décision / validation niveau 1.
+        //
+        // vehiculeId éventuellement reçu est volontairement
+        // ignoré ici pour préserver la règle métier.
+
+        // -----------------------------------------------------
+        // 7. REGLE 24 H
+        // UNIQUEMENT HORS TOAMASINA
         // -----------------------------------------------------
 
-        if (request.getBesoinChauffeur() == null) {
+        boolean horsDelai24h =
+                missionHorsToamasina
+                        &&
+                        request
+                                .getDateDebut()
+                                .isBefore(
+                                        maintenant.plusHours(24)
+                                );
 
-            return ResponseEntity
-                    .badRequest()
-                    .body(
-                            "Veuillez préciser si un chauffeur est nécessaire"
-                    );
+        boolean urgenceOperationnelle =
+                Boolean.TRUE.equals(
+                        request.getDemandeUrgente()
+                );
+
+        String typeDemande;
+
+        if (urgenceOperationnelle) {
+
+            typeDemande =
+                    "URGENTE";
+
+        } else if (horsDelai24h) {
+
+            typeDemande =
+                    "TARDIVE";
+
+        } else {
+
+            typeDemande =
+                    "PLANIFIEE";
         }
 
-        // -----------------------------------------------------
-        // 8. COHERENCE DES DATES
-        // -----------------------------------------------------
+        if (!"PLANIFIEE".equals(typeDemande)
+                &&
+                (
+                        request.getMotifUrgence() == null
+                                ||
+                                request.getMotifUrgence().isBlank()
+                )) {
 
-        if (!request
-                .getDateFin()
-                .isAfter(request.getDateDebut())) {
+            if (urgenceOperationnelle) {
 
-            return ResponseEntity
-                    .badRequest()
-                    .body(
-                            "La date de retour doit être après la date de départ"
-                    );
-        }
-
-        LocalDateTime maintenant =
-                LocalDateTime.now();
-
-        if (request
-                .getDateDebut()
-                .isBefore(maintenant)) {
-
-            return ResponseEntity
-                    .badRequest()
-                    .body(
-                            "La date de départ ne peut pas être dans le passé"
-                    );
-        }
-
-        // =====================================================
-        // RG-01 : DEMANDE AU MOINS 24H A L'AVANCE
-        // =====================================================
-
-        boolean demandeUrgente =
-                request
-                        .getDateDebut()
-                        .isBefore(
-                                maintenant.plusHours(24)
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "Le motif de l'urgence est obligatoire."
                         );
 
-        if (demandeUrgente
-                && (
-                request.getMotifUrgence() == null
-                        || request.getMotifUrgence().isBlank()
-        )) {
+            } else {
 
-            return ResponseEntity
-                    .badRequest()
-                    .body(
-                            "La demande est soumise à moins de 24 heures du départ. "
-                                    + "Un motif d'urgence est obligatoire."
-                    );
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "La mission hors Toamasina est créée à moins de 24 heures du départ. "
+                                        + "Veuillez justifier cette demande tardive."
+                        );
+            }
         }
 
-        // =====================================================
-        // CREATION
-        // =====================================================
+        // -----------------------------------------------------
+        // 8. CREATION DU TICKET
+        // -----------------------------------------------------
 
         Reservation reservation =
                 new Reservation();
 
-        // Aucun véhicule ni chauffeur à la création.
-        reservation.setVehicule(null);
-        reservation.setChauffeur(null);
+        /*
+         * IMPORTANT :
+         * aucune ressource n'est affectée à ce stade.
+         *
+         * Le Chef du Service Logistique vérifiera ensuite
+         * les disponibilités et choisira le véhicule ainsi
+         * que le chauffeur.
+         */
+        reservation.setVehicule(
+                null
+        );
+
+        reservation.setChauffeur(
+                null
+        );
 
         reservation.setDemandeur(
                 utilisateurConnecte
+        );
+
+        reservation.setZoneMission(
+                zoneMission
         );
 
         reservation.setDateDebut(
@@ -330,55 +449,97 @@ public class ReservationController {
         );
 
         reservation.setMotif(
-                request.getMotif().trim()
+                request
+                        .getMotif()
+                        .trim()
         );
 
         reservation.setDemandeUrgente(
-                demandeUrgente
+                urgenceOperationnelle
         );
 
+        reservation.setHorsDelai24h(
+                horsDelai24h
+        );
+
+        reservation.setTypeDemande(
+                typeDemande
+        );
+
+        /*
+         * Toamasina :
+         * FLEXIBLE jusqu'à l'heure de départ.
+         *
+         * Hors Toamasina :
+         * PLANIFIEE immédiatement, représentée en base
+         * par VERROUILLEE.
+         *
+         * Une urgence est également verrouillée.
+         */
+        if (urgenceOperationnelle
+                || missionHorsToamasina) {
+
+            reservation.setMobilisabilite(
+                    "VERROUILLEE"
+            );
+
+        } else {
+
+            reservation.setMobilisabilite(
+                    "FLEXIBLE"
+            );
+        }
+
         reservation.setMotifUrgence(
-                demandeUrgente
+                !"PLANIFIEE".equals(
+                        typeDemande
+                )
                         ? request
                         .getMotifUrgence()
                         .trim()
                         : null
         );
 
-        // -----------------------------------------------------
-        // BENEFICIAIRE
-        // -----------------------------------------------------
-
         reservation.setDemandeurNom(
-                request.getDemandeurNom().trim()
+                request
+                        .getDemandeurNom()
+                        .trim()
         );
 
         reservation.setDemandeurPrenom(
-                request.getDemandeurPrenom().trim()
+                request
+                        .getDemandeurPrenom()
+                        .trim()
         );
 
         reservation.setDemandeurMatricule(
-                request.getDemandeurMatricule().trim()
+                request
+                        .getDemandeurMatricule()
+                        .trim()
         );
 
         reservation.setDemandeurEntite(
-                request.getDemandeurEntite().trim()
+                request
+                        .getDemandeurEntite()
+                        .trim()
         );
 
         reservation.setDemandeurTelephone(
-                request.getDemandeurTelephone().trim()
+                request
+                        .getDemandeurTelephone()
+                        .trim()
         );
 
-        // -----------------------------------------------------
-        // MISSION
-        // -----------------------------------------------------
-
         reservation.setDestination(
-                request.getDestination().trim()
+                request
+                        .getDestination()
+                        .trim()
         );
 
         reservation.setPointDepart(
-                request.getPointDepart().trim()
+                request
+                        .getPointDepart()
+                        .trim()
         );
 
         reservation.setNombrePassagers(
@@ -387,68 +548,175 @@ public class ReservationController {
 
         reservation.setListePassagers(
                 request.getListePassagers() != null
-                        && !request.getListePassagers().isBlank()
-                        ? request.getListePassagers().trim()
+                        &&
+                        !request.getListePassagers().isBlank()
+
+                        ? request
+                        .getListePassagers()
+                        .trim()
+
                         : null
         );
-
-        // -----------------------------------------------------
-        // TYPE DE VEHICULE SOUHAITE
-        // -----------------------------------------------------
 
         reservation.setTypeVehiculeSouhaite(
                 request.getTypeVehiculeSouhaite() != null
-                        && !request.getTypeVehiculeSouhaite().isBlank()
+                        &&
+                        !request.getTypeVehiculeSouhaite().isBlank()
+
                         ? request
                         .getTypeVehiculeSouhaite()
                         .trim()
-                        .toUpperCase(Locale.ROOT)
+                        .toUpperCase(
+                                Locale.ROOT
+                        )
+
                         : null
         );
 
+        /*
+         * Par défaut, une mission nécessite un chauffeur.
+         * Le champ reste compatible avec les clients existants.
+         */
         reservation.setBesoinChauffeur(
-                request.getBesoinChauffeur()
+                request.getBesoinChauffeur() == null
+                        ? true
+                        : request.getBesoinChauffeur()
         );
 
         reservation.setObservations(
                 request.getObservations() != null
-                        && !request.getObservations().isBlank()
-                        ? request.getObservations().trim()
+                        &&
+                        !request.getObservations().isBlank()
+
+                        ? request
+                        .getObservations()
+                        .trim()
+
                         : null
         );
 
-        // -----------------------------------------------------
-        // STATUT INITIAL
-        // -----------------------------------------------------
-
+        /*
+         * Le workflow de validation ne change pas.
+         */
         reservation.setStatut(
                 "EN_ATTENTE"
         );
 
         reservation.setDateCreation(
-                LocalDateTime.now()
+                maintenant
         );
 
-        // Champs de décision encore vides.
-        reservation.setMotifRefus(null);
-        reservation.setRefusePar(null);
-        reservation.setDateRefus(null);
+        reservation.setMotifRefus(
+                null
+        );
 
-        reservation.setValidationN1Par(null);
-        reservation.setDateValidationN1(null);
+        reservation.setRefusePar(
+                null
+        );
 
-        reservation.setValidationN2Par(null);
-        reservation.setDateValidationN2(null);
+        reservation.setDateRefus(
+                null
+        );
+
+        reservation.setValidationN1Par(
+                null
+        );
+
+        reservation.setDateValidationN1(
+                null
+        );
+
+        reservation.setValidationN2Par(
+                null
+        );
+
+        reservation.setDateValidationN2(
+                null
+        );
 
         Reservation reservationSauvegardee =
-                reservationRepository.save(
-                        reservation
-                );
+                reservationRepository
+                        .save(
+                                reservation
+                        );
+
+        // -----------------------------------------------------
+        // 9. NOTIFIER LE CHEF DU SERVICE LOGISTIQUE
+        // -----------------------------------------------------
+        //
+        // Une seule création métier = une notification pour
+        // chaque utilisateur actif ayant le rôle
+        // CHEF_SERVICE_LOGISTIQUE.
+        //
+        // L'échec d'une notification ou d'un email ne doit
+        // jamais empêcher la création du ticket.
+        //
+        try {
+
+            String ticket =
+                    "TKT-"
+                            + String.format(
+                            "%05d",
+                            reservationSauvegardee.getId()
+                    );
+
+            String beneficiaire =
+                    (
+                            reservationSauvegardee.getDemandeurPrenom()
+                                    + " "
+                                    + reservationSauvegardee.getDemandeurNom()
+                    )
+                            .trim();
+
+            String destination =
+                    reservationSauvegardee.getDestination() == null
+                            || reservationSauvegardee.getDestination().isBlank()
+                            ? "destination non renseignée"
+                            : reservationSauvegardee
+                            .getDestination()
+                            .trim();
+
+            var notificationsCreees =
+                    notificationService.creerPourRole(
+                            "CHEF_SERVICE_LOGISTIQUE",
+                            "TICKET",
+                            "IMPORTANT",
+                            "Nouveau ticket à traiter",
+                            ticket
+                                    + " — "
+                                    + beneficiaire
+                                    + " — destination : "
+                                    + destination,
+                            "/chef-service-logistique",
+                            reservationSauvegardee.getId(),
+                            null,
+                            null,
+                            true
+                    );
+
+            System.out.println(
+                    "NOTIFICATION TICKET → "
+                            + ticket
+                            + " → "
+                            + notificationsCreees.size()
+                            + " notification(s) créée(s) pour CHEF_SERVICE_LOGISTIQUE"
+            );
+
+        } catch (Exception e) {
+
+            System.err.println(
+                    "NOTIFICATION TICKET IMPOSSIBLE → réservation "
+                            + reservationSauvegardee.getId()
+                            + " : "
+                            + e.getMessage()
+            );
+        }
 
         return ResponseEntity.ok(
                 reservationSauvegardee
         );
     }
+
 
     // =========================================================
     // MES DEMANDES
@@ -460,6 +728,7 @@ public class ReservationController {
         Utilisateur utilisateurConnecte =
                 utilisateurCourant();
 
+
         if (utilisateurConnecte == null) {
 
             return ResponseEntity
@@ -469,16 +738,19 @@ public class ReservationController {
                     );
         }
 
+
         List<Reservation> reservations =
                 reservationRepository
                         .findByDemandeurIdOrderByDateCreationDesc(
                                 utilisateurConnecte.getId()
                         );
 
+
         return ResponseEntity.ok(
                 reservations
         );
     }
+
 
     // =========================================================
     // TOUTES LES DEMANDES
@@ -497,13 +769,38 @@ public class ReservationController {
                     .findByStatutOrderByDateCreationDesc(
                             statut
                                     .trim()
-                                    .toUpperCase(Locale.ROOT)
+                                    .toUpperCase(
+                                            Locale.ROOT
+                                    )
                     );
         }
+
 
         return reservationRepository
                 .findAllByOrderByDateCreationDesc();
     }
+
+
+    // =========================================================
+    // PLANNING DES VEHICULES SUR LES DATES DU TICKET
+    // =========================================================
+    // Endpoint de lecture additionnel : ne change ni le format de
+    // /{id}/disponibilites, ni la creation, ni la validation.
+
+    @GetMapping("/{id}/planning-vehicules")
+    public ResponseEntity<?> planningVehiculesPourTicket(
+            @PathVariable Long id
+    ) {
+        try {
+            return ResponseEntity.ok(
+                    disponibiliteReservationService
+                            .calculerPlanningVehicules(id)
+            );
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
 
     // =========================================================
     // DISPONIBILITES
@@ -514,18 +811,25 @@ public class ReservationController {
             @PathVariable Long id
     ) {
 
-        if (!reservationRepository.existsById(id)) {
+        if (!reservationRepository
+                .existsById(
+                        id
+                )) {
 
             return ResponseEntity
                     .notFound()
                     .build();
         }
 
+
         try {
 
             DisponibiliteReservationResponse disponibilites =
                     disponibiliteReservationService
-                            .calculerDisponibilites(id);
+                            .calculerDisponibilites(
+                                    id
+                            );
+
 
             return ResponseEntity.ok(
                     disponibilites
@@ -543,6 +847,7 @@ public class ReservationController {
 
             e.printStackTrace();
 
+
             return ResponseEntity
                     .internalServerError()
                     .body(
@@ -551,29 +856,450 @@ public class ReservationController {
         }
     }
 
+
+    // Affectation automatique utilisée à chaque choix d'un véhicule.
+    // Le chauffeur transmis par l'interface et l'ancien chauffeur du ticket
+    // ne sont jamais des choix imposés au système.
+    private Chauffeur choisirChauffeurCompatiblePourTicket(Reservation ticket, Vehicule vehicule) {
+        // Verifier les candidats les uns apres les autres : un premier candidat devenu
+        // indisponible ne doit pas faire echouer la recherche d'un suivant eligible.
+        for (Chauffeur candidat : chauffeurAutoService.trouverChauffeursCompatiblesDisponibles(
+                vehicule, ticket.getDateDebut(), ticket.getDateFin(), ticket.getId())) {
+            Chauffeur verrouille = chauffeurRepository.findByIdForUpdate(candidat.getId()).orElse(null);
+            if (verrouille != null
+                    && chauffeurAutoService.estCompatible(vehicule, verrouille)
+                    && disponibiliteReservationService.estChauffeurDisponiblePourPeriode(
+                    verrouille.getId(), ticket.getDateDebut(), ticket.getDateFin(), ticket.getId())) {
+                return verrouille;
+            }
+        }
+        return null;
+    }
+
+    private String expliquerAffectationImpossible(Reservation ticket, Vehicule vehicule) {
+        return chauffeurAutoService.expliquerAbsenceDeChauffeur(
+                vehicule, ticket.getDateDebut(), ticket.getDateFin(), ticket.getId());
+    }
+
+    // =========================================================
+    // NOUVEAU VEHICULE APRES AVIS DID DEFAVORABLE
+    // Toujours le même ticket; chaque contrôle reste en historique.
+    // =========================================================
+    @PostMapping("/{id}/relancer-avis-did")
+    @Transactional
+    public ResponseEntity<?> relancerAvisDid(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> request
+    ) {
+        Utilisateur auteur = utilisateurCourant();
+        if (auteur == null) {
+            return ResponseEntity.status(401).body("Utilisateur non authentifié.");
+        }
+        if (auteur.getRole() == null || !"CHEF_SERVICE_LOGISTIQUE".equalsIgnoreCase(
+                auteur.getRole().trim().replaceFirst("^ROLE_", ""))) {
+            return ResponseEntity.status(403).body("Action réservée au Chef du Service Logistique.");
+        }
+
+        // Le rôle est aussi protégé dans SecurityConfig (pas seulement l'interface).
+        Reservation reservation = reservationRepository.findByIdForUpdate(id).orElse(null);
+        if (reservation == null) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!"EN_ATTENTE_AVIS_DID".equalsIgnoreCase(reservation.getStatut())) {
+            return ResponseEntity.status(409).body("Le ticket n'est pas dans le circuit DID.");
+        }
+        if (reservation.getVehicule() == null) {
+            return ResponseEntity.status(409).body("Aucun véhicule actuellement associé au ticket.");
+        }
+
+        Maintenance precedent = dernierControleDidDuTicket(id);
+        if (precedent == null || precedent.getVehicule() == null ||
+                !precedent.getVehicule().getId().equals(reservation.getVehicule().getId()) ||
+                !avisDidDefavorable(precedent)) {
+            return ResponseEntity.status(409).body(
+                    "Un avis DID défavorable sur le véhicule actuel est requis avant de le remplacer.");
+        }
+
+        Long nouvelId = lireIdentifiant(request, "vehiculeId");
+        if (nouvelId == null || nouvelId.equals(reservation.getVehicule().getId())) {
+            return ResponseEntity.badRequest().body("Choisissez un véhicule différent de celui refusé.");
+        }
+        // Un véhicule déjà déclaré défavorable pour CE ticket ne doit pas être proposé à nouveau.
+        boolean dejaEcarte = controlesDidDuTicket(id).stream()
+                .anyMatch(m -> avisDidDefavorable(m) && m.getVehicule() != null &&
+                        nouvelId.equals(m.getVehicule().getId()));
+        if (dejaEcarte) {
+            return ResponseEntity.status(409).body("Ce véhicule a déjà reçu un avis défavorable pour ce ticket.");
+        }
+
+        Vehicule nouveau = vehiculeRepository.findByIdForUpdate(nouvelId).orElse(null);
+        if (nouveau == null) {
+            return ResponseEntity.badRequest().body("Véhicule de remplacement introuvable.");
+        }
+        if (!disponibiliteReservationService.estVehiculeDisponiblePourPeriode(
+                nouveau.getId(), reservation.getDateDebut(), reservation.getDateFin(), reservation.getId())) {
+            return ResponseEntity.status(409).body("Véhicule déjà réservé ou indisponible pour la période du ticket.");
+        }
+
+        Chauffeur chauffeur = null;
+        if (Boolean.TRUE.equals(reservation.getBesoinChauffeur())) {
+            chauffeur = choisirChauffeurCompatiblePourTicket(reservation, nouveau);
+            if (chauffeur == null) {
+                return ResponseEntity.status(409).body(
+                        expliquerAffectationImpossible(reservation, nouveau));
+            }
+        }
+
+        Vehicule vehiculeRefuse = reservation.getVehicule();
+        // L'ancien avis demeure associé à l'ancien véhicule; la réservation
+        // réserve maintenant le nouveau véhicule et son chauffeur pour ces dates.
+        reservation.setVehicule(nouveau);
+        reservation.setChauffeur(chauffeur);
+        reservation.setStatut("EN_ATTENTE_AVIS_DID");
+        reservationRepository.save(reservation);
+
+        Maintenance nouveauControle = new Maintenance();
+        nouveauControle.setReservation(reservation);
+        nouveauControle.setVehicule(nouveau);
+        nouveauControle.setNatureIntervention("Contrôle visuel avant mission");
+        Maintenance sauvegarde = maintenanceService.creer(nouveauControle);
+
+        // La demande d'entretien de l'ancien véhicule est signalée au DID.
+        // L'ouverture de la liste déroulante seule n'envoie rien.
+        try {
+            String numeroTicket = "TKT-" + String.format("%05d", reservation.getId());
+            var notificationsCreees = notificationService.creerPourRole(
+                    "MECANICIEN_DID", "ENTRETIEN", "IMPORTANT",
+                    "Demande d'entretien acceptée pour le ticket " + numeroTicket,
+                    "Demande d'entretien acceptée pour le ticket " + numeroTicket
+                            + " : véhicule " + vehiculeRefuse.getImmatriculation()
+                            + " (avis défavorable). Nouveau contrôle demandé pour le véhicule "
+                            + nouveau.getImmatriculation() + ".",
+                    "/mecanicien-did", reservation.getId(), null, nouveau.getId(), true
+            );
+            System.out.println("Relance DID ticket " + numeroTicket
+                    + " : " + notificationsCreees.size() + " notification(s) mécanicien créées.");
+        } catch (Exception erreurNotification) {
+            System.err.println("Relance DID créée; notification à vérifier : "
+                    + erreurNotification.getMessage());
+        }
+        return ResponseEntity.ok(sauvegarde);
+    }
+
+    private Long lireIdentifiant(Map<String, Object> corps, String cle) {
+        if (corps == null || corps.get(cle) == null) return null;
+        try {
+            Long valeur = Long.valueOf(String.valueOf(corps.get(cle)).trim());
+            return valeur > 0 ? valeur : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private boolean avisDidDefavorable(Maintenance controle) {
+        return controle != null && (
+                "DEFAVORABLE".equalsIgnoreCase(controle.getDecisionDID()) ||
+                        "AVIS_DEFAVORABLE_DID".equalsIgnoreCase(String.valueOf(controle.getStatut()))
+        );
+    }
+
+    private List<Maintenance> controlesDidDuTicket(Long id) {
+        return maintenanceService.listerToutes().stream()
+                .filter(m -> m.getReservation() != null && id.equals(m.getReservation().getId()))
+                .filter(m -> m.getNatureIntervention() != null &&
+                        m.getNatureIntervention().toLowerCase(Locale.ROOT).contains("contrôle visuel avant mission"))
+                .sorted(Comparator.comparing(Maintenance::getDateCreation,
+                                Comparator.nullsFirst(Comparator.naturalOrder())).reversed()
+                        .thenComparing(m -> String.valueOf(m.getId()), Comparator.reverseOrder()))
+                .toList();
+    }
+
+    private Maintenance dernierControleDidDuTicket(Long id) {
+        return controlesDidDuTicket(id).stream().findFirst().orElse(null);
+    }
+
+    // =========================================================
+    // DEMANDE AVIS ENTRETIEN VEHICULE - DID
+    // =========================================================
+
+    @PostMapping("/{id}/demande-avis-entretien")
+    @Transactional
+    public ResponseEntity<?> demanderAvisEntretien(
+            @PathVariable Long id,
+            @RequestBody(required = false)
+            Map<String, Object> request
+    ) {
+
+        Reservation reservation =
+                reservationRepository
+                        .findByIdForUpdate(
+                                id
+                        )
+                        .orElse(null);
+
+
+        if (reservation == null) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+        }
+
+
+        if (!"EN_ATTENTE".equalsIgnoreCase(
+                reservation.getStatut()
+        )) {
+
+            return ResponseEntity
+                    .status(409)
+                    .body(
+                            "Cette demande ne peut plus être envoyée au DID. "
+                                    + "Statut actuel : "
+                                    + reservation.getStatut()
+                    );
+        }
+
+
+        Long vehiculeId =
+                null;
+
+
+        if (request != null) {
+
+            Object valeurVehicule =
+                    request.get(
+                            "vehiculeId"
+                    );
+
+
+            if (valeurVehicule instanceof Number) {
+
+                vehiculeId =
+                        ((Number) valeurVehicule)
+                                .longValue();
+
+            } else if (valeurVehicule instanceof String) {
+
+                String texte =
+                        ((String) valeurVehicule)
+                                .trim();
+
+
+                if (!texte.isBlank()) {
+
+                    try {
+
+                        vehiculeId =
+                                Long.parseLong(
+                                        texte
+                                );
+
+                    } catch (NumberFormatException ignored) {
+
+                        return ResponseEntity
+                                .badRequest()
+                                .body(
+                                        "L'identifiant du véhicule est invalide."
+                                );
+                    }
+                }
+            }
+        }
+
+
+        if (vehiculeId == null
+                && reservation.getVehicule() != null) {
+
+            vehiculeId =
+                    reservation
+                            .getVehicule()
+                            .getId();
+        }
+
+
+        if (vehiculeId == null) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Veuillez sélectionner un véhicule avant de demander l'avis DID."
+                    );
+        }
+
+
+        Vehicule vehicule =
+                vehiculeRepository
+                        .findByIdForUpdate(
+                                vehiculeId
+                        )
+                        .orElse(null);
+
+
+        if (vehicule == null) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Le véhicule sélectionné n'existe pas."
+                    );
+        }
+
+
+        boolean vehiculeDisponible =
+                disponibiliteReservationService
+                        .estVehiculeDisponiblePourPeriode(
+                                vehicule.getId(),
+                                reservation.getDateDebut(),
+                                reservation.getDateFin(),
+                                reservation.getId()
+                        );
+
+
+        if (!vehiculeDisponible) {
+
+            return ResponseEntity
+                    .status(409)
+                    .body(
+                            "Le véhicule sélectionné n'est pas disponible "
+                                    + "pour la période demandée."
+                    );
+        }
+
+
+        // À chaque premier choix, le backend désigne lui-même le chauffeur.
+        // L'identifiant chauffeur éventuellement envoyé par un ancien frontend est ignoré.
+        Chauffeur chauffeur = null;
+        if (Boolean.TRUE.equals(reservation.getBesoinChauffeur())) {
+            chauffeur = choisirChauffeurCompatiblePourTicket(reservation, vehicule);
+            if (chauffeur == null) {
+                return ResponseEntity.status(409).body(
+                        expliquerAffectationImpossible(reservation, vehicule));
+            }
+        }
+
+        reservation.setVehicule(
+                vehicule
+        );
+
+
+        reservation.setChauffeur(
+                chauffeur
+        );
+
+
+        reservationRepository.save(
+                reservation
+        );
+
+
+        Maintenance maintenance =
+                new Maintenance();
+
+
+        maintenance.setReservation(
+                reservation
+        );
+
+
+        maintenance.setVehicule(
+                vehicule
+        );
+
+
+        maintenance.setNatureIntervention(
+                "Contrôle visuel avant mission"
+        );
+
+
+        Maintenance sauvegarde =
+                maintenanceService
+                        .creer(
+                                maintenance
+                        );
+
+
+        reservation.setStatut(
+                "EN_ATTENTE_AVIS_DID"
+        );
+
+
+        reservationRepository.save(
+                reservation
+        );
+
+
+        // -----------------------------------------------------
+        // NOTIFIER LE MECANICIEN DID
+        // -----------------------------------------------------
+        //
+        // L'alerte n'est plus affichée dans une boîte locale
+        // sur la page du mécanicien : elle passe par le centre
+        // de notifications commun (cloche + badge + email).
+        //
+        // Une panne d'email / notification ne doit jamais
+        // bloquer la demande d'avis DID.
+        //
+        try {
+
+            String ticket =
+                    "TKT-"
+                            + String.format(
+                            "%05d",
+                            reservation.getId()
+                    );
+
+            String immatriculation =
+                    vehicule.getImmatriculation() == null
+                            || vehicule.getImmatriculation().isBlank()
+                            ? "véhicule non renseigné"
+                            : vehicule.getImmatriculation().trim();
+
+            var notificationsDID =
+                    notificationService.creerPourRole(
+                            "MECANICIEN_DID",
+                            "AVIS_DID",
+                            "IMPORTANT",
+                            "Nouvel avis DID à traiter",
+                            ticket
+                                    + " — "
+                                    + immatriculation
+                                    + " — contrôle technique requis avant validation.",
+                            "/mecanicien-did",
+                            reservation.getId(),
+                            null,
+                            vehicule.getId(),
+                            true
+                    );
+
+            System.out.println(
+                    "NOTIFICATION DID → "
+                            + ticket
+                            + " → "
+                            + notificationsDID.size()
+                            + " notification(s) créée(s) pour MECANICIEN_DID"
+            );
+
+        } catch (Exception e) {
+
+            System.err.println(
+                    "NOTIFICATION DID IMPOSSIBLE → réservation "
+                            + reservation.getId()
+                            + " : "
+                            + e.getMessage()
+            );
+        }
+
+
+        return ResponseEntity.ok(
+                sauvegarde
+        );
+    }
+
+
     // =========================================================
     // DECISION CHEF SERVICE LOGISTIQUE
     // =========================================================
 
-    /**
-     * VALIDATION NIVEAU 1
-     *
-     * PUT /api/reservations/{id}/decision
-     *
-     * {
-     *   "statut": "VALIDEE_N1",
-     *   "vehiculeId": 5,
-     *   "chauffeurId": 8
-     * }
-     *
-     *
-     * REFUS
-     *
-     * {
-     *   "statut": "REFUSEE",
-     *   "motifRefus": "Motif du refus"
-     * }
-     */
     @Transactional
     @PutMapping("/{id}/decision")
     public ResponseEntity<?> deciderReservation(
@@ -581,12 +1307,9 @@ public class ReservationController {
             @RequestBody DecisionReservationRequest request
     ) {
 
-        // -----------------------------------------------------
-        // 1. UTILISATEUR QUI PREND LA DECISION
-        // -----------------------------------------------------
-
         Utilisateur utilisateurDecision =
                 utilisateurCourant();
+
 
         if (utilisateurDecision == null) {
 
@@ -597,9 +1320,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 2. BODY
-        // -----------------------------------------------------
 
         if (request == null
                 || request.getStatut() == null
@@ -612,18 +1332,22 @@ public class ReservationController {
                     );
         }
 
+
         String nouveauStatut =
                 request
                         .getStatut()
                         .trim()
-                        .toUpperCase(Locale.ROOT);
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
 
-        // -----------------------------------------------------
-        // 3. STATUT AUTORISE
-        // -----------------------------------------------------
 
-        if (!"VALIDEE_N1".equals(nouveauStatut)
-                && !"REFUSEE".equals(nouveauStatut)) {
+        if (!"VALIDEE_N1".equals(
+                nouveauStatut
+        )
+                && !"REFUSEE".equals(
+                nouveauStatut
+        )) {
 
             return ResponseEntity
                     .badRequest()
@@ -632,14 +1356,14 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 4. VERROU SUR LA RESERVATION
-        // -----------------------------------------------------
 
         Reservation reservation =
                 reservationRepository
-                        .findByIdForUpdate(id)
+                        .findByIdForUpdate(
+                                id
+                        )
                         .orElse(null);
+
 
         if (reservation == null) {
 
@@ -648,13 +1372,14 @@ public class ReservationController {
                     .build();
         }
 
-        // -----------------------------------------------------
-        // 5. UNE DEMANDE DEJA TRAITEE NE PEUT PLUS ETRE MODIFIEE
-        // -----------------------------------------------------
 
         if (!"EN_ATTENTE".equalsIgnoreCase(
                 reservation.getStatut()
-        )) {
+        )
+                &&
+                !"EN_ATTENTE_AVIS_DID".equalsIgnoreCase(
+                        reservation.getStatut()
+                )) {
 
             return ResponseEntity
                     .status(409)
@@ -665,11 +1390,14 @@ public class ReservationController {
                     );
         }
 
+
         // =====================================================
         // REFUS
         // =====================================================
 
-        if ("REFUSEE".equals(nouveauStatut)) {
+        if ("REFUSEE".equals(
+                nouveauStatut
+        )) {
 
             if (request.getMotifRefus() == null
                     || request.getMotifRefus().isBlank()) {
@@ -681,48 +1409,73 @@ public class ReservationController {
                         );
             }
 
-            reservation.setVehicule(null);
-            reservation.setChauffeur(null);
+
+            reservation.setVehicule(
+                    null
+            );
+
+
+            reservation.setChauffeur(
+                    null
+            );
+
 
             reservation.setStatut(
                     "REFUSEE"
             );
 
+
             reservation.setMotifRefus(
-                    request.getMotifRefus().trim()
+                    request
+                            .getMotifRefus()
+                            .trim()
             );
+
 
             reservation.setRefusePar(
                     utilisateurDecision
             );
 
+
             reservation.setDateRefus(
                     LocalDateTime.now()
             );
 
-            // Nettoyage défensif des informations N1 et N2.
-            reservation.setValidationN1Par(null);
-            reservation.setDateValidationN1(null);
-            reservation.setValidationN2Par(null);
-            reservation.setDateValidationN2(null);
+
+            reservation.setValidationN1Par(
+                    null
+            );
+
+            reservation.setDateValidationN1(
+                    null
+            );
+
+
+            reservation.setValidationN2Par(
+                    null
+            );
+
+            reservation.setDateValidationN2(
+                    null
+            );
+
 
             Reservation reservationSauvegardee =
-                    reservationRepository.save(
-                            reservation
-                    );
+                    reservationRepository
+                            .save(
+                                    reservation
+                            );
+
 
             return ResponseEntity.ok(
                     reservationSauvegardee
             );
         }
 
+
         // =====================================================
         // VALIDATION NIVEAU 1
         // =====================================================
-
-        // -----------------------------------------------------
-        // 6. VEHICULE OBLIGATOIRE
-        // -----------------------------------------------------
 
         if (request.getVehiculeId() == null) {
 
@@ -733,9 +1486,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 7. VERROU VEHICULE
-        // -----------------------------------------------------
 
         Vehicule vehicule =
                 vehiculeRepository
@@ -743,6 +1493,7 @@ public class ReservationController {
                                 request.getVehiculeId()
                         )
                         .orElse(null);
+
 
         if (vehicule == null) {
 
@@ -753,9 +1504,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 8. RECONTROLE VEHICULE
-        // -----------------------------------------------------
 
         boolean vehiculeDisponible =
                 disponibiliteReservationService
@@ -765,6 +1513,7 @@ public class ReservationController {
                                 reservation.getDateFin(),
                                 reservation.getId()
                         );
+
 
         if (!vehiculeDisponible) {
 
@@ -776,117 +1525,128 @@ public class ReservationController {
                     );
         }
 
-        // =====================================================
-        // CHAUFFEUR
-        // =====================================================
 
-        Chauffeur chauffeur = null;
-
-        boolean chauffeurNecessaire =
-                Boolean.TRUE.equals(
-                        reservation.getBesoinChauffeur()
-                );
-
-        if (chauffeurNecessaire) {
-
-            // -------------------------------------------------
-            // 9. CHAUFFEUR OBLIGATOIRE
-            // -------------------------------------------------
-
-            if (request.getChauffeurId() == null) {
-
-                return ResponseEntity
-                        .badRequest()
-                        .body(
-                                "Un chauffeur doit être sélectionné pour cette demande"
-                        );
-            }
-
-            // -------------------------------------------------
-            // 10. VERROU CHAUFFEUR
-            // -------------------------------------------------
-
-            chauffeur =
-                    chauffeurRepository
-                            .findByIdForUpdate(
-                                    request.getChauffeurId()
-                            )
-                            .orElse(null);
-
-            if (chauffeur == null) {
-
-                return ResponseEntity
-                        .badRequest()
-                        .body(
-                                "Chauffeur introuvable"
-                        );
-            }
-
-            // -------------------------------------------------
-            // 11. RECONTROLE CHAUFFEUR
-            // -------------------------------------------------
-
-            boolean chauffeurDisponible =
-                    disponibiliteReservationService
-                            .estChauffeurDisponiblePourPeriode(
-                                    chauffeur.getId(),
-                                    reservation.getDateDebut(),
-                                    reservation.getDateFin(),
-                                    reservation.getId()
-                            );
-
-            if (!chauffeurDisponible) {
-
-                return ResponseEntity
-                        .status(409)
-                        .body(
-                                "Ce chauffeur n'est plus disponible pour la période demandée. "
-                                        + "Veuillez actualiser les disponibilités."
-                        );
-            }
+        // Ne jamais valider une version antérieure du contrôle ou un véhicule
+        // refusé : seule la DERNIÈRE décision DID du ticket fait foi.
+        Maintenance dernierControle = dernierControleDidDuTicket(reservation.getId());
+        if (dernierControle == null || dernierControle.getVehicule() == null ||
+                !vehicule.getId().equals(dernierControle.getVehicule().getId()) ||
+                avisDidDefavorable(dernierControle) ||
+                !"FAVORABLE".equalsIgnoreCase(dernierControle.getDecisionDID())) {
+            return ResponseEntity.status(409).body(
+                    "Validation N°1 impossible : le véhicule choisi doit avoir reçu le dernier avis DID favorable du ticket.");
         }
 
-        // =====================================================
-        // 12. VALIDATION N1
-        // =====================================================
+        Chauffeur chauffeur = null;
+        if (Boolean.TRUE.equals(reservation.getBesoinChauffeur())) {
+            // Le chauffeur est normalement déjà enregistré au choix du véhicule.
+            // Ne jamais reprendre un ancien chauffeur incompatible ou un id fourni par le navigateur.
+            boolean memeVehicule = reservation.getVehicule() != null &&
+                    vehicule.getId().equals(reservation.getVehicule().getId());
+            Chauffeur dejaAffecte = memeVehicule ? reservation.getChauffeur() : null;
+            if (dejaAffecte != null &&
+                    chauffeurAutoService.estCompatible(vehicule, dejaAffecte) &&
+                    disponibiliteReservationService.estChauffeurDisponiblePourPeriode(
+                            dejaAffecte.getId(), reservation.getDateDebut(),
+                            reservation.getDateFin(), reservation.getId())) {
+                chauffeur = dejaAffecte;
+            } else {
+                chauffeur = choisirChauffeurCompatiblePourTicket(reservation, vehicule);
+            }
+            if (chauffeur == null) {
+                return ResponseEntity.status(409).body(
+                        expliquerAffectationImpossible(reservation, vehicule));
+            }
+        }
 
         reservation.setVehicule(
                 vehicule
         );
 
+
         reservation.setChauffeur(
                 chauffeur
         );
+
 
         reservation.setStatut(
                 "VALIDEE_N1"
         );
 
+
         reservation.setValidationN1Par(
                 utilisateurDecision
         );
+
 
         reservation.setDateValidationN1(
                 LocalDateTime.now()
         );
 
-        // Aucune validation niveau 2 à ce stade.
-        reservation.setValidationN2Par(null);
-        reservation.setDateValidationN2(null);
 
-        // Nettoyage défensif des données de refus.
-        reservation.setMotifRefus(null);
-        reservation.setRefusePar(null);
-        reservation.setDateRefus(null);
+        reservation.setValidationN2Par(
+                null
+        );
 
-        // =====================================================
-        // 13. SAUVEGARDE
-        // =====================================================
+
+        reservation.setDateValidationN2(
+                null
+        );
+
+
+        reservation.setMotifRefus(
+                null
+        );
+
+
+        reservation.setRefusePar(
+                null
+        );
+
+
+        reservation.setDateRefus(
+                null
+        );
+
 
         Reservation reservationSauvegardee =
-                reservationRepository.save(
-                        reservation
-                );
+                reservationRepository
+                        .save(
+                                reservation
+                        );
+
+        // -----------------------------------------------------
+        // NOTIFICATION NIVEAU 1 -> CHEF DGAL
+        // Une seule notification par utilisateur actif au moment
+        // de la validation N1 ; aucun envoi au simple chargement de page.
+        // -----------------------------------------------------
+        try {
+            Long ticketId = reservationSauvegardee.getId();
+            Long vehiculeId = reservationSauvegardee.getVehicule() != null
+                    ? reservationSauvegardee.getVehicule().getId()
+                    : null;
+            String numeroTicket = "TKT-" + String.format("%05d", ticketId);
+
+            var notificationsDgal = notificationService.creerPourRole(
+                    "CHEF_DGAL",
+                    "TICKET",
+                    "IMPORTANT",
+                    "Ticket à valider au niveau 2",
+                    "Le ticket " + numeroTicket
+                            + " a été validé au niveau 1 et attend votre validation au niveau 2.",
+                    "/chef-dgal",
+                    ticketId,
+                    null,
+                    vehiculeId,
+                    true
+            );
+            System.out.println("NOTIFICATION CHEF_DGAL -> " + numeroTicket
+                    + " : " + notificationsDgal.size() + " destinataire(s)");
+        } catch (Exception erreurNotification) {
+            // Préserver le traitement métier si l'envoi est indisponible.
+            System.err.println("Validation N1 enregistrée ; notification DGAL impossible : "
+                    + erreurNotification.getMessage());
+        }
 
         return ResponseEntity.ok(
                 reservationSauvegardee
@@ -898,26 +1658,15 @@ public class ReservationController {
     // VALIDATION NIVEAU 2 - CHEF DGAL
     // =========================================================
 
-    /**
-     * PUT /api/reservations/{id}/validation-n2
-     *
-     * Aucun véhicule ni chauffeur n'est modifié ici :
-     * l'affectation a déjà été faite et tracée au niveau 1.
-     *
-     * Seule une demande VALIDEE_N1 peut passer à VALIDEE.
-     */
     @Transactional
     @PutMapping("/{id}/validation-n2")
     public ResponseEntity<?> validerNiveau2(
             @PathVariable Long id
     ) {
 
-        // -----------------------------------------------------
-        // 1. UTILISATEUR CONNECTE
-        // -----------------------------------------------------
-
         Utilisateur utilisateurDecision =
                 utilisateurCourant();
+
 
         if (utilisateurDecision == null) {
 
@@ -928,14 +1677,14 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 2. VERROU SUR LA RESERVATION
-        // -----------------------------------------------------
 
         Reservation reservation =
                 reservationRepository
-                        .findByIdForUpdate(id)
+                        .findByIdForUpdate(
+                                id
+                        )
                         .orElse(null);
+
 
         if (reservation == null) {
 
@@ -944,9 +1693,6 @@ public class ReservationController {
                     .build();
         }
 
-        // -----------------------------------------------------
-        // 3. VALIDATION N1 OBLIGATOIRE
-        // -----------------------------------------------------
 
         if (!"VALIDEE_N1".equalsIgnoreCase(
                 reservation.getStatut()
@@ -962,9 +1708,6 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 4. COHERENCE DE L'AFFECTATION N1
-        // -----------------------------------------------------
 
         if (reservation.getVehicule() == null) {
 
@@ -976,9 +1719,12 @@ public class ReservationController {
                     );
         }
 
+
         if (Boolean.TRUE.equals(
                 reservation.getBesoinChauffeur()
-        ) && reservation.getChauffeur() == null) {
+        )
+                &&
+                reservation.getChauffeur() == null) {
 
             return ResponseEntity
                     .status(409)
@@ -987,6 +1733,7 @@ public class ReservationController {
                                     + "un chauffeur est requis mais aucun chauffeur n'est affecté."
                     );
         }
+
 
         if (reservation.getValidationN1Par() == null
                 || reservation.getDateValidationN1() == null) {
@@ -999,30 +1746,31 @@ public class ReservationController {
                     );
         }
 
-        // -----------------------------------------------------
-        // 5. VALIDATION NIVEAU 2
-        // -----------------------------------------------------
 
         reservation.setStatut(
                 "VALIDEE"
         );
 
+
         reservation.setValidationN2Par(
                 utilisateurDecision
         );
+
 
         reservation.setDateValidationN2(
                 LocalDateTime.now()
         );
 
+
         Reservation reservationSauvegardee =
-                reservationRepository.save(
-                        reservation
-                );
+                reservationRepository
+                        .save(
+                                reservation
+                        );
+
 
         return ResponseEntity.ok(
                 reservationSauvegardee
         );
     }
-
 }

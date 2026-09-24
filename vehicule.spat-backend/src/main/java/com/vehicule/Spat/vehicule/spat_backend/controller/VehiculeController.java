@@ -7,12 +7,16 @@ import com.vehicule.Spat.vehicule.spat_backend.repository.AffectationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ChauffeurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
+import com.vehicule.Spat.vehicule.spat_backend.service.ChauffeurAutoService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,17 +28,20 @@ public class VehiculeController {
     private final AffectationRepository affectationRepository;
     private final ReservationRepository reservationRepository;
     private final ChauffeurRepository chauffeurRepository;
+    private final ChauffeurAutoService chauffeurAutoService;
 
     public VehiculeController(
             VehiculeRepository vehiculeRepository,
             AffectationRepository affectationRepository,
             ReservationRepository reservationRepository,
-            ChauffeurRepository chauffeurRepository
+            ChauffeurRepository chauffeurRepository,
+            ChauffeurAutoService chauffeurAutoService
     ) {
         this.vehiculeRepository = vehiculeRepository;
         this.affectationRepository = affectationRepository;
         this.reservationRepository = reservationRepository;
         this.chauffeurRepository = chauffeurRepository;
+        this.chauffeurAutoService = chauffeurAutoService;
     }
 
     // =========================================================
@@ -481,6 +488,223 @@ public class VehiculeController {
                                 .build()
                 );
     }
+
+
+    // =========================================================
+    // CHAUFFEURS COMPATIBLES SELON LE REFERENTIEL SPAT
+    // =========================================================
+
+    @GetMapping("/{id}/chauffeurs-compatibles")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> chauffeursCompatibles(
+            @PathVariable Long id
+    ) {
+
+        Vehicule vehicule =
+                vehiculeRepository
+                        .findById(id)
+                        .orElse(null);
+
+        if (vehicule == null) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+        }
+
+        List<Map<String, Object>> response =
+                chauffeurAutoService
+                        .trouverChauffeursCompatibles(
+                                vehicule
+                        )
+                        .stream()
+                        .map(
+                                this::chauffeurVersMap
+                        )
+                        .toList();
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+
+    // =========================================================
+    // CHOIX AUTOMATIQUE D'UN CHAUFFEUR
+    // =========================================================
+
+    /**
+     * Utilisé par le formulaire Chef de Direction.
+     *
+     * Si les dates sont fournies, le chauffeur choisi doit
+     * également être disponible pendant toute la mission.
+     */
+    @GetMapping("/{id}/chauffeur-auto")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> chauffeurAutomatique(
+            @PathVariable Long id,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE_TIME
+            )
+            LocalDateTime dateDebut,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE_TIME
+            )
+            LocalDateTime dateFin
+    ) {
+
+        Vehicule vehicule =
+                vehiculeRepository
+                        .findById(id)
+                        .orElse(null);
+
+        if (vehicule == null) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+        }
+
+        Chauffeur chauffeur =
+                chauffeurAutoService
+                        .choisirChauffeurAutomatiquement(
+                                vehicule,
+                                dateDebut,
+                                dateFin,
+                                null
+                        );
+
+        if (chauffeur == null) {
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(
+                            Map.of(
+                                    "message",
+                                    "Aucun chauffeur compatible et disponible n'a été trouvé pour ce véhicule."
+                            )
+                    );
+        }
+
+        return ResponseEntity.ok(
+                chauffeurVersMap(
+                        chauffeur
+                )
+        );
+    }
+
+
+    // =========================================================
+    // COMPATIBILITE AVEC L'ANCIEN ENDPOINT
+    // =========================================================
+
+    /**
+     * Ancien endpoint conservé pour ne casser aucune page.
+     *
+     * Il utilise maintenant la règle automatique par
+     * affectation de service au lieu d'exiger une ligne
+     * Affectation ACTIVE permanente.
+     */
+    @GetMapping("/{id}/chauffeur-actif")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> chauffeurActifDuVehicule(
+            @PathVariable Long id
+    ) {
+
+        Vehicule vehicule =
+                vehiculeRepository
+                        .findById(id)
+                        .orElse(null);
+
+        if (vehicule == null) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+        }
+
+        Chauffeur chauffeur =
+                chauffeurAutoService
+                        .choisirChauffeurAutomatiquement(
+                                vehicule,
+                                null,
+                                null,
+                                null
+                        );
+
+        if (chauffeur == null) {
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(
+                            Map.of(
+                                    "message",
+                                    "Aucun chauffeur compatible n'a été trouvé pour ce véhicule."
+                            )
+                    );
+        }
+
+        return ResponseEntity.ok(
+                chauffeurVersMap(
+                        chauffeur
+                )
+        );
+    }
+
+
+    // =========================================================
+    // CONVERSION CHAUFFEUR -> JSON LEGER
+    // =========================================================
+
+    private Map<String, Object> chauffeurVersMap(
+            Chauffeur chauffeur
+    ) {
+
+        Map<String, Object> response =
+                new LinkedHashMap<>();
+
+        response.put(
+                "id",
+                chauffeur.getId()
+        );
+
+        response.put(
+                "matricule",
+                chauffeur.getMatricule()
+        );
+
+        response.put(
+                "nom",
+                chauffeur.getNom()
+        );
+
+        response.put(
+                "prenom",
+                chauffeur.getPrenom()
+        );
+
+        response.put(
+                "telephone",
+                chauffeur.getTelephone()
+        );
+
+        response.put(
+                "affectationService",
+                chauffeur.getAffectationService()
+        );
+
+        response.put(
+                "statut",
+                chauffeur.getStatut()
+        );
+
+        return response;
+    }
+
 
     // =========================================================
     // SUPPRIMER UN VEHICULE

@@ -19,125 +19,23 @@ public class Vehicule {
     // INFORMATIONS DE L'INVENTAIRE SPAT
     // =========================================================
 
-    /**
-     * Catégorie du véhicule ou matériel roulant.
-     *
-     * Exemples actuels SPAT :
-     * - Voiture de service
-     * - Voiture de fonction
-     * - Camion
-     * - Engin
-     * - Tracteur
-     * - Autopompe
-     * - Remorque
-     * - Bus
-     * - Ambulance
-     *
-     * String volontairement utilisé afin de permettre
-     * l'ajout futur de nouvelles catégories sans modifier
-     * obligatoirement le modèle Java.
-     */
     @Column(nullable = false, length = 100)
     private String categorie;
 
-
-    /**
-     * Immatriculation ou identifiant du matériel.
-     *
-     * Exemples :
-     * 1205TCA
-     * 40560WWT
-     * TRAX 966G
-     * BOBCAT 272C
-     * SIDES
-     */
     @Column(nullable = false, unique = true, length = 150)
     private String immatriculation;
 
-
-    /**
-     * Correspond directement à la colonne
-     * "Modèle / Type" du document SPAT.
-     *
-     * Exemples :
-     * TOYOTA REVO
-     * Toyota Sequoia
-     * Fortuner VP
-     * Benne à ordure
-     * Pelle chargeuse
-     * Renault Claas
-     * Ambulance Port
-     */
     @Column(name = "modele_type", nullable = false, length = 200)
     private String modeleType;
 
-
-    /**
-     * Type fonctionnel du véhicule utilisé lors
-     * des demandes et affectations.
-     *
-     * Exemples :
-     * - BERLINE
-     * - 4X4
-     * - UTILITAIRE
-     * - MINIBUS
-     * - AUTRE
-     *
-     * Ce champ permet de comparer le type souhaité
-     * par le demandeur avec les véhicules réellement
-     * disponibles.
-     *
-     * La valeur doit être renseignée avec les vraies
-     * informations du véhicule.
-     */
     @Column(name = "type_vehicule", length = 50)
     private String typeVehicule;
 
-
-    /**
-     * Année du véhicule.
-     *
-     * Integer et non int car certains matériels
-     * n'ont pas d'année renseignée dans l'inventaire.
-     */
     private Integer annee;
 
-
-    /**
-     * Affectation figurant dans l'inventaire.
-     *
-     * Exemples :
-     * Garage
-     * Garage / Missionnaire
-     * DG SPAT
-     * SG SPAT
-     * DIREX
-     * DID
-     * DIR MARKETING
-     * DRH
-     * DDI
-     * DFP
-     * CEMEDI
-     * Pompier
-     */
     @Column(length = 255)
     private String affectation;
 
-
-    /**
-     * Correspond exactement à la colonne :
-     *
-     * "État général (observations)"
-     *
-     * Exemples :
-     * Bon état
-     * État moyen
-     * État neuf
-     * État mauvais
-     * État moyen (Panne BV)
-     * État neuf, pare-brise fissuré, stationné au garage
-     * État moyen (En réparation)
-     */
     @Column(
             name = "etat_general_observations",
             length = 1000
@@ -146,26 +44,38 @@ public class Vehicule {
 
 
     // =========================================================
-    // STATUT OPERATIONNEL DANS LE PORTAIL
+    // STATUT OPERATIONNEL
+    // =========================================================
+
+    @Column(nullable = false, length = 50)
+    private String statut = "DISPONIBLE";
+
+
+    // =========================================================
+    // CONFIGURATION GPS
     // =========================================================
 
     /**
-     * Ce champ ne vient pas directement du tableau
-     * d'inventaire mais est nécessaire au portail.
+     * Indique si le véhicule dispose d'un traceur GPS
+     * configuré dans le portail SPAT.
      *
-     * Il représente la disponibilité opérationnelle.
-     *
-     * Valeurs utilisées :
-     *
-     * DISPONIBLE
-     * EN_MISSION
-     * EN_MAINTENANCE
-     * HORS_SERVICE
-     * TRANSFERE
-     * REFORME
+     * Les véhicules non équipés restent à false.
      */
-    @Column(nullable = false, length = 50)
-    private String statut = "DISPONIBLE";
+    @Column(name = "gps_equipe")
+    private Boolean gpsEquipe = false;
+
+
+    /**
+     * Identifiant interne du traceur sur gps-gps.online.
+     *
+     * Exemple :
+     * 1218 TCA -> 3761
+     *
+     * Cet identifiant est fixe et permet au backend
+     * d'associer les données GPS au bon véhicule SPAT.
+     */
+    @Column(name = "gps_device_id", unique = true)
+    private Long gpsDeviceId;
 
 
     // =========================================================
@@ -261,5 +171,27 @@ public class Vehicule {
 
     public void setStatut(String statut) {
         this.statut = statut;
+    }
+
+
+    // =========================================================
+    // GPS
+    // =========================================================
+
+    public Boolean getGpsEquipe() {
+        return gpsEquipe;
+    }
+
+    public void setGpsEquipe(Boolean gpsEquipe) {
+        this.gpsEquipe = gpsEquipe;
+    }
+
+
+    public Long getGpsDeviceId() {
+        return gpsDeviceId;
+    }
+
+    public void setGpsDeviceId(Long gpsDeviceId) {
+        this.gpsDeviceId = gpsDeviceId;
     }
 }

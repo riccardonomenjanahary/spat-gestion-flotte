@@ -513,6 +513,85 @@ public class VehiculeDataInitializer {
             );
 
 
+            // =====================================================
+            // CONFIGURATION DES 10 TRACEURS GPS
+            // =====================================================
+
+            // 0040 - AMBULANCE TOYOTA HIACE
+            configurerGps(
+                    vehiculeRepository,
+                    "0040AH",
+                    3756L
+            );
+
+            // 1205 TCA - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "1205TCA",
+                    3760L
+            );
+
+            // 1218 TCA - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "1218TCA",
+                    3761L
+            );
+
+            // 19255 WWT - TOYOTA COASTER
+            configurerGps(
+                    vehiculeRepository,
+                    "19255WWT",
+                    3765L
+            );
+
+            // 5174 AH - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "5174AH",
+                    3763L
+            );
+
+            // 5334 AJ - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "5334AJ",
+                    3758L
+            );
+
+            // 5533 AE - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "5533AE",
+                    3762L
+            );
+
+            // 6742 AJ - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "6742AJ",
+                    3759L
+            );
+
+            // 6743 AJ - TOYOTA HILUX
+            configurerGps(
+                    vehiculeRepository,
+                    "6743AJ",
+                    3764L
+            );
+
+            // 9774 AE - CAMION RENAULT BLEU
+            configurerGps(
+                    vehiculeRepository,
+                    "9774 AE",
+                    3851L
+            );
+
+
+            // =====================================================
+            // FIN INITIALISATION
+            // =====================================================
+
             System.out.println(
                     "Initialisation flotte SPAT terminée. "
                             + vehiculeRepository.count()
@@ -550,11 +629,79 @@ public class VehiculeDataInitializer {
         vehicule.setModeleType(modeleType);
         vehicule.setAnnee(annee);
         vehicule.setAffectation(affectation);
+
         vehicule.setEtatGeneralObservations(
                 etatGeneralObservations
         );
+
         vehicule.setStatut(statut);
 
+        // Aucun GPS par défaut
+        vehicule.setGpsEquipe(false);
+        vehicule.setGpsDeviceId(null);
+
         repository.save(vehicule);
+    }
+
+
+    // =========================================================
+    // CONFIGURATION GPS
+    // =========================================================
+
+    /**
+     * Associe un identifiant gps-gps.online
+     * à un véhicule déjà existant dans SPAT.
+     *
+     * La méthode est réexécutée au démarrage,
+     * mais ne recrée pas le véhicule.
+     */
+    private void configurerGps(
+            VehiculeRepository repository,
+            String immatriculation,
+            Long gpsDeviceId
+    ) {
+
+        repository
+                .findByImmatriculationIgnoreCase(
+                        immatriculation
+                )
+                .ifPresentOrElse(
+
+                        vehicule -> {
+
+                            boolean gpsDejaCorrect =
+                                    Boolean.TRUE.equals(
+                                            vehicule.getGpsEquipe()
+                                    )
+                                            &&
+                                            gpsDeviceId.equals(
+                                                    vehicule.getGpsDeviceId()
+                                            );
+
+                            if (gpsDejaCorrect) {
+                                return;
+                            }
+
+                            vehicule.setGpsEquipe(true);
+                            vehicule.setGpsDeviceId(
+                                    gpsDeviceId
+                            );
+
+                            repository.save(vehicule);
+
+                            System.out.println(
+                                    "GPS configuré : "
+                                            + immatriculation
+                                            + " -> ID "
+                                            + gpsDeviceId
+                            );
+                        },
+
+                        () -> System.err.println(
+                                "Impossible de configurer le GPS : "
+                                        + "véhicule introuvable : "
+                                        + immatriculation
+                        )
+                );
     }
 }

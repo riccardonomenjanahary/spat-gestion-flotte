@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import BoutonsRapportSpat from "@/app/components/BoutonsRapportSpat";
+import type { RapportSpat } from "@/app/lib/spatRapports";
 import { ROLES } from "@/app/lib/roles";
 import { toast } from "sonner";
 import {
@@ -12,7 +14,6 @@ import {
   Download,
   Fuel,
   Gauge,
-  Printer,
   RefreshCw,
   ShieldAlert,
   Truck,
@@ -309,6 +310,39 @@ function ChefDgalContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Le centre de notifications est géré par EnTete. La liste des tickets à
+  // valider est rafraîchie séparément, sans recharger toute la page.
+  useEffect(() => {
+    let actif = true;
+    let enCours = false;
+
+    const actualiserTickets = async () => {
+      if (enCours || document.visibilityState === "hidden" || !API) return;
+      const token = getToken();
+      if (!token) return;
+      enCours = true;
+      try {
+        const tickets = await fetchListe<Reservation>(`${API}/reservations`, token);
+        if (actif) setReservations(tickets);
+      } catch (error) {
+        // Ne pas masquer les informations déjà chargées si le réseau est coupé.
+        console.warn("Actualisation des tickets en attente de validation N2 impossible", error);
+      } finally {
+        enCours = false;
+      }
+    };
+
+    const intervalle = window.setInterval(() => { void actualiserTickets(); }, 15000);
+    const retourPage = () => { void actualiserTickets(); };
+    window.addEventListener("focus", retourPage);
+    return () => {
+      actif = false;
+      window.clearInterval(intervalle);
+      window.removeEventListener("focus", retourPage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API]);
+
   const disponibles = vehicules.filter((v) => v.statut === "DISPONIBLE").length;
   const tauxDisponibilite = vehicules.length > 0 ? Math.round((disponibles / vehicules.length) * 100) : 0;
 
@@ -417,10 +451,49 @@ function ChefDgalContent() {
     toast.success("Synthèse hebdomadaire exportée");
   };
 
+  const preparerRapportDgal = (): RapportSpat => ({
+    titre: "RAPPORT DE SUPERVISION DE LA FLOTTE",
+    sousTitre: "Chef DGAL — Synthèse de pilotage et décisions de niveau 2",
+    nomFichier: `spat_rapport_chef_dgal_${moisSelection}`,
+    champsEntete: [
+      { libelle: "Service", valeur: "Direction générale — Chef DGAL" },
+      { libelle: "Mois de suivi du carburant", valeur: libelleMois(moisSelection) },
+    ],
+    indicateurs: [
+      { libelle: "Parc total", valeur: vehicules.length },
+      { libelle: "Véhicules disponibles", valeur: disponibles },
+      { libelle: "Taux de disponibilité", valeur: `${tauxDisponibilite}%` },
+      { libelle: "Consommation du mois", valeur: `${formatNombre(totalConsommationMois)} L` },
+      { libelle: "Demandes à valider (N°2)", valeur: reservationsAValiderN2.length },
+      { libelle: "Entretiens actifs", valeur: maintenancesActives.length },
+      { libelle: "Délai moyen d'entretien du mois", valeur: delaiMoyenEntretien == null ? "—" : `${formatNombre(delaiMoyenEntretien)} j` },
+      { libelle: "Assurances à échéance ≤ 15 jours", valeur: assurancesJ15 },
+      { libelle: "Sinistres ouverts", valeur: sinistresOuverts },
+    ],
+    sections: [
+      {
+        titre: "Consommation mensuelle par véhicule",
+        colonnes: ["Immatriculation", "Modèle", "Consommation (L)"],
+        lignes: consommationParVehicule.map(({ vehicule, total }) => [
+          vehicule.immatriculation, vehicule.modeleType || "—", formatNombre(total),
+        ]),
+      },
+      {
+        titre: "Tickets en attente de validation N°2",
+        colonnes: ["Ticket", "Bénéficiaire", "Objet", "Véhicule", "Urgent", "Statut"],
+        lignes: reservationsAValiderN2.map((r) => [
+          `TKT-${String(r.id).padStart(5, "0")}`,
+          [r.demandeurPrenom, r.demandeurNom].filter(Boolean).join(" ") || r.demandeur?.nomComplet || "—",
+          r.motif, r.vehicule?.immatriculation || "—", r.demandeUrgente ? "Oui" : "Non", r.statut,
+        ]),
+      },
+    ],
+  });
+
   if (chargement) {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6" }}>
-        <EnTete />
+        <EnTete afficherNotifications />
         <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
           Chargement de la vue consolidée...
         </div>
@@ -430,25 +503,20 @@ function ChefDgalContent() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6" }}>
-      <EnTete />
+      <EnTete afficherNotifications />
 
       <main style={{ padding: 32 }}>
-        <div style={{ maxWidth: 1220, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           <div style={headerStyle}>
             <div>
               <h2 style={{ margin: 0, fontSize: 22, color: "#1e293b" }}>
-                Chef du DGAL — Supervision de la flotte
+                Chef DGAL — Supervision de la flotte
               </h2>
-              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>
-                Vue consolidée de pilotage, consultation des dossiers et reporting.
-              </p>
+              
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => window.print()} style={boutonSecondaire}>
-                <Printer size={15} />
-                Imprimer / PDF
-              </button>
+              <BoutonsRapportSpat preparerRapport={preparerRapportDgal} />
               <button onClick={exporterSynthese} style={boutonSecondaire}>
                 <Download size={15} />
                 Synthèse CSV
@@ -460,12 +528,7 @@ function ChefDgalContent() {
             </div>
           </div>
 
-          <div style={noticeStyle}>
-            <ShieldAlert size={18} />
-            <div>
-              <strong>Vue de supervision et validation niveau 2.</strong> Le Chef du DGAL consulte la flotte et les indicateurs consolidés, puis valide au niveau 2 les demandes déjà validées au niveau 1. Les actions opérationnelles de niveau 1 restent au Chef du Service Logistique et l&apos;avis technique reste au mécanicien DID.
-            </div>
-          </div>
+         
 
           <div style={kpiGridStyle}>
             <CarteKpi
@@ -505,6 +568,26 @@ function ChefDgalContent() {
               sousTexte={`${assurancesJ15} échéance(s) J-15 · ${sinistresOuverts} sinistre(s) ouvert(s)`}
             />
           </div>
+
+          <nav aria-label="Rubriques de supervision" style={{display: "flex", flexWrap: "wrap",
+            gap: 10, padding: 12, border: "1px solid #e2e8f0", borderRadius: 12,
+            background: "#ffffff", marginBottom: 22}}>
+            {[
+              {id: "dgal-validations", texte: `Tickets à valider (${reservationsAValiderN2.length})`, couleur: "#2563eb"},
+              {id: "dgal-consultation", texte: "Liste des tickets", couleur: "#2563eb"},
+              {id: "dgal-entretiens", texte: "Entretiens", couleur: "#16a34a"},
+              {id: "dgal-assurances", texte: "Assurances et sinistres", couleur: "#dc2626"},
+              {id: "dgal-synthese", texte: "Synthèse", couleur: "#2563eb"},
+            ].map(rubrique => (
+              <button key={rubrique.id} type="button"
+                onClick={() => document.getElementById(rubrique.id)?.scrollIntoView({behavior: "smooth", block: "start"})}
+                style={{...boutonSecondaire, borderColor: rubrique.couleur, color: "#ffffff",
+                  background: rubrique.couleur, minHeight: 43,
+                  boxShadow: "0 3px 9px rgba(15,23,42,.10)"}}>
+                {rubrique.texte}
+              </button>
+            ))}
+          </nav>
 
           <div style={sectionHeaderStyle}>
             <SectionTitre titre="Pilotage mensuel" />
@@ -547,10 +630,12 @@ function ChefDgalContent() {
             </div>
           </div>
 
-          <SectionTitre titre="Demandes de véhicule — validation niveau 2" />
+          <div id="dgal-validations" style={{scrollMarginTop: 85}}>
+            <SectionTitre titre="Demandes de véhicule — 2eme validation" />
+          </div>
 
           {reservationsAValiderN2.length === 0 ? (
-            <BlocVide texte="Aucune demande en attente de validation niveau 2." />
+            <BlocVide texte="Aucune demande en attente de 2eme validation." />
           ) : (
             <div
               style={{
@@ -591,7 +676,7 @@ function ChefDgalContent() {
                             }}
                           >
                             <strong style={{ color: "#111827" }}>
-                              {`DMD-${String(r.id).padStart(5, "0")}`}
+                              {`Ticket TKT-${String(r.id).padStart(5, "0")}`}
                             </strong>
                             <BadgeStatut statut={r.statut} />
                             {r.demandeUrgente && (
@@ -702,7 +787,9 @@ function ChefDgalContent() {
             </div>
           )}
 
-          <SectionTitre titre="Demandes de véhicule — consultation et traçabilité" />
+          <div id="dgal-consultation" style={{scrollMarginTop: 85}}>
+            <SectionTitre titre="Demandes de véhicule — consultation et traçabilité" />
+          </div>
 
           {reservations.length === 0 ? (
             <BlocVide texte="Aucune demande de véhicule." />
@@ -802,7 +889,9 @@ function ChefDgalContent() {
             </div>
           )}
 
-          <SectionTitre titre="Entretiens — consultation du circuit DID" />
+          <div id="dgal-entretiens" style={{scrollMarginTop: 85}}>
+            <SectionTitre titre="Entretiens — consultation du circuit DID" />
+          </div>
           {maintenances.length === 0 ? (
             <BlocVide texte="Aucun entretien enregistré." />
           ) : (
@@ -840,7 +929,9 @@ function ChefDgalContent() {
 
           {(assurances.length > 0 || sinistres.length > 0) && (
             <>
-              <SectionTitre titre="Assurances et sinistres — consultation" />
+              <div id="dgal-assurances" style={{scrollMarginTop: 85}}>
+                <SectionTitre titre="Assurances et sinistres — consultation" />
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 18, marginBottom: 30 }}>
                 <div style={cardStyle}>
                   <h4 style={cardTitleStyle}>Assurances</h4>
@@ -886,7 +977,9 @@ function ChefDgalContent() {
             </>
           )}
 
-          <SectionTitre titre="Synthèse hebdomadaire pour le Chef du Département" />
+          <div id="dgal-synthese" style={{scrollMarginTop: 85}}>
+            <SectionTitre titre="Synthèse hebdomadaire pour le Chef du Département" />
+          </div>
           <div style={cardStyle}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>
               <Info label="Demandes créées sur 7 jours" value={String(demandes7j.length)} />
@@ -1221,9 +1314,9 @@ const boutonValider: CSSProperties = {
   gap: 7,
   padding: "9px 13px",
   borderRadius: 8,
-  border: "1px solid #bbf7d0",
-  background: "#dcfce7",
-  color: "#166534",
+  border: "1px solid #16a34a",
+  background: "#16a34a",
+  color: "#ffffff",
   fontSize: 13,
   fontWeight: 700,
   cursor: "pointer",
@@ -1236,9 +1329,9 @@ const boutonSecondaire: CSSProperties = {
   gap: 7,
   padding: "9px 13px",
   borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "white",
-  color: "#374151",
+  border: "1px solid #2563eb",
+  background: "#2563eb",
+  color: "#ffffff",
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
@@ -1270,15 +1363,17 @@ const tableStyle: CSSProperties = {
 };
 
 const theadRowStyle: CSSProperties = {
-  background: "#f8fafc",
-  borderBottom: "1px solid #e5e7eb",
+  background: "#ffffff",
+  borderBottom: "1px solid #e2e8f0",
 };
 
 const thStyle: CSSProperties = {
   textAlign: "left",
-  padding: "11px 14px",
+  padding: "12px 14px",
   fontSize: 11,
-  color: "#64748b",
+  background: "#ffffff",
+  color: "#334155",
+  borderBottom: "1px solid #e2e8f0",
   textTransform: "uppercase",
   letterSpacing: "0.04em",
   fontWeight: 700,

@@ -1,6 +1,7 @@
 package com.vehicule.Spat.vehicule.spat_backend.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -13,9 +14,17 @@ public class TransactionCarburant {
     @GeneratedValue
     private UUID id;
 
+    // =========================================================
+    // VEHICULE
+    // =========================================================
+
     @ManyToOne
     @JoinColumn(name = "vehicule_id", nullable = false)
     private Vehicule vehicule;
+
+    // =========================================================
+    // OPERATION
+    // =========================================================
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -27,15 +36,69 @@ public class TransactionCarburant {
     @Column(nullable = false)
     private LocalDate dateOperation;
 
-    // Référence/numéro du justificatif (facture, ticket) — pas d'upload
-    // de fichier réel pour l'instant, juste une référence textuelle.
+    // =========================================================
+    // INFORMATIONS FINANCIERES
+    // =========================================================
+
+    private Double prixUnitaire;
+
+    private Double montantTotal;
+
+    // =========================================================
+    // KILOMETRAGE
+    // =========================================================
+
+    private Long kilometrage;
+
+    // =========================================================
+    // INFORMATIONS COMPLEMENTAIRES
+    // =========================================================
+
+    private String station;
+
+    private String mission;
+
+    // Référence / numéro du justificatif
     private String justificatif;
 
-    // Email de l'agent qui a saisi la transaction (via le JWT)
+    private String observation;
+
+    // =========================================================
+    // AGENT
+    // =========================================================
+
+    // Email / identité de l'utilisateur ayant saisi la transaction
     private String agentEmail;
+
+    // =========================================================
+    // ESPACE CHAUFFEUR
+    // =========================================================
+    //
+    // Ces deux relations sont facultatives afin de ne pas casser
+    // les transactions carburant déjà saisies par l'Agent Flotte.
+    //
+    // Elles sont renseignées uniquement lorsqu'une consommation
+    // est déclarée depuis l'espace Chauffeur.
+    // =========================================================
+
+    @ManyToOne
+    @JoinColumn(name = "chauffeur_id")
+    private Chauffeur chauffeur;
+
+    @ManyToOne
+    @JoinColumn(name = "reservation_id")
+    private Reservation reservation;
+
+    // =========================================================
+    // DATE DE CREATION
+    // =========================================================
 
     @Column(nullable = false)
     private LocalDateTime dateCreation = LocalDateTime.now();
+
+    // =========================================================
+    // GETTERS / SETTERS
+    // =========================================================
 
     public UUID getId() {
         return id;
@@ -77,6 +140,46 @@ public class TransactionCarburant {
         this.dateOperation = dateOperation;
     }
 
+    public Double getPrixUnitaire() {
+        return prixUnitaire;
+    }
+
+    public void setPrixUnitaire(Double prixUnitaire) {
+        this.prixUnitaire = prixUnitaire;
+    }
+
+    public Double getMontantTotal() {
+        return montantTotal;
+    }
+
+    public void setMontantTotal(Double montantTotal) {
+        this.montantTotal = montantTotal;
+    }
+
+    public Long getKilometrage() {
+        return kilometrage;
+    }
+
+    public void setKilometrage(Long kilometrage) {
+        this.kilometrage = kilometrage;
+    }
+
+    public String getStation() {
+        return station;
+    }
+
+    public void setStation(String station) {
+        this.station = station;
+    }
+
+    public String getMission() {
+        return mission;
+    }
+
+    public void setMission(String mission) {
+        this.mission = mission;
+    }
+
     public String getJustificatif() {
         return justificatif;
     }
@@ -85,12 +188,36 @@ public class TransactionCarburant {
         this.justificatif = justificatif;
     }
 
+    public String getObservation() {
+        return observation;
+    }
+
+    public void setObservation(String observation) {
+        this.observation = observation;
+    }
+
     public String getAgentEmail() {
         return agentEmail;
     }
 
     public void setAgentEmail(String agentEmail) {
         this.agentEmail = agentEmail;
+    }
+
+    public Chauffeur getChauffeur() {
+        return chauffeur;
+    }
+
+    public void setChauffeur(Chauffeur chauffeur) {
+        this.chauffeur = chauffeur;
+    }
+
+    public Reservation getReservation() {
+        return reservation;
+    }
+
+    public void setReservation(Reservation reservation) {
+        this.reservation = reservation;
     }
 
     public LocalDateTime getDateCreation() {

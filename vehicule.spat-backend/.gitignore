@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
+# Configuration locale du backend - identifiants GPS
+**/application-local.properties
+**/application-local.yml

@@ -3,34 +3,12 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-function homeForRole(role: string | null): string {
-  switch (role) {
-    case "ADMIN":
-      return "/admin";
-    case "DISPATCHER":
-      return "/dispatch";
-    case "EMPLOYE":
-      return "/employe/reservations";
-    case "CONDUCTEUR":
-      return "/conducteur/missions";
-    default:
-      return "/login";
-  }
-}
-
 export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const token = localStorage.getItem("token");
-      const role = localStorage.getItem("role");
-
-      if (token && role) {
-        router.replace(homeForRole(role));
-      } else {
-        router.replace("/login");
-      }
+      router.replace("/login");
     }, 800);
 
     return () => clearTimeout(timer);
@@ -60,7 +38,7 @@ export default function Home() {
       >
         <img
           src="/logo.png"
-          alt="Logo"
+          alt="Logo SPAT"
           style={{
             width: 90,
             height: 90,
@@ -83,12 +61,21 @@ export default function Home() {
           <defs>
             <path
               id="circlePath"
-              d="M 90, 90 m -70, 0 a 70,70 0 1,1 140,0 a 70,70 0 1,1 -140,0"
+              d="M 90,90 m -70,0 a 70,70 0 1,1 140,0 a 70,70 0 1,1 -140,0"
               fill="none"
             />
           </defs>
-          <text fill="#dc2626" fontSize="14" fontWeight="700" letterSpacing="4">
-            <textPath href="#circlePath" startOffset="0%">
+
+          <text
+            fill="#dc2626"
+            fontSize="14"
+            fontWeight="700"
+            letterSpacing="4"
+          >
+            <textPath
+              href="#circlePath"
+              startOffset="0%"
+            >
               Gestion de parc automobile
             </textPath>
           </text>
@@ -111,14 +98,17 @@ export default function Home() {
           0% {
             transform: rotate(0deg);
           }
+
           100% {
             transform: rotate(360deg);
           }
         }
+
         @keyframes orbit {
           0% {
             transform: rotate(0deg);
           }
+
           100% {
             transform: rotate(360deg);
           }

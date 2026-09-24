@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -11,19 +12,20 @@ import {
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
+import RoleGuard from "@/components/RoleGuard";
+import { ROLES } from "@/app/lib/roles";
 
 import {
-  AlertTriangle,
   CalendarDays,
   Car,
   CheckCircle2,
-  ChevronDown,
   Clock3,
   FileText,
-  LogOut,
   MapPin,
   Plus,
   RefreshCw,
+  Search,
   Send,
   UserRound,
   Users,
@@ -35,26 +37,50 @@ import {
 // TYPES
 // =========================================================
 
+type TypeDemande = "PLANIFIEE" | "TARDIVE" | "URGENTE";
+type Mobilisabilite = "FLEXIBLE" | "VERROUILLEE";
+type ZoneMission = "VILLE_TOAMASINA" | "HORS_TOAMASINA";
+
 interface VehiculeResume {
   id: number;
   immatriculation?: string | null;
   marque?: string | null;
   modele?: string | null;
+  modeleType?: string | null;
+  categorie?: string | null;
+  typeVehicule?: string | null;
+  affectation?: string | null;
+  statut?: string | null;
+}
+
+interface ChauffeurResume {
+  id: number;
+  matricule?: string | null;
+  nom?: string | null;
+  prenom?: string | null;
+  telephone?: string | null;
+  statut?: string | null;
 }
 
 interface Reservation {
   id: number;
-
   dateDebut: string;
   dateFin: string;
-
   motif: string;
-
   demandeUrgente: boolean;
   motifUrgence?: string | null;
-
+  typeDemande?: TypeDemande | null;
+  horsDelai24h?: boolean | null;
+  mobilisabilite?: Mobilisabilite | null;
+  zoneMission?: ZoneMission | null;
   statut: string;
   dateCreation: string;
+
+  demandeur?: {
+    nomComplet?: string | null;
+    matricule?: string | null;
+    role?: string | null;
+  } | null;
 
   demandeurNom?: string | null;
   demandeurPrenom?: string | null;
@@ -64,102 +90,77 @@ interface Reservation {
 
   destination?: string | null;
   pointDepart?: string | null;
-
   nombrePassagers?: number | null;
   listePassagers?: string | null;
 
   typeVehiculeSouhaite?: string | null;
   besoinChauffeur?: boolean | null;
-
   observations?: string | null;
 
   vehicule?: VehiculeResume | null;
+  chauffeur?: ChauffeurResume | null;
 }
 
 interface FormulaireReservation {
+  zoneMission: ZoneMission | "";
   dateDebut: string;
   dateFin: string;
-
   motif: string;
   motifUrgence: string;
-
   demandeurNom: string;
   demandeurPrenom: string;
   demandeurMatricule: string;
   demandeurEntite: string;
   demandeurTelephone: string;
-
   destination: string;
   pointDepart: string;
-
   nombrePassagers: string;
   listePassagers: string;
-
-  typeVehiculeSouhaite: string;
-  besoinChauffeur: boolean;
-
   observations: string;
 }
 
-interface ProfilUtilisateur {
-  matricule: string;
-  nomComplet: string;
-  role: string;
-}
-
-// =========================================================
-// FORMULAIRE INITIAL
-// =========================================================
-
 const formulaireInitial: FormulaireReservation = {
+  zoneMission: "",
   dateDebut: "",
   dateFin: "",
-
   motif: "",
   motifUrgence: "",
-
   demandeurNom: "",
   demandeurPrenom: "",
   demandeurMatricule: "",
   demandeurEntite: "",
   demandeurTelephone: "",
-
   destination: "",
   pointDepart: "",
-
   nombrePassagers: "1",
   listePassagers: "",
-
-  typeVehiculeSouhaite: "",
-  besoinChauffeur: true,
-
   observations: "",
 };
 
-// =========================================================
-// STYLE STATUTS
-// =========================================================
-
 const statutStyle: Record<
   string,
-  {
-    bg: string;
-    text: string;
-    label: string;
-  }
+  { bg: string; text: string; label: string }
 > = {
   EN_ATTENTE: {
     bg: "#fef3c7",
     text: "#92400e",
     label: "En attente",
   },
-
+  EN_ATTENTE_AVIS_DID: {
+    bg: "#e0f2fe",
+    text: "#075985",
+    label: "Avis DID",
+  },
+  VALIDEE_N1: {
+    bg: "#ede9fe",
+    text: "#6d28d9",
+    label: "Validée N1",
+  },
   VALIDEE: {
     bg: "#dcfce7",
     text: "#166534",
     label: "Validée",
   },
-
   REFUSEE: {
     bg: "#fee2e2",
     text: "#991b1b",
@@ -168,42 +169,42 @@ const statutStyle: Record<
 };
 
 // =========================================================
-// PAGE
+// PAGE CHEF DE DIRECTION
 // =========================================================
 
 export default function ChefDirectionPage() {
-  const router = useRouter();
+  return (
+    <RoleGuard role={ROLES.CHEF_DIRECTION}>
+      <ChefDirectionContent />
+    </RoleGuard>
+  );
+}
 
+function ChefDirectionContent() {
+  const router = useRouter();
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
-
   const [chargement, setChargement] = useState(true);
+  const [recherche, setRecherche] = useState("");
+  const [afficherRefuses, setAfficherRefuses] = useState(false);
 
   const [modalOuverte, setModalOuverte] = useState(false);
-
   const [envoi, setEnvoi] = useState(false);
 
   const [formulaire, setFormulaire] =
     useState<FormulaireReservation>(formulaireInitial);
 
-  // =======================================================
-  // TOKEN
-  // =======================================================
-
   const getToken = () => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
+    if (typeof window === "undefined") return null;
     return localStorage.getItem("token");
   };
 
-  // =======================================================
-  // CHARGER LES RESERVATIONS
-  // =======================================================
+  // =========================================================
+  // CHARGEMENT DES TICKETS
+  // =========================================================
 
-  const chargerReservations = async () => {
+  const chargerDonnees = async () => {
     const token = getToken();
 
     if (!API) {
@@ -222,51 +223,56 @@ export default function ChefDirectionPage() {
     try {
       const res = await fetch(`${API}/reservations/mes`, {
         method: "GET",
-
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-
         cache: "no-store",
       });
 
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
         toast.error("Votre session a expiré");
         router.replace("/login");
         return;
       }
 
-      if (!res.ok) {
-        const message = await lireErreur(res);
+      if (res.status === 403) {
+        toast.error(
+          "Vous n'avez pas l'autorisation d'accéder à ces données."
+        );
+        return;
+      }
 
+      if (!res.ok) {
         throw new Error(
-          message || "Impossible de charger les demandes"
+          (await lireErreur(res)) || "Impossible de charger les tickets"
         );
       }
 
-      const data: Reservation[] = await res.json();
+      const data: unknown = await res.json();
 
-      setReservations(Array.isArray(data) ? data : []);
+      setReservations(
+        Array.isArray(data) ? (data as Reservation[]) : []
+      );
     } catch (error) {
-      const message =
+      toast.error(
         error instanceof Error
           ? error.message
-          : "Impossible de charger vos demandes";
-
-      toast.error(message);
+          : "Impossible de charger les données"
+      );
     } finally {
       setChargement(false);
     }
   };
 
   useEffect(() => {
-    chargerReservations();
+    void chargerDonnees();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // =======================================================
-  // MODAL
-  // =======================================================
+  // =========================================================
+  // MODALE NOUVELLE MISSION
+  // =========================================================
 
   const ouvrirModal = () => {
     setFormulaire(formulaireInitial);
@@ -274,26 +280,21 @@ export default function ChefDirectionPage() {
   };
 
   const fermerModal = () => {
-    if (envoi) {
-      return;
-    }
+    if (envoi) return;
 
     setModalOuverte(false);
     setFormulaire(formulaireInitial);
   };
 
   useEffect(() => {
-    if (!modalOuverte) {
-      return;
-    }
+    if (!modalOuverte) return;
 
     const ancienOverflow = document.body.style.overflow;
-
     document.body.style.overflow = "hidden";
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !envoi) {
-        setModalOuverte(false);
+        fermerModal();
       }
     };
 
@@ -301,14 +302,15 @@ export default function ChefDirectionPage() {
 
     return () => {
       document.body.style.overflow = ancienOverflow;
-
       window.removeEventListener("keydown", handleKeyDown);
     };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOuverte, envoi]);
 
-  // =======================================================
-  // STATISTIQUES
-  // =======================================================
+  // =========================================================
+  // STATISTIQUES ET RECHERCHE
+  // =========================================================
 
   const totalDemandes = reservations.length;
 
@@ -324,35 +326,74 @@ export default function ChefDirectionPage() {
     (r) => r.statut === "REFUSEE"
   ).length;
 
-  // =======================================================
-  // URGENCE < 24H
-  // =======================================================
+  const reservationsFiltrees = useMemo(() => {
+    const terme = normaliserRecherche(recherche);
 
-  const estUrgente = useMemo(() => {
-    if (!formulaire.dateDebut) {
+    const ticketsSource = afficherRefuses
+      ? reservations.filter((r) => r.statut === "REFUSEE")
+      : reservations;
+
+    if (!terme) return ticketsSource;
+
+    return ticketsSource.filter((reservation) => {
+      const ticket = `TKT-${String(reservation.id).padStart(5, "0")}`;
+
+      const typeDemande = obtenirStyleTypeDemande(
+        obtenirTypeDemande(reservation)
+      ).label;
+
+      const statut =
+        statutStyle[reservation.statut]?.label || reservation.statut;
+
+      const texteRecherche = [
+        ticket,
+        reservation.motif,
+        reservation.destination,
+        reservation.pointDepart,
+        reservation.demandeurNom,
+        reservation.demandeurPrenom,
+        reservation.demandeurMatricule,
+        reservation.demandeurEntite,
+        reservation.demandeurTelephone,
+        libelleZoneMission(reservation.zoneMission),
+        libelleEtatOperationnel(reservation),
+        statut,
+        typeDemande,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return normaliserRecherche(texteRecherche).includes(terme);
+    });
+  }, [reservations, recherche, afficherRefuses]);
+
+  // =========================================================
+  // FORMULAIRE
+  // =========================================================
+
+  const estHorsDelai24h = useMemo(() => {
+    if (
+      formulaire.zoneMission !== "HORS_TOAMASINA" ||
+      !formulaire.dateDebut
+    ) {
       return false;
     }
 
     const debut = new Date(formulaire.dateDebut);
 
-    if (Number.isNaN(debut.getTime())) {
-      return false;
-    }
+    if (Number.isNaN(debut.getTime())) return false;
 
-    const maintenant = new Date();
+    return debut < new Date(Date.now() + 24 * 60 * 60 * 1000);
+  }, [formulaire.zoneMission, formulaire.dateDebut]);
 
-    const limite24h = new Date(
-      maintenant.getTime() + 24 * 60 * 60 * 1000
-    );
+  const etatOperationnelFormulaire =
+    formulaire.zoneMission === "HORS_TOAMASINA"
+      ? "PLANIFIEE"
+      : formulaire.zoneMission === "VILLE_TOAMASINA"
+        ? "FLEXIBLE"
+        : null;
 
-    return debut < limite24h;
-  }, [formulaire.dateDebut]);
-
-  // =======================================================
-  // MODIFIER CHAMP
-  // =======================================================
-
-  const modifierChamp = <K extends keyof FormulaireReservation>(
+  const modifierChamp = <K extends keyof FormulaireReservation,>(
     champ: K,
     valeur: FormulaireReservation[K]
   ) => {
@@ -362,9 +403,51 @@ export default function ChefDirectionPage() {
     }));
   };
 
-  // =======================================================
-  // ENVOYER DEMANDE
-  // =======================================================
+  const lignesPassagers = useMemo(() => {
+    const nombre = Math.max(
+      1,
+      Number.parseInt(formulaire.nombrePassagers || "1", 10) || 1
+    );
+
+    const existants = formulaire.listePassagers
+      .split("\n")
+      .map((nom) => nom.trim());
+
+    return Array.from(
+      { length: nombre },
+      (_, index) => existants[index] || ""
+    );
+  }, [formulaire.nombrePassagers, formulaire.listePassagers]);
+
+  const modifierNombrePassagers = (valeur: string) => {
+    const nombre = Math.max(
+      1,
+      Number.parseInt(valeur || "1", 10) || 1
+    );
+
+    const existants = formulaire.listePassagers
+      .split("\n")
+      .map((nom) => nom.trim());
+
+    setFormulaire((ancien) => ({
+      ...ancien,
+      nombrePassagers: valeur,
+      listePassagers: Array.from(
+        { length: nombre },
+        (_, index) => existants[index] || ""
+      ).join("\n"),
+    }));
+  };
+
+  const modifierNomPassager = (index: number, valeur: string) => {
+    const copie = [...lignesPassagers];
+    copie[index] = valeur;
+    modifierChamp("listePassagers", copie.join("\n"));
+  };
+
+  // =========================================================
+  // ENVOI D'UNE NOUVELLE MISSION
+  // =========================================================
 
   const envoyerDemande = async (
     event: FormEvent<HTMLFormElement>
@@ -383,9 +466,12 @@ export default function ChefDirectionPage() {
       return;
     }
 
-    // -----------------------------------------------------
-    // DATES
-    // -----------------------------------------------------
+    if (!formulaire.zoneMission) {
+      toast.error(
+        "Veuillez préciser si la mission est dans Toamasina ou hors Toamasina"
+      );
+      return;
+    }
 
     if (!formulaire.dateDebut || !formulaire.dateFin) {
       toast.error(
@@ -396,7 +482,6 @@ export default function ChefDirectionPage() {
 
     const debut = new Date(formulaire.dateDebut);
     const fin = new Date(formulaire.dateFin);
-    const maintenant = new Date();
 
     if (
       Number.isNaN(debut.getTime()) ||
@@ -406,30 +491,20 @@ export default function ChefDirectionPage() {
       return;
     }
 
-    if (debut < maintenant) {
+    if (debut < new Date()) {
       toast.error("La date de départ ne peut pas être dans le passé");
       return;
     }
 
     if (fin <= debut) {
-      toast.error(
-        "La date de retour doit être après la date de départ"
-      );
+      toast.error("La date de retour doit être après la date de départ");
       return;
     }
-
-    // -----------------------------------------------------
-    // OBJET
-    // -----------------------------------------------------
 
     if (!formulaire.motif.trim()) {
       toast.error("L'objet de la mission est obligatoire");
       return;
     }
-
-    // -----------------------------------------------------
-    // BENEFICIAIRE
-    // -----------------------------------------------------
 
     if (!formulaire.demandeurNom.trim()) {
       toast.error("Le nom du bénéficiaire est obligatoire");
@@ -458,10 +533,6 @@ export default function ChefDirectionPage() {
       return;
     }
 
-    // -----------------------------------------------------
-    // MISSION
-    // -----------------------------------------------------
-
     if (!formulaire.pointDepart.trim()) {
       toast.error("Le point de départ est obligatoire");
       return;
@@ -472,77 +543,70 @@ export default function ChefDirectionPage() {
       return;
     }
 
-    // -----------------------------------------------------
-    // PASSAGERS
-    // -----------------------------------------------------
-
     const nombrePassagers = Number(formulaire.nombrePassagers);
 
     if (
       !Number.isInteger(nombrePassagers) ||
       nombrePassagers <= 0
     ) {
+      toast.error("Le nombre de passagers doit être supérieur à 0");
+      return;
+    }
+
+    const passagersSaisis = lignesPassagers.map((nom) => nom.trim());
+
+    if (
+      passagersSaisis.length !== nombrePassagers ||
+      passagersSaisis.some((nom) => !nom)
+    ) {
       toast.error(
-        "Le nombre de passagers doit être supérieur à 0"
+        "Veuillez renseigner le nom et le prénom de chaque passager."
       );
       return;
     }
 
-    // -----------------------------------------------------
-    // URGENCE
-    // -----------------------------------------------------
-
-    if (estUrgente && !formulaire.motifUrgence.trim()) {
+    if (
+      formulaire.zoneMission === "HORS_TOAMASINA" &&
+      estHorsDelai24h &&
+      !formulaire.motifUrgence.trim()
+    ) {
       toast.error(
-        "Cette demande est effectuée à moins de 24 heures du départ. Le motif d'urgence est obligatoire."
+        "La mission hors Toamasina est créée à moins de 24 heures du départ. Veuillez justifier cette demande tardive."
       );
       return;
     }
-
-    // -----------------------------------------------------
-    // JSON BACKEND
-    // -----------------------------------------------------
 
     const body = {
+      zoneMission: formulaire.zoneMission,
       dateDebut: convertirDatePourApi(formulaire.dateDebut),
-
       dateFin: convertirDatePourApi(formulaire.dateFin),
-
       motif: formulaire.motif.trim(),
 
-      motifUrgence: estUrgente
-        ? formulaire.motifUrgence.trim()
-        : null,
+      // Les urgences opérationnelles sont traitées par le circuit dédié.
+      demandeUrgente: false,
+
+      motifUrgence:
+        formulaire.zoneMission === "HORS_TOAMASINA" &&
+        estHorsDelai24h
+          ? formulaire.motifUrgence.trim()
+          : null,
 
       demandeurNom: formulaire.demandeurNom.trim(),
-
       demandeurPrenom: formulaire.demandeurPrenom.trim(),
-
       demandeurMatricule: formulaire.demandeurMatricule.trim(),
-
       demandeurEntite: formulaire.demandeurEntite.trim(),
-
       demandeurTelephone: formulaire.demandeurTelephone.trim(),
 
       destination: formulaire.destination.trim(),
-
       pointDepart: formulaire.pointDepart.trim(),
-
       nombrePassagers,
+      listePassagers: passagersSaisis.join("\n"),
 
-      listePassagers: formulaire.listePassagers.trim()
-        ? formulaire.listePassagers.trim()
-        : null,
+      // L'affectation du véhicule et du chauffeur relève de la logistique.
+      typeVehiculeSouhaite: null,
+      besoinChauffeur: true,
 
-      typeVehiculeSouhaite: formulaire.typeVehiculeSouhaite
-        ? formulaire.typeVehiculeSouhaite
-        : null,
-
-      besoinChauffeur: formulaire.besoinChauffeur,
-
-      observations: formulaire.observations.trim()
-        ? formulaire.observations.trim()
-        : null,
+      observations: formulaire.observations.trim() || null,
     };
 
     setEnvoi(true);
@@ -550,40 +614,49 @@ export default function ChefDirectionPage() {
     try {
       const res = await fetch(`${API}/reservations`, {
         method: "POST",
-
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-
         body: JSON.stringify(body),
       });
 
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
         toast.error("Votre session a expiré");
         router.replace("/login");
         return;
       }
 
-      if (!res.ok) {
-        const message = await lireErreur(res);
-
+      if (res.status === 403) {
         toast.error(
-          message || "Impossible d'enregistrer la demande"
+          "Vous n'avez pas l'autorisation de créer ce ticket."
         );
-
         return;
       }
 
+      if (!res.ok) {
+        toast.error(
+          (await lireErreur(res)) || "Impossible d'enregistrer la mission"
+        );
+        return;
+      }
+
+      const creee = (await res.json().catch(() => null)) as
+        | Reservation
+        | null;
+
+      const ticket = creee?.id
+        ? `TKT-${String(creee.id).padStart(5, "0")}`
+        : "Le ticket";
+
       toast.success(
-        "La demande de véhicule a été transmise au Service Logistique"
+        `${ticket} a été transmis au Service Logistique`
       );
 
       setModalOuverte(false);
       setFormulaire(formulaireInitial);
-
-      await chargerReservations();
+      await chargerDonnees();
     } catch {
       toast.error("Erreur de communication avec le serveur");
     } finally {
@@ -591,9 +664,16 @@ export default function ChefDirectionPage() {
     }
   };
 
-  // =======================================================
-  // RENDU
-  // =======================================================
+  const allerListe = () => {
+    document.getElementById("liste-tickets-direction")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  // =========================================================
+  // AFFICHAGE
+  // =========================================================
 
   return (
     <>
@@ -610,7 +690,7 @@ export default function ChefDirectionPage() {
         textarea,
         select {
           color: #111827;
-          background-color: white;
+          background-color: #ffffff;
           font-family: inherit;
           font-size: 14px;
         }
@@ -631,42 +711,37 @@ export default function ChefDirectionPage() {
           font-family: inherit;
         }
 
+        .ligne-demande {
+          transition: background-color 0.18s ease;
+        }
+
         .ligne-demande:hover {
-          background-color: #f9fafb;
+          background-color: #f8fafc !important;
         }
 
-        .bouton-principal:hover:not(:disabled) {
+        .bouton-vert:hover:not(:disabled) {
+          background-color: #15803d !important;
+        }
+
+        .bouton-bleu:hover:not(:disabled) {
+          background-color: #1d4ed8 !important;
+        }
+
+        .bouton-rouge:hover:not(:disabled) {
           background-color: #b91c1c !important;
-        }
-
-        .bouton-secondaire:hover:not(:disabled) {
-          background-color: #f9fafb !important;
-        }
-
-        .profil-header:hover {
-          background-color: #f9fafb !important;
         }
 
         @media (max-width: 950px) {
           .stats-grid {
-            grid-template-columns: repeat(
-              2,
-              minmax(0, 1fr)
-            ) !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
 
           .form-grid {
             grid-template-columns: 1fr !important;
           }
-        }
 
-        @media (max-width: 700px) {
-          .header-marque-texte {
-            display: none !important;
-          }
-
-          .header-profil-texte {
-            display: none !important;
+          .passager-ligne {
+            grid-template-columns: 1fr !important;
           }
         }
 
@@ -697,23 +772,11 @@ export default function ChefDirectionPage() {
             max-height: 95vh !important;
             border-radius: 14px 14px 0 0 !important;
           }
-
-          .header-interieur {
-            padding-left: 18px !important;
-            padding-right: 18px !important;
-          }
         }
       `}</style>
 
-      {/* ===================================================
-          HEADER
-      =================================================== */}
-
-      <HeaderChefDirection />
-
-      {/* ===================================================
-          PAGE
-      =================================================== */}
+      {/* La cloche de notification est masquée pour cette page. */}
+      <EnTete afficherNotifications={false} />
 
       <div
         className="page-container"
@@ -723,15 +786,8 @@ export default function ChefDirectionPage() {
           padding: 32,
         }}
       >
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-          }}
-        >
-          {/* =================================================
-              ENTETE PAGE
-          ================================================= */}
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          {/* EN-TÊTE DE PAGE */}
 
           <div
             className="header-page"
@@ -744,537 +800,477 @@ export default function ChefDirectionPage() {
             }}
           >
             <div>
-              <div
+              <h1
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
+                  margin: 0,
+                  fontSize: 22,
+                  fontWeight: 700,
+                  color: "#172033",
                 }}
               >
-                <Car size={25} color="#1e293b" />
-
-                <h2
-                  style={{
-                    color: "#1e293b",
-                    margin: 0,
-                  }}
-                >
-                  Espace Chef de Direction
-                </h2>
-              </div>
+                Chef de Direction
+              </h1>
 
               <p
                 style={{
-                  margin: "7px 0 0 35px",
-                  color: "#6b7280",
-                  fontSize: 14,
+                  margin: "5px 0 0",
+                  color: "#64748b",
+                  fontSize: 13,
                 }}
               >
-                Gestion de vos demandes de véhicules pour mission
+                Création et suivi des tickets de mission
               </p>
             </div>
 
+            {/* SEUL BOUTON « NOUVELLE MISSION » EN HAUT DE PAGE */}
             <button
               type="button"
-              className="bouton-principal bouton-nouvelle"
+              className="bouton-vert bouton-nouvelle"
               onClick={ouvrirModal}
-              style={{
-                border: "none",
-                borderRadius: 8,
-                backgroundColor: "#dc2626",
-                color: "white",
-                padding: "11px 17px",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
+              style={boutonVert}
             >
               <Plus size={18} />
-
-              Nouvelle demande
+              Nouvelle mission
             </button>
           </div>
 
-          {/* =================================================
-              STATISTIQUES
-          ================================================= */}
+          {/* STATISTIQUES */}
 
           <div
             className="stats-grid"
             style={{
               display: "grid",
-              gridTemplateColumns:
-                "repeat(4, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
               gap: 16,
               marginBottom: 24,
             }}
           >
             <StatCard
-              titre="Mes demandes"
+              titre="Tickets de ma direction"
               valeur={chargement ? "…" : totalDemandes}
-              icone={
-                <FileText size={21} color="#2563eb" />
-              }
+              icone={<FileText size={21} color="#2563eb" />}
             />
 
             <StatCard
               titre="En attente"
               valeur={chargement ? "…" : enAttente}
-              icone={
-                <Clock3 size={21} color="#d97706" />
-              }
+              icone={<Clock3 size={21} color="#d97706" />}
             />
 
             <StatCard
-              titre="Validées"
+              titre="Validés"
               valeur={chargement ? "…" : validees}
-              icone={
-                <CheckCircle2 size={21} color="#16a34a" />
-              }
+              icone={<CheckCircle2 size={21} color="#16a34a" />}
             />
 
             <StatCard
-              titre="Refusées"
+              titre="Refusés"
               valeur={chargement ? "…" : refusees}
-              icone={
-                <XCircle size={21} color="#dc2626" />
-              }
+              icone={<XCircle size={21} color="#dc2626" />}
             />
           </div>
 
-          {/* =================================================
-              TITRE TABLEAU
-          ================================================= */}
+          {/* NAVIGATION : UNIQUEMENT LES BOUTONS BLEU ET ROUGE */}
 
-          <div
+          <nav
+            aria-label="Navigation des missions"
             style={{
+              backgroundColor: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 20,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              marginBottom: 12,
+              flexWrap: "wrap",
+              gap: 10,
             }}
           >
-            <div>
-              <h3
-                style={{
-                  margin: 0,
-                  color: "#1e293b",
-                  fontSize: 18,
-                }}
-              >
-                Mes demandes
-              </h3>
-
-              <p
-                style={{
-                  margin: "5px 0 0",
-                  color: "#6b7280",
-                  fontSize: 13,
-                }}
-              >
-                Suivez ici les demandes transmises au Service
-                Logistique.
-              </p>
-            </div>
+            <button
+              type="button"
+              className="bouton-bleu"
+              onClick={() => {
+                setAfficherRefuses(false);
+                allerListe();
+              }}
+              style={{ ...boutonBleu, minHeight: 43 }}
+            >
+              <FileText size={16} />
+              Liste des tickets ({totalDemandes})
+            </button>
 
             <button
               type="button"
-              className="bouton-secondaire"
-              onClick={chargerReservations}
+              className="bouton-rouge"
+              aria-pressed={afficherRefuses}
+              onClick={() => {
+                setAfficherRefuses((actuel) => !actuel);
+                allerListe();
+              }}
+              style={{
+                ...boutonRouge,
+                minHeight: 43,
+                boxShadow: afficherRefuses
+                  ? "0 0 0 2px #ffffff inset"
+                  : "none",
+              }}
+            >
+              <XCircle size={16} />
+
+              {afficherRefuses
+                ? "Afficher tous les tickets"
+                : `Tickets refusés (${refusees})`}
+            </button>
+          </nav>
+
+          {/* RECHERCHE */}
+
+          <div style={rechercheCardStyle}>
+            <div style={rechercheTitreStyle}>
+              <Search size={17} color="#475569" />
+              Rechercher un ticket
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <Search
+                size={17}
+                color="#9ca3af"
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  pointerEvents: "none",
+                }}
+              />
+
+              <input
+                type="search"
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                placeholder="Ticket, objet, destination, bénéficiaire, statut..."
+                aria-label="Rechercher dans mes tickets"
+                style={{
+                  ...inputStyle,
+                  paddingLeft: 39,
+                  paddingRight: recherche ? 42 : 12,
+                  height: 42,
+                }}
+              />
+
+              {recherche && (
+                <button
+                  type="button"
+                  onClick={() => setRecherche("")}
+                  aria-label="Effacer la recherche"
+                  title="Effacer la recherche"
+                  style={boutonEffacerRecherche}
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            {recherche.trim() && (
+              <div style={resultatRechercheStyle}>
+                <strong style={{ color: "#374151" }}>
+                  {reservationsFiltrees.length}
+                </strong>{" "}
+                résultat
+                {reservationsFiltrees.length > 1 ? "s" : ""} sur{" "}
+                {reservations.length} ticket
+                {reservations.length > 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+
+          {/* TITRE DE LA LISTE ET ACTUALISATION */}
+
+          <div
+            id="liste-tickets-direction"
+            style={{
+              ...listeHeaderStyle,
+              scrollMarginTop: 85,
+            }}
+          >
+            <h3 style={listeTitreStyle}>
+              {afficherRefuses
+                ? "Tickets refusés de ma direction"
+                : "Tickets de ma direction"}
+            </h3>
+
+            <button
+              type="button"
+              className="bouton-bleu"
+              onClick={() => void chargerDonnees()}
               disabled={chargement}
               style={{
-                border: "1px solid #d1d5db",
-                backgroundColor: "white",
-                color: "#374151",
-                borderRadius: 8,
-                padding: "9px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
+                ...boutonBleu,
                 cursor: chargement ? "not-allowed" : "pointer",
                 opacity: chargement ? 0.6 : 1,
               }}
             >
               <RefreshCw size={15} />
-
               Actualiser
             </button>
           </div>
 
-          {/* =================================================
-              TABLEAU
-          ================================================= */}
+          {/* TABLEAU : EN-TÊTE BLANC */}
 
-          <div
-            style={{
-              backgroundColor: "white",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              overflowX: "auto",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor: "#f9fafb",
-                    borderBottom: "1px solid #e5e7eb",
-                  }}
-                >
-                  <th style={thStyle}>Référence</th>
-                  <th style={thStyle}>Objet de la mission</th>
-                  <th style={thStyle}>Destination</th>
-                  <th style={thStyle}>Départ</th>
-                  <th style={thStyle}>Passagers</th>
-                  <th style={thStyle}>Véhicule</th>
-                  <th style={thStyle}>Statut</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {chargement ? (
-                  <tr>
-                    <td colSpan={7} style={emptyStyle}>
-                      Chargement des demandes...
-                    </td>
+          <div style={listeBoxStyle}>
+            <div style={tableContainerStyle}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  minWidth: 860,
+                }}
+              >
+                <thead>
+                  <tr style={theadRowStyle}>
+                    <th style={thStyle}>Ticket</th>
+                    <th style={thStyle}>Mission</th>
+                    <th style={thStyle}>Zone</th>
+                    <th style={thStyle}>Destination</th>
+                    <th style={thStyle}>Départ</th>
+                    <th style={thStyle}>État opérationnel</th>
+                    <th style={thStyle}>Étape actuelle</th>
                   </tr>
-                ) : reservations.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={emptyStyle}>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <Car size={34} color="#9ca3af" />
+                </thead>
 
-                        <strong
+                <tbody>
+                  {chargement ? (
+                    <tr>
+                      <td colSpan={7} style={emptyStyle}>
+                        Chargement des tickets...
+                      </td>
+                    </tr>
+                  ) : reservations.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={emptyStyle}>
+                        <div style={emptyContentStyle}>
+                          <Car size={34} color="#9ca3af" />
+
+                          <strong style={{ color: "#374151" }}>
+                            Aucun ticket
+                          </strong>
+
+                          <span>
+                            Vous n&apos;avez encore créé aucune mission.
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={ouvrirModal}
+                            style={boutonLien}
+                          >
+                            Créer une mission
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : reservationsFiltrees.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={emptyStyle}>
+                        <div style={emptyContentStyle}>
+                          <Search size={32} color="#9ca3af" />
+
+                          <strong style={{ color: "#374151" }}>
+                            Aucun résultat
+                          </strong>
+
+                          <span>
+                            Aucun ticket ne correspond à votre recherche.
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setRecherche("")}
+                            style={boutonLien}
+                          >
+                            Effacer la recherche
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    reservationsFiltrees.map((reservation, index) => {
+                      const styleStatut =
+                        statutStyle[reservation.statut] || {
+                          bg: "#f3f4f6",
+                          text: "#374151",
+                          label: reservation.statut,
+                        };
+
+                      const styleType = obtenirStyleTypeDemande(
+                        obtenirTypeDemande(reservation)
+                      );
+
+                      return (
+                        <tr
+                          key={reservation.id}
+                          className="ligne-demande"
                           style={{
-                            color: "#374151",
+                            backgroundColor:
+                              index % 2 === 0 ? "#ffffff" : "#fcfcfd",
                           }}
                         >
-                          Aucune demande
-                        </strong>
-
-                        <span>
-                          Vous n&apos;avez encore transmis aucune
-                          demande de véhicule.
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={ouvrirModal}
-                          style={{
-                            border: "none",
-                            background: "none",
-                            color: "#dc2626",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                          }}
-                        >
-                          Créer une demande
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  reservations.map((reservation) => {
-                    const styleStatut =
-                      statutStyle[reservation.statut] || {
-                        bg: "#f3f4f6",
-                        text: "#374151",
-                        label: reservation.statut,
-                      };
-
-                    return (
-                      <tr
-                        key={reservation.id}
-                        className="ligne-demande"
-                        style={{
-                          borderBottom: "1px solid #f3f4f6",
-                        }}
-                      >
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              color: "#111827",
-                            }}
-                          >
-                            {`DMD-${String(
-                              reservation.id
-                            ).padStart(5, "0")}`}
-                          </div>
-
-                          {reservation.demandeUrgente && (
-                            <div
-                              style={{
-                                marginTop: 6,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  backgroundColor: "#fee2e2",
-                                  color: "#991b1b",
-                                  padding: "3px 7px",
-                                  borderRadius: 20,
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Urgente
-                              </span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              fontWeight: 600,
-                              color: "#111827",
-                              maxWidth: 260,
-                            }}
-                          >
-                            {reservation.motif}
-                          </div>
-
-                          <div
-                            style={{
-                              marginTop: 4,
-                              color: "#9ca3af",
-                              fontSize: 12,
-                            }}
-                          >
-                            Créée le{" "}
-                            {formatDateHeure(
-                              reservation.dateCreation
-                            )}
-                          </div>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <MapPin size={14} color="#6b7280" />
-
-                            {reservation.destination || "—"}
-                          </div>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <CalendarDays
-                              size={14}
-                              color="#6b7280"
-                            />
-
-                            {formatDateHeure(
-                              reservation.dateDebut
-                            )}
-                          </div>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <Users size={14} color="#6b7280" />
-
-                            {reservation.nombrePassagers ?? "—"}
-                          </div>
-                        </td>
-
-                        <td style={tdStyle}>
-                          {reservation.vehicule ? (
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 600,
-                                  color: "#111827",
-                                }}
-                              >
-                                {reservation.vehicule
-                                  .immatriculation ||
-                                  `Véhicule ${reservation.vehicule.id}`}
-                              </div>
-
-                              {(reservation.vehicule.marque ||
-                                reservation.vehicule.modele) && (
+                          <td style={tdStyle}>
+                            <div style={ticketCellStyle}>
+                              <div>
                                 <div
                                   style={{
-                                    color: "#9ca3af",
-                                    fontSize: 12,
-                                    marginTop: 3,
+                                    fontWeight: 800,
+                                    color: "#111827",
+                                    whiteSpace: "nowrap",
+                                    letterSpacing: 0.2,
                                   }}
                                 >
-                                  {[
-                                    reservation.vehicule.marque,
-                                    reservation.vehicule.modele,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" ")}
+                                  {`TKT-${String(
+                                    reservation.id
+                                  ).padStart(5, "0")}`}
+                                </div>
+
+                                <div style={{ marginTop: 6 }}>
+                                  <span
+                                    style={{
+                                      backgroundColor: styleType.bg,
+                                      color: styleType.text,
+                                      padding: "4px 9px",
+                                      borderRadius: 999,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      whiteSpace: "nowrap",
+                                      border: `1px solid ${styleType.text}22`,
+                                    }}
+                                  >
+                                    {styleType.label}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={missionCellStyle}>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  color: "#111827",
+                                  maxWidth: 250,
+                                  lineHeight: 1.45,
+                                }}
+                              >
+                                {reservation.motif}
+                              </div>
+
+                              <div style={texteSecondaireStyle}>
+                                Créé le{" "}
+                                {formatDateHeure(reservation.dateCreation)}
+                              </div>
+
+                              {reservation.demandeur?.role ===
+                                ROLES.ASSISTANT_DIRECTION && (
+                                <div style={texteSecondaireStyle}>
+                                  Créé par l’assistant :{" "}
+                                  {reservation.demandeur.nomComplet ||
+                                    reservation.demandeur.matricule ||
+                                    "—"}
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <span
+                          </td>
+
+                          <td style={tdStyle}>
+                            {libelleZoneMission(
+                              reservation.zoneMission
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={iconeTexteStyle}>
+                              <MapPin size={14} color="#6b7280" />
+                              {reservation.destination || "—"}
+                            </div>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div
                               style={{
-                                color: "#9ca3af",
-                                fontSize: 12,
+                                ...iconeTexteStyle,
+                                whiteSpace: "nowrap",
                               }}
                             >
-                              Non affecté
-                            </span>
-                          )}
-                        </td>
+                              <CalendarDays
+                                size={14}
+                                color="#6b7280"
+                              />
+                              {formatDateHeure(
+                                reservation.dateDebut
+                              )}
+                            </div>
+                          </td>
 
-                        <td style={tdStyle}>
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              backgroundColor: styleStatut.bg,
-                              color: styleStatut.text,
-                              padding: "5px 10px",
-                              borderRadius: 20,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {styleStatut.label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          <td style={tdStyle}>
+                            <BadgeEtatOperationnel
+                              libelle={libelleEtatOperationnel(
+                                reservation
+                              )}
+                            />
+                          </td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                backgroundColor: styleStatut.bg,
+                                color: styleStatut.text,
+                                padding: "6px 11px",
+                                borderRadius: 999,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                border: `1px solid ${styleStatut.text}22`,
+                              }}
+                            >
+                              {styleStatut.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ===================================================
-          MODAL
-      =================================================== */}
+      {/* =====================================================
+          MODALE NOUVELLE MISSION
+      ===================================================== */}
 
       {modalOuverte && (
         <div
           className="modal-container"
           onMouseDown={fermerModal}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            backgroundColor: "rgba(15, 23, 42, 0.58)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
+          style={modalOverlayStyle}
         >
           <form
             className="modal-content"
             onSubmit={envoyerDemande}
             onMouseDown={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 920,
-              maxHeight: "92vh",
-              overflowY: "auto",
-              backgroundColor: "white",
-              borderRadius: 12,
-              boxShadow: "0 24px 70px rgba(0,0,0,0.28)",
-            }}
+            style={modalContentStyle}
           >
-            {/* HEADER MODAL */}
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 16,
-                padding: "18px 22px",
-                borderBottom: "1px solid #e5e7eb",
-                position: "sticky",
-                top: 0,
-                backgroundColor: "white",
-                zIndex: 10,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 11,
-                }}
-              >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 9,
-                    backgroundColor: "#fee2e2",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
+            <div style={modalHeaderStyle}>
+              <div style={iconeTexteStyle}>
+                <div style={modalIconStyle}>
                   <Car size={21} color="#dc2626" />
                 </div>
 
-                <div>
-                  <h3
-                    style={{
-                      margin: 0,
-                      color: "#1e293b",
-                      fontSize: 18,
-                    }}
-                  >
-                    Nouvelle demande de véhicule
-                  </h3>
-
-                  <p
-                    style={{
-                      margin: "4px 0 0",
-                      color: "#6b7280",
-                      fontSize: 13,
-                    }}
-                  >
-                    Demande de véhicule pour mission
-                  </p>
-                </div>
+                <h3 style={modalTitleStyle}>Nouvelle mission</h3>
               </div>
 
               <button
@@ -1283,15 +1279,8 @@ export default function ChefDirectionPage() {
                 disabled={envoi}
                 aria-label="Fermer"
                 style={{
-                  width: 36,
-                  height: 36,
-                  border: "none",
-                  backgroundColor: "#f3f4f6",
-                  borderRadius: 8,
+                  ...closeButtonStyle,
                   cursor: envoi ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   opacity: envoi ? 0.5 : 1,
                 }}
               >
@@ -1299,22 +1288,15 @@ export default function ChefDirectionPage() {
               </button>
             </div>
 
-            {/* CONTENU MODAL */}
-
             <div style={{ padding: 22 }}>
-              {/* 1 BENEFICIAIRE */}
+              {/* BÉNÉFICIAIRE */}
 
               <BlocFormulaire
                 numero="1"
                 titre="Bénéficiaire de la mission"
-                icone={
-                  <UserRound size={18} color="#2563eb" />
-                }
+                icone={<UserRound size={18} color="#2563eb" />}
               >
-                <div
-                  className="form-grid"
-                  style={gridDeuxColonnes}
-                >
+                <div className="form-grid" style={gridDeuxColonnes}>
                   <Champ label="Nom" obligatoire>
                     <input
                       value={formulaire.demandeurNom}
@@ -1393,24 +1375,58 @@ export default function ChefDirectionPage() {
                 </div>
               </BlocFormulaire>
 
-              {/* 2 MISSION */}
+              {/* INFORMATIONS SUR LA MISSION */}
 
               <BlocFormulaire
                 numero="2"
                 titre="Informations sur la mission"
                 icone={<MapPin size={18} color="#16a34a" />}
               >
-                <Champ label="Objet de la mission" obligatoire>
-                  <textarea
-                    value={formulaire.motif}
-                    onChange={(e) =>
-                      modifierChamp("motif", e.target.value)
-                    }
-                    rows={3}
-                    placeholder="Décrivez brièvement l'objet de la mission..."
-                    style={textareaStyle}
-                  />
-                </Champ>
+                <div className="form-grid" style={gridDeuxColonnes}>
+                  <Champ label="Zone de mission" obligatoire>
+                    <select
+                      value={formulaire.zoneMission}
+                      onChange={(e) =>
+                        modifierChamp(
+                          "zoneMission",
+                          e.target.value as ZoneMission | ""
+                        )
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="">Sélectionner la zone</option>
+
+                      <option value="VILLE_TOAMASINA">
+                        Dans la ville de Toamasina
+                      </option>
+
+                      <option value="HORS_TOAMASINA">
+                        Hors ville de Toamasina
+                      </option>
+                    </select>
+                  </Champ>
+
+                  <Champ label="État opérationnel">
+                    <div style={readOnlyStyle}>
+                      {etatOperationnelFormulaire ||
+                        "Sélectionnez la zone"}
+                    </div>
+                  </Champ>
+                </div>
+
+                <div style={{ marginTop: 16 }}>
+                  <Champ label="Objet de la mission" obligatoire>
+                    <textarea
+                      value={formulaire.motif}
+                      onChange={(e) =>
+                        modifierChamp("motif", e.target.value)
+                      }
+                      rows={3}
+                      placeholder="Décrivez brièvement l'objet de la mission..."
+                      style={textareaStyle}
+                    />
+                  </Champ>
+                </div>
 
                 <div
                   className="form-grid"
@@ -1482,211 +1498,114 @@ export default function ChefDirectionPage() {
                   </Champ>
                 </div>
 
-                {/* URGENCE */}
+                {formulaire.zoneMission === "HORS_TOAMASINA" &&
+                  estHorsDelai24h &&
+                  formulaire.dateDebut && (
+                    <div style={warningJauneStyle}>
+                      <div style={warningRowStyle}>
+                        <Clock3
+                          size={20}
+                          color="#d97706"
+                          style={{ flexShrink: 0 }}
+                        />
 
-                {estUrgente && formulaire.dateDebut && (
-                  <div
-                    style={{
-                      marginTop: 17,
-                      border: "1px solid #fecaca",
-                      backgroundColor: "#fef2f2",
-                      borderRadius: 9,
-                      padding: 15,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 10,
-                      }}
-                    >
-                      <AlertTriangle
-                        size={20}
-                        color="#dc2626"
-                        style={{
-                          marginTop: 1,
-                          flexShrink: 0,
-                        }}
-                      />
+                        <div style={{ flex: 1 }}>
+                          <strong>
+                            Mission hors ville créée tardivement
+                          </strong>
 
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color: "#991b1b",
-                          }}
-                        >
-                          Demande urgente
+                          <p style={warningTextStyle}>
+                            Le départ est prévu à moins de 24 heures.
+                            Une justification est obligatoire.
+                          </p>
+
+                          <Champ
+                            label="Justification de la demande tardive"
+                            obligatoire
+                          >
+                            <textarea
+                              value={formulaire.motifUrgence}
+                              onChange={(e) =>
+                                modifierChamp(
+                                  "motifUrgence",
+                                  e.target.value
+                                )
+                              }
+                              rows={3}
+                              placeholder="Ex. Mission confirmée tardivement..."
+                              style={textareaStyle}
+                            />
+                          </Champ>
                         </div>
-
-                        <p
-                          style={{
-                            margin: "4px 0 10px",
-                            fontSize: 12,
-                            lineHeight: 1.5,
-                            color: "#b91c1c",
-                          }}
-                        >
-                          Le départ est prévu à moins de 24 heures.
-                          Une justification est obligatoire.
-                        </p>
-
-                        <Champ
-                          label="Motif de l'urgence"
-                          obligatoire
-                        >
-                          <textarea
-                            value={formulaire.motifUrgence}
-                            onChange={(e) =>
-                              modifierChamp(
-                                "motifUrgence",
-                                e.target.value
-                              )
-                            }
-                            rows={3}
-                            placeholder="Expliquez la raison de cette demande urgente..."
-                            style={textareaStyle}
-                          />
-                        </Champ>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </BlocFormulaire>
 
-              {/* 3 TRANSPORT */}
+              {/* PASSAGERS ET CONTRAINTES */}
 
               <BlocFormulaire
                 numero="3"
-                titre="Besoin de transport"
+                titre="Passagers et contraintes"
                 icone={<Users size={18} color="#7c3aed" />}
               >
-                <div
-                  className="form-grid"
-                  style={gridDeuxColonnes}
-                >
-                  <Champ
-                    label="Nombre de passagers"
-                    obligatoire
-                  >
+                <div style={{ marginTop: 16 }}>
+                  <Champ label="Nombre de passagers" obligatoire>
                     <input
                       type="number"
                       min={1}
+                      step={1}
                       value={formulaire.nombrePassagers}
                       onChange={(e) =>
-                        modifierChamp(
-                          "nombrePassagers",
-                          e.target.value
-                        )
+                        modifierNombrePassagers(e.target.value)
                       }
                       style={inputStyle}
                     />
-                  </Champ>
-
-                  <Champ label="Type de véhicule souhaité">
-                    <select
-                      value={formulaire.typeVehiculeSouhaite}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "typeVehiculeSouhaite",
-                          e.target.value
-                        )
-                      }
-                      style={inputStyle}
-                    >
-                      <option value="">
-                        Aucun type particulier
-                      </option>
-
-                      <option value="BERLINE">Berline</option>
-                      <option value="4X4">4x4</option>
-
-                      <option value="UTILITAIRE">
-                        Utilitaire
-                      </option>
-
-                      <option value="MINIBUS">Minibus</option>
-                      <option value="AUTRE">Autre</option>
-                    </select>
                   </Champ>
                 </div>
 
                 <div style={{ marginTop: 16 }}>
-                  <Champ label="Liste des passagers">
-                    <textarea
-                      value={formulaire.listePassagers}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "listePassagers",
-                          e.target.value
-                        )
-                      }
-                      rows={3}
-                      placeholder="Ex. RAKOTO Jean, RASOA Marie..."
-                      style={textareaStyle}
-                    />
-                  </Champ>
-                </div>
+                  <Champ label="Liste des passagers" obligatoire>
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {lignesPassagers.map((nom, index) => (
+                        <div
+                          key={`passager-${index}`}
+                          className="passager-ligne"
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "110px minmax(0, 1fr)",
+                            gap: 10,
+                            alignItems: "center",
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#64748b",
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Passager {index + 1}
+                          </span>
 
-                <div
-                  style={{
-                    marginTop: 17,
-                    padding: "13px 14px",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    backgroundColor: "#f9fafb",
-                  }}
-                >
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formulaire.besoinChauffeur}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "besoinChauffeur",
-                          e.target.checked
-                        )
-                      }
-                      style={{
-                        width: 18,
-                        height: 18,
-                        accentColor: "#dc2626",
-                        cursor: "pointer",
-                      }}
-                    />
-
-                    <div>
-                      <div
-                        style={{
-                          color: "#374151",
-                          fontSize: 14,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Besoin d&apos;un chauffeur
-                      </div>
-
-                      <div
-                        style={{
-                          color: "#6b7280",
-                          fontSize: 12,
-                          marginTop: 2,
-                        }}
-                      >
-                        Cochez si un chauffeur doit être affecté
-                        à la mission.
-                      </div>
+                          <input
+                            value={nom}
+                            onChange={(e) =>
+                              modifierNomPassager(
+                                index,
+                                e.target.value
+                              )
+                            }
+                            placeholder={`Nom et prénom du passager ${
+                              index + 1
+                            }`}
+                            style={inputStyle}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  </label>
+                  </Champ>
                 </div>
 
                 <div style={{ marginTop: 16 }}>
@@ -1706,74 +1625,18 @@ export default function ChefDirectionPage() {
                   </Champ>
                 </div>
               </BlocFormulaire>
-
-              {/* INFO VEHICULE */}
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  backgroundColor: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: 9,
-                  padding: 14,
-                }}
-              >
-                <Car
-                  size={19}
-                  color="#2563eb"
-                  style={{
-                    marginTop: 1,
-                    flexShrink: 0,
-                  }}
-                />
-
-                <div
-                  style={{
-                    color: "#1e40af",
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                  }}
-                >
-                  <strong>Affectation du véhicule</strong>
-
-                  <br />
-
-                  Le véhicule précis sera affecté par le Service
-                  Logistique après vérification des disponibilités.
-                </div>
-              </div>
             </div>
 
-            {/* FOOTER */}
+            {/* ACTIONS DU FORMULAIRE */}
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-                padding: "16px 22px",
-                borderTop: "1px solid #e5e7eb",
-                backgroundColor: "#f9fafb",
-                position: "sticky",
-                bottom: 0,
-                zIndex: 10,
-              }}
-            >
+            <div style={modalFooterStyle}>
               <button
                 type="button"
-                className="bouton-secondaire"
+                className="bouton-bleu"
                 onClick={fermerModal}
                 disabled={envoi}
                 style={{
-                  border: "1px solid #d1d5db",
-                  backgroundColor: "white",
-                  color: "#374151",
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  cursor: envoi ? "not-allowed" : "pointer",
-                  fontWeight: 600,
+                  ...boutonBleu,
                   opacity: envoi ? 0.6 : 1,
                 }}
               >
@@ -1782,20 +1645,12 @@ export default function ChefDirectionPage() {
 
               <button
                 type="submit"
-                className="bouton-principal"
+                className="bouton-vert"
                 disabled={envoi}
                 style={{
-                  border: "none",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  cursor: envoi ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
+                  ...boutonVert,
                   opacity: envoi ? 0.7 : 1,
+                  cursor: envoi ? "not-allowed" : "pointer",
                 }}
               >
                 {envoi ? (
@@ -1806,7 +1661,7 @@ export default function ChefDirectionPage() {
                 ) : (
                   <>
                     <Send size={17} />
-                    Transmettre la demande
+                    Créer le ticket
                   </>
                 )}
               </button>
@@ -1819,419 +1674,7 @@ export default function ChefDirectionPage() {
 }
 
 // =========================================================
-// HEADER
-// =========================================================
-
-function HeaderChefDirection() {
-  const router = useRouter();
-
-  const [menuOuvert, setMenuOuvert] = useState(false);
-
-  const [profil, setProfil] = useState<ProfilUtilisateur>({
-    matricule: "",
-    nomComplet: "",
-    role: "",
-  });
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      return;
-    }
-
-    try {
-      const parties = token.split(".");
-
-      if (parties.length !== 3) {
-        return;
-      }
-
-      let payloadBase64 = parties[1]
-        .replace(/-/g, "+")
-        .replace(/_/g, "/");
-
-      while (payloadBase64.length % 4 !== 0) {
-        payloadBase64 += "=";
-      }
-
-      const payload = JSON.parse(atob(payloadBase64));
-
-      let role = "";
-
-      if (typeof payload.role === "string") {
-        role = payload.role;
-      } else if (typeof payload.authority === "string") {
-        role = payload.authority;
-      } else if (
-        Array.isArray(payload.roles) &&
-        payload.roles.length > 0
-      ) {
-        role = String(payload.roles[0]);
-      }
-
-      setProfil({
-        matricule:
-          payload.sub ||
-          payload.matricule ||
-          "",
-
-        nomComplet:
-          payload.nomComplet ||
-          payload.name ||
-          payload.nom ||
-          "",
-
-        role,
-      });
-    } catch (error) {
-      console.error("Erreur lecture JWT :", error);
-    }
-  }, []);
-
-  const deconnexion = () => {
-    localStorage.removeItem("token");
-
-    router.replace("/login");
-  };
-
-  return (
-    <header
-      style={{
-        width: "100%",
-        height: 66,
-        backgroundColor: "white",
-        borderBottom: "1px solid #e5e7eb",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        display: "flex",
-        alignItems: "center",
-        position: "relative",
-        zIndex: 100,
-      }}
-    >
-      <div
-        className="header-interieur"
-        style={{
-          width: "100%",
-          maxWidth: 1264,
-          margin: "0 auto",
-          padding: "0 32px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        {/* GAUCHE */}
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <img
-            src="/logo.png"
-            alt="SPAT"
-            style={{
-              height: 43,
-              maxWidth: 150,
-              width: "auto",
-              objectFit: "contain",
-            }}
-          />
-
-          <div
-            className="header-marque-texte"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                width: 1,
-                height: 30,
-                backgroundColor: "#e5e7eb",
-              }}
-            />
-
-            <div>
-              <div
-                style={{
-                  color: "#1e293b",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                Gestion de la flotte
-              </div>
-
-              <div
-                style={{
-                  color: "#9ca3af",
-                  fontSize: 11,
-                  marginTop: 2,
-                }}
-              >
-                Portail SPAT
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* DROITE */}
-
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            className="profil-header"
-            onClick={() =>
-              setMenuOuvert((ancien) => !ancien)
-            }
-            style={{
-              border: "none",
-              backgroundColor: "transparent",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "6px 8px",
-              borderRadius: 8,
-              cursor: "pointer",
-            }}
-          >
-            <div
-              className="header-profil-texte"
-              style={{
-                textAlign: "right",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#1e293b",
-                }}
-              >
-                {profil.nomComplet ||
-                  profil.matricule ||
-                  "Utilisateur SPAT"}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#6b7280",
-                  marginTop: 2,
-                }}
-              >
-                {formatRole(profil.role)}
-              </div>
-            </div>
-
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                overflow: "hidden",
-                border: "2px solid #e5e7eb",
-                backgroundColor: "#f3f4f6",
-              }}
-            >
-              <img
-                src="/icon.png"
-                alt="Profil"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-            </div>
-
-            <ChevronDown
-              size={15}
-              color="#6b7280"
-              style={{
-                transform: menuOuvert
-                  ? "rotate(180deg)"
-                  : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-              }}
-            />
-          </button>
-
-          {/* MENU */}
-
-          {menuOuvert && (
-            <div
-              style={{
-                position: "absolute",
-                top: 54,
-                right: 0,
-                width: 270,
-                backgroundColor: "white",
-                border: "1px solid #e5e7eb",
-                borderRadius: 10,
-                boxShadow:
-                  "0 12px 30px rgba(15,23,42,0.15)",
-                overflow: "hidden",
-                zIndex: 500,
-              }}
-            >
-              {/* IDENTITE */}
-
-              <div
-                style={{
-                  padding: 16,
-                  borderBottom: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 11,
-                    alignItems: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      backgroundColor: "#f3f4f6",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <img
-                      src="/icon.png"
-                      alt="Profil"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {profil.nomComplet ||
-                        "Utilisateur SPAT"}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#6b7280",
-                        marginTop: 3,
-                      }}
-                    >
-                      Matricule :{" "}
-                      {profil.matricule || "—"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* PROFIL */}
-
-              <div
-                style={{
-                  padding: "12px 16px",
-                  borderBottom: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 9,
-                  }}
-                >
-                  <UserRound
-                    size={16}
-                    color="#6b7280"
-                  />
-
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#9ca3af",
-                      }}
-                    >
-                      Profil
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 2,
-                        fontSize: 13,
-                        color: "#374151",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {formatRole(profil.role)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* DECONNEXION */}
-
-              <div style={{ padding: 7 }}>
-                <button
-                  type="button"
-                  onClick={deconnexion}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    backgroundColor: "transparent",
-                    padding: "10px 11px",
-                    borderRadius: 7,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 9,
-                    color: "#dc2626",
-                    fontWeight: 600,
-                    fontSize: 13,
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor =
-                      "#fef2f2";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor =
-                      "transparent";
-                  }}
-                >
-                  <LogOut size={17} />
-
-                  Se déconnecter
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-}
-
-// =========================================================
-// STAT CARD
+// COMPOSANTS
 // =========================================================
 
 function StatCard({
@@ -2244,65 +1687,16 @@ function StatCard({
   icone: ReactNode;
 }) {
   return (
-    <div
-      style={{
-        backgroundColor: "white",
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-        padding: 18,
-        boxShadow: "0 2px 5px rgba(0,0,0,0.03)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-        }}
-      >
-        <span
-          style={{
-            color: "#6b7280",
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          {titre}
-        </span>
-
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#f9fafb",
-            borderRadius: 8,
-          }}
-        >
-          {icone}
-        </div>
+    <div style={statCardStyle}>
+      <div style={statCardHeaderStyle}>
+        <span style={statCardLabelStyle}>{titre}</span>
+        <div style={statCardIconStyle}>{icone}</div>
       </div>
 
-      <div
-        style={{
-          color: "#1e293b",
-          fontSize: 28,
-          lineHeight: 1,
-          fontWeight: 700,
-        }}
-      >
-        {valeur}
-      </div>
+      <div style={statCardValueStyle}>{valeur}</div>
     </div>
   );
 }
-
-// =========================================================
-// BLOC FORMULAIRE
-// =========================================================
 
 function BlocFormulaire({
   numero,
@@ -2316,65 +1710,17 @@ function BlocFormulaire({
   children: ReactNode;
 }) {
   return (
-    <section
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-        marginBottom: 18,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 9,
-          backgroundColor: "#f9fafb",
-          padding: "13px 16px",
-          borderBottom: "1px solid #e5e7eb",
-        }}
-      >
-        <div
-          style={{
-            width: 27,
-            height: 27,
-            borderRadius: "50%",
-            backgroundColor: "white",
-            border: "1px solid #e5e7eb",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#374151",
-            fontWeight: 700,
-            fontSize: 12,
-          }}
-        >
-          {numero}
-        </div>
-
+    <section style={blocStyle}>
+      <div style={blocHeaderStyle}>
+        <div style={numeroStyle}>{numero}</div>
         {icone}
-
-        <h4
-          style={{
-            margin: 0,
-            color: "#1e293b",
-            fontSize: 15,
-          }}
-        >
-          {titre}
-        </h4>
+        <h4 style={blocTitleStyle}>{titre}</h4>
       </div>
 
-      <div style={{ padding: 17 }}>
-        {children}
-      </div>
+      <div style={{ padding: 17 }}>{children}</div>
     </section>
   );
 }
-
-// =========================================================
-// CHAMP
-// =========================================================
 
 function Champ({
   label,
@@ -2387,73 +1733,130 @@ function Champ({
 }) {
   return (
     <label style={{ display: "block" }}>
-      <div
-        style={{
-          marginBottom: 6,
-          color: "#374151",
-          fontSize: 13,
-          fontWeight: 600,
-        }}
-      >
+      <div style={champLabelStyle}>
         {label}
-
         {obligatoire && (
-          <span
-            style={{
-              color: "#dc2626",
-              marginLeft: 3,
-            }}
-          >
+          <span style={{ color: "#dc2626", marginLeft: 3 }}>
             *
           </span>
         )}
       </div>
-
       {children}
     </label>
   );
 }
 
-// =========================================================
-// ROLE
-// =========================================================
-
-function formatRole(role?: string) {
-  if (!role) {
-    return "Chef de Direction";
-  }
-
-  const roles: Record<string, string> = {
-    CHEF_DIRECTION: "Chef de Direction",
-    DIRECTEUR_DFP: "Directeur DFP",
-    CHEF_SERVICE_LOGISTIQUE: "Chef Service Logistique",
-    CHEF_SERVICE: "Chef de Service",
-    CHEF_DEPARTEMENT: "Chef de Département",
-    CHEF_DGAL: "Chef DGAL",
-    AGENT_FLOTTE: "Agent Flotte",
-    CHAUFFEUR: "Chauffeur",
-    MECANICIEN_DID: "Mécanicien DID",
-  };
+function BadgeEtatOperationnel({
+  libelle,
+}: {
+  libelle: string;
+}) {
+  const style =
+    libelle === "Flexible"
+      ? { bg: "#e0f2fe", color: "#075985" }
+      : libelle === "Urgente"
+        ? { bg: "#fee2e2", color: "#991b1b" }
+        : { bg: "#dcfce7", color: "#166534" };
 
   return (
-    roles[role] ||
-    role
-      .replaceAll("_", " ")
-      .toLowerCase()
-      .replace(/\b\w/g, (lettre) =>
-        lettre.toUpperCase()
-      )
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "5px 10px",
+        borderRadius: 20,
+        backgroundColor: style.bg,
+        color: style.color,
+        fontSize: 12,
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {libelle}
+    </span>
   );
 }
 
 // =========================================================
-// DATE API
+// HELPERS MÉTIER
 // =========================================================
 
-function convertirDatePourApi(valeur: string) {
-  if (!valeur) {
-    return valeur;
+function obtenirTypeDemande(
+  reservation: Reservation
+): TypeDemande {
+  if (
+    reservation.typeDemande === "PLANIFIEE" ||
+    reservation.typeDemande === "TARDIVE" ||
+    reservation.typeDemande === "URGENTE"
+  ) {
+    return reservation.typeDemande;
   }
+
+  if (reservation.demandeUrgente) return "URGENTE";
+  if (reservation.horsDelai24h) return "TARDIVE";
+
+  return "PLANIFIEE";
+}
+
+function obtenirStyleTypeDemande(type: TypeDemande) {
+  switch (type) {
+    case "URGENTE":
+      return {
+        bg: "#fee2e2",
+        text: "#991b1b",
+        label: "Urgente",
+      };
+
+    case "TARDIVE":
+      return {
+        bg: "#fef3c7",
+        text: "#92400e",
+        label: "Tardive",
+      };
+
+    default:
+      return {
+        bg: "#e0f2fe",
+        text: "#075985",
+        label: "Planifiée",
+      };
+  }
+}
+
+function libelleZoneMission(
+  zone?: ZoneMission | null
+) {
+  if (zone === "VILLE_TOAMASINA") return "Toamasina";
+  if (zone === "HORS_TOAMASINA") return "Hors Toamasina";
+  return "—";
+}
+
+function libelleEtatOperationnel(
+  reservation: Reservation
+) {
+  if (reservation.demandeUrgente) return "Urgente";
+
+  if (
+    String(reservation.mobilisabilite || "").toUpperCase() ===
+    "FLEXIBLE"
+  ) {
+    return "Flexible";
+  }
+
+  return "Planifiée";
+}
+
+function normaliserRecherche(
+  valeur?: string | number | null
+) {
+  return String(valeur ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function convertirDatePourApi(valeur: string) {
+  if (!valeur) return valeur;
 
   if (valeur.length === 16) {
     return `${valeur}:00`;
@@ -2462,20 +1865,14 @@ function convertirDatePourApi(valeur: string) {
   return valeur;
 }
 
-// =========================================================
-// FORMAT DATE
-// =========================================================
-
-function formatDateHeure(valeur?: string | null) {
-  if (!valeur) {
-    return "—";
-  }
+function formatDateHeure(
+  valeur?: string | null
+) {
+  if (!valeur) return "—";
 
   const date = new Date(valeur);
 
-  if (Number.isNaN(date.getTime())) {
-    return valeur;
-  }
+  if (Number.isNaN(date.getTime())) return valeur;
 
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -2486,10 +1883,6 @@ function formatDateHeure(valeur?: string | null) {
   }).format(date);
 }
 
-// =========================================================
-// ERREURS API
-// =========================================================
-
 async function lireErreur(res: Response) {
   try {
     const contentType = res.headers.get("content-type");
@@ -2497,15 +1890,9 @@ async function lireErreur(res: Response) {
     if (contentType?.includes("application/json")) {
       const data = await res.json();
 
-      if (typeof data === "string") {
-        return data;
-      }
+      if (typeof data === "string") return data;
 
-      return (
-        data?.message ||
-        data?.error ||
-        JSON.stringify(data)
-      );
+      return data?.message || data?.error || JSON.stringify(data);
     }
 
     return await res.text();
@@ -2531,25 +1918,147 @@ const inputStyle: CSSProperties = {
   borderRadius: 8,
 };
 
+const readOnlyStyle: CSSProperties = {
+  ...inputStyle,
+  backgroundColor: "#f8fafc",
+  color: "#475569",
+};
+
 const textareaStyle: CSSProperties = {
   ...inputStyle,
   minHeight: 82,
 };
 
+const boutonBase: CSSProperties = {
+  border: "1px solid transparent",
+  borderRadius: 8,
+  color: "#ffffff",
+  padding: "11px 17px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 13,
+};
+
+const boutonVert: CSSProperties = {
+  ...boutonBase,
+  backgroundColor: "#16a34a",
+  borderColor: "#16a34a",
+};
+
+const boutonBleu: CSSProperties = {
+  ...boutonBase,
+  backgroundColor: "#2563eb",
+  borderColor: "#2563eb",
+};
+
+const boutonRouge: CSSProperties = {
+  ...boutonBase,
+  backgroundColor: "#dc2626",
+  borderColor: "#dc2626",
+};
+
+const rechercheCardStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 16,
+  marginBottom: 20,
+  boxShadow: "0 2px 5px rgba(0,0,0,0.03)",
+};
+
+const rechercheTitreStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 10,
+  color: "#1e293b",
+  fontWeight: 700,
+  fontSize: 14,
+};
+
+const boutonEffacerRecherche: CSSProperties = {
+  position: "absolute",
+  right: 7,
+  top: "50%",
+  transform: "translateY(-50%)",
+  width: 30,
+  height: 30,
+  border: "none",
+  borderRadius: 7,
+  backgroundColor: "#f3f4f6",
+  color: "#6b7280",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const resultatRechercheStyle: CSSProperties = {
+  marginTop: 9,
+  color: "#6b7280",
+  fontSize: 12,
+};
+
+const listeBoxStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #cbd5e1",
+  borderRadius: 16,
+  overflow: "hidden",
+  boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
+};
+
+const listeHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 12,
+  color: "#111827",
+};
+
+const listeTitreStyle: CSSProperties = {
+  margin: 0,
+  color: "#111827",
+  fontSize: 18,
+  fontWeight: 700,
+};
+
+const tableContainerStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  overflowX: "auto",
+};
+
+// EN-TÊTE BLANC DU TABLEAU
+
+const theadRowStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderBottom: "1px solid #e2e8f0",
+};
+
 const thStyle: CSSProperties = {
   textAlign: "left",
-  padding: "12px 16px",
-  fontSize: 13,
-  color: "#6b7280",
-  fontWeight: 600,
+  padding: "15px 14px",
+  fontSize: 12,
+  color: "#334155",
+  backgroundColor: "#ffffff",
+  borderBottom: "1px solid #e2e8f0",
+  fontWeight: 800,
   whiteSpace: "nowrap",
+  letterSpacing: 0.2,
+  textTransform: "uppercase",
 };
 
 const tdStyle: CSSProperties = {
-  padding: "13px 16px",
-  fontSize: 14,
+  padding: "16px 14px",
+  fontSize: 13,
   color: "#374151",
   verticalAlign: "middle",
+  borderBottom: "1px solid #eef2f7",
 };
 
 const emptyStyle: CSSProperties = {
@@ -2557,4 +2066,220 @@ const emptyStyle: CSSProperties = {
   padding: 42,
   textAlign: "center",
   color: "#6b7280",
+};
+
+const emptyContentStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 10,
+};
+
+const boutonLien: CSSProperties = {
+  border: "none",
+  background: "none",
+  color: "#dc2626",
+  cursor: "pointer",
+  fontWeight: 600,
+};
+
+const texteSecondaireStyle: CSSProperties = {
+  marginTop: 4,
+  color: "#9ca3af",
+  fontSize: 11,
+};
+
+const ticketCellStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+};
+
+const missionCellStyle: CSSProperties = {
+  display: "grid",
+  gap: 4,
+};
+
+const iconeTexteStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+};
+
+const modalOverlayStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1000,
+  backgroundColor: "rgba(15, 23, 42, 0.58)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 20,
+};
+
+const modalContentStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: 960,
+  maxHeight: "92vh",
+  overflowY: "auto",
+  backgroundColor: "#ffffff",
+  borderRadius: 12,
+  boxShadow: "0 24px 70px rgba(0,0,0,0.28)",
+};
+
+const modalHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 16,
+  padding: "18px 22px",
+  borderBottom: "1px solid #e5e7eb",
+  position: "sticky",
+  top: 0,
+  backgroundColor: "#ffffff",
+  zIndex: 10,
+};
+
+const modalIconStyle: CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: 9,
+  backgroundColor: "#fee2e2",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const modalTitleStyle: CSSProperties = {
+  margin: 0,
+  color: "#1e293b",
+  fontSize: 18,
+};
+
+const closeButtonStyle: CSSProperties = {
+  width: 36,
+  height: 36,
+  border: "none",
+  backgroundColor: "#f3f4f6",
+  borderRadius: 8,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const modalFooterStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  padding: "16px 22px",
+  borderTop: "1px solid #e5e7eb",
+  backgroundColor: "#f9fafb",
+  position: "sticky",
+  bottom: 0,
+  zIndex: 10,
+};
+
+const statCardStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 18,
+  boxShadow: "0 2px 5px rgba(0,0,0,0.03)",
+};
+
+const statCardHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 10,
+};
+
+const statCardLabelStyle: CSSProperties = {
+  color: "#6b7280",
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const statCardIconStyle: CSSProperties = {
+  width: 36,
+  height: 36,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#f9fafb",
+  borderRadius: 8,
+};
+
+const statCardValueStyle: CSSProperties = {
+  color: "#1e293b",
+  fontSize: 28,
+  lineHeight: 1,
+  fontWeight: 700,
+};
+
+const blocStyle: CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  marginBottom: 18,
+  overflow: "hidden",
+};
+
+const blocHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 9,
+  backgroundColor: "#f9fafb",
+  padding: "13px 16px",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const numeroStyle: CSSProperties = {
+  width: 27,
+  height: 27,
+  borderRadius: "50%",
+  backgroundColor: "#ffffff",
+  border: "1px solid #e5e7eb",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#374151",
+  fontWeight: 700,
+  fontSize: 12,
+};
+
+const blocTitleStyle: CSSProperties = {
+  margin: 0,
+  color: "#1e293b",
+  fontSize: 15,
+};
+
+const champLabelStyle: CSSProperties = {
+  marginBottom: 6,
+  color: "#374151",
+  fontSize: 13,
+  fontWeight: 600,
+};
+
+const warningJauneStyle: CSSProperties = {
+  marginTop: 14,
+  border: "1px solid #fde68a",
+  backgroundColor: "#fffbeb",
+  borderRadius: 9,
+  padding: 15,
+  color: "#92400e",
+};
+
+const warningRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 10,
+};
+
+const warningTextStyle: CSSProperties = {
+  margin: "4px 0 10px",
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "#92400e",
 };

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
 import { Users, Car, Fuel, Wrench, FileBarChart, UserRound, Route } from "lucide-react";
 
 interface Vehicule {
@@ -16,9 +17,6 @@ interface Vehicule {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [menuOuvert, setMenuOuvert] = useState(true);
-  const [profilMenuOuvert, setProfilMenuOuvert] = useState(false);
 
   const [stats, setStats] = useState({
     vehiculesActifs: "—",
@@ -27,10 +25,6 @@ export default function AdminPage() {
     utilisateurs: "—",
   });
   const [statsChargement, setStatsChargement] = useState(true);
-
-  useEffect(() => {
-    setEmail(localStorage.getItem("email") || "");
-  }, []);
 
   useEffect(() => {
     const chargerStats = async () => {
@@ -76,14 +70,6 @@ export default function AdminPage() {
     chargerStats();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("email");
-    toast.success("Déconnexion réussie");
-    router.push("/login");
-  };
-
   const menuItems = [
     { label: "Utilisateurs", path: "/admin/utilisateurs", icon: Users },
     { label: "Véhicules", path: "/admin/vehicules", icon: Car },
@@ -114,122 +100,10 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f3f4f6" }}>
-      <div style={{ display: "flex" }}>
-        {menuOuvert && (
-          <div
-            style={{
-              width: 220,
-              backgroundColor: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px 0",
-              borderRight: "1px solid #e5e7eb",
-              borderBottom: "1px solid #e5e7eb",
-            }}
-          >
-            <img src="/Logo.png" alt="Logo" style={{ width: 90, height: 90, objectFit: "contain" }} />
-          </div>
-        )}
-
-        <div
-          style={{
-            flex: 1,
-            height: 90,
-            backgroundColor: "#1e293b",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 20px",
-          }}
-        >
-          <button
-            onClick={() => setMenuOuvert(!menuOuvert)}
-            style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}
-          >
-            ☰
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setProfilMenuOuvert((v) => !v)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  color: "white",
-                  cursor: "pointer",
-                }}
-                aria-label="Ouvrir le profil"
-              >
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#f3f4f6",
-                  }}
-                >
-                  <img src="/icon.png" alt="Avatar profil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-                <div style={{ textAlign: "left", lineHeight: 1.2 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>SPAT-Admin</div>
-                  <div style={{ fontSize: 11, color: "#cbd5e1" }}>Administrateur</div>
-                </div>
-              </button>
-
-              {profilMenuOuvert && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 52,
-                    right: 0,
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    minWidth: 200,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                    zIndex: 20,
-                  }}
-                >
-                  <div style={{ padding: "12px 14px", borderBottom: "1px solid #f3f4f6", color: "#111827" }}>
-                    <div style={{ fontWeight: 700 }}>{email || "Admin"}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>Administrateur</div>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "10px 14px",
-                      border: "none",
-                      backgroundColor: "transparent",
-                      color: "#dc2626",
-                      cursor: "pointer",
-                      fontSize: 14,
-                    }}
-                  >
-                    Déconnexion
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <EnTete afficherNotifications={false} />
 
       <div style={{ display: "flex", flex: 1 }}>
-        {menuOuvert && (
-          <div style={{ width: 220, backgroundColor: "white", borderRight: "1px solid #e5e7eb", padding: "20px 0" }}>
+        <div style={{ width: 220, backgroundColor: "white", borderRight: "1px solid #e5e7eb", padding: "20px 0" }}>
             <div style={{ padding: "0 20px", marginBottom: 12, color: "#9ca3af", fontSize: 12, textTransform: "uppercase" }}>
               Menu
             </div>
@@ -264,7 +138,6 @@ export default function AdminPage() {
               );
             })}
           </div>
-        )}
 
         <div style={{ flex: 1, padding: 32 }}>
           <h2 style={{ color: "#1e293b", marginBottom: 8 }}>Tableau de bord de pilotage de flotte</h2>

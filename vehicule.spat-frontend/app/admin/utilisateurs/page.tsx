@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
 import {
   Search,
   Users,
@@ -168,6 +169,8 @@ export default function UtilisateursPage() {
           background: #f9fafb;
         }
       `}</style>
+
+      <EnTete afficherNotifications={false} afficherProfil={false} />
       <div
         style={{
           minHeight: "100vh",

@@ -36,6 +36,41 @@ public interface ReservationRepository
     );
 
     // =====================================================
+    // ESPACE CHAUFFEUR
+    // =====================================================
+
+    /*
+     * Dès qu'une mission est créée avec un véhicule,
+     * le chauffeur affecté à ce véhicule est enregistré
+     * dans Reservation.chauffeur.
+     *
+     * Cette requête alimente donc automatiquement
+     * l'espace du chauffeur.
+     */
+    List<Reservation>
+    findByChauffeurIdOrderByDateDebutDesc(
+            Long chauffeurId
+    );
+
+    // =====================================================
+    // PASSAGE FLEXIBLE -> PLANIFIEE
+    // =====================================================
+
+    @Query("""
+        SELECT r
+        FROM Reservation r
+        WHERE r.zoneMission = 'VILLE_TOAMASINA'
+          AND r.mobilisabilite = 'FLEXIBLE'
+          AND r.dateDebut <= :maintenant
+          AND r.statut <> 'REFUSEE'
+        """)
+    List<Reservation>
+    findMissionsToamasinaFlexiblesArriveesAHeure(
+            @Param("maintenant")
+            LocalDateTime maintenant
+    );
+
+    // =====================================================
     // SUPPRESSIONS
     // =====================================================
 
@@ -51,16 +86,6 @@ public interface ReservationRepository
     // VERROU RESERVATION
     // =====================================================
 
-    /**
-     * Charge une réservation avec verrou d'écriture.
-     *
-     * Utilisé pendant la validation/refus afin
-     * d'empêcher deux traitements simultanés
-     * sur la même demande.
-     *
-     * Cette méthode doit être appelée dans
-     * une méthode @Transactional.
-     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT r
@@ -76,10 +101,11 @@ public interface ReservationRepository
     // =====================================================
 
     /**
-     * Une demande EN_ATTENTE ne bloque pas le véhicule.
+     * EN_ATTENTE est maintenant inclus car le Chef de Direction
+     * sélectionne déjà le véhicule lors de la création du ticket.
      *
-     * Seules les demandes déjà validées
-     * avec affectation doivent bloquer le créneau.
+     * Une mission FLEXIBLE peut être réorganisée en cas d'urgence,
+     * mais elle ne doit pas créer une double affectation automatique.
      */
     @Query("""
         SELECT COUNT(r) > 0
@@ -89,9 +115,14 @@ public interface ReservationRepository
 
         AND r.vehicule.id = :vehiculeId
 
-        AND r.id <> :reservationId
+        AND (
+            :reservationId IS NULL
+            OR r.id <> :reservationId
+        )
 
         AND r.statut IN (
+            'EN_ATTENTE',
+            'EN_ATTENTE_AVIS_DID',
             'VALIDEE_N1',
             'VALIDEE'
         )
@@ -117,11 +148,6 @@ public interface ReservationRepository
     // CHEVAUCHEMENT CHAUFFEUR
     // =====================================================
 
-    /**
-     * Vérifie qu'un chauffeur n'est pas déjà
-     * affecté à une autre réservation validée
-     * pendant la même période.
-     */
     @Query("""
         SELECT COUNT(r) > 0
         FROM Reservation r
@@ -130,9 +156,14 @@ public interface ReservationRepository
 
         AND r.chauffeur.id = :chauffeurId
 
-        AND r.id <> :reservationId
+        AND (
+            :reservationId IS NULL
+            OR r.id <> :reservationId
+        )
 
         AND r.statut IN (
+            'EN_ATTENTE',
+            'EN_ATTENTE_AVIS_DID',
             'VALIDEE_N1',
             'VALIDEE'
         )

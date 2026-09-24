@@ -17,6 +17,17 @@ public interface ChauffeurRepository
         extends JpaRepository<Chauffeur, Long> {
 
     // =========================================================
+    // RECHERCHE PAR MATRICULE
+    // =========================================================
+    //
+    // Utilisé par l'espace chauffeur pour faire le lien entre
+    // l'utilisateur connecté (matricule contenu dans le JWT)
+    // et la fiche Chauffeur correspondante.
+    // =========================================================
+
+    Optional<Chauffeur> findByMatricule(String matricule);
+
+    // =========================================================
     // VERROU CHAUFFEUR POUR AFFECTATION
     // =========================================================
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
 
 interface Vehicule {
   id: number;
@@ -13,23 +14,48 @@ interface Vehicule {
   affectation?: string | null;
   etatGeneralObservations?: string | null;
   statut: string;
+
+  // GPS
+  gpsEquipe?: boolean;
+  gpsDeviceId?: number | null;
 }
 
-interface Chauffeur {
-  id: number;
-  nom: string;
-  prenom: string;
-  telephone?: string;
-  statut: string;
+interface AssuranceItem {
+  id: string;
+  vehicule?: { id: number };
+  dateExpiration: string;
+  numeroPolice?: string;
+  assureur?: string;
 }
 
 interface MissionHisto {
   id: number;
-  vehiculeId?: number;
-  dateDebut: string;
-  dateFin?: string | null;
-  chauffeur?: { prenom: string; nom: string };
+  vehiculeId?: number | null;
   vehicule?: { id: number };
+  chauffeur?: { id?: number; prenom?: string | null; nom?: string | null } | null;
+  dateDebut?: string | null;
+  dateFin?: string | null;
+  statut?: string | null;
+  motif?: string | null;
+  destination?: string | null;
+}
+
+
+interface ChauffeurAffiche {
+  id: number;
+  matricule?: string | null;
+  nom?: string | null;
+  prenom?: string | null;
+  telephone?: string | null;
+  affectationService?: string | null;
+  statut?: string | null;
+}
+
+function formaterDateFr(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return new Intl.DateTimeFormat("fr-FR").format(d);
 }
 
 const CATEGORIES_SPAT = [
@@ -87,22 +113,6 @@ const IconTrash = () => (
   </svg>
 );
 
-const IconLink = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-
 const IconHistory = () => (
   <svg
     width="16"
@@ -154,20 +164,16 @@ export default function VehiculesPage() {
   const [affectation, setAffectation] = useState("");
   const [etatGeneralObservations, setEtatGeneralObservations] = useState("");
   const [statut, setStatut] = useState("DISPONIBLE");
+  const [gpsEquipe, setGpsEquipe] = useState(false);
+  const [gpsDeviceId, setGpsDeviceId] = useState("");
+  const [dateEcheanceAssurance, setDateEcheanceAssurance] = useState("");
+
+  const [assurances, setAssurances] = useState<Record<number, AssuranceItem>>({});
+  const [chauffeursCompatibles, setChauffeursCompatibles] =
+    useState<Record<number, ChauffeurAffiche[]>>({});
 
   const [vehiculeEnEdition, setVehiculeEnEdition] =
     useState<Vehicule | null>(null);
-
-  // =========================================================
-  // AFFECTATION CHAUFFEUR
-  // =========================================================
-
-  const [affectationOuverte, setAffectationOuverte] = useState(false);
-  const [vehiculeAAffecter, setVehiculeAAffecter] =
-    useState<Vehicule | null>(null);
-  const [chauffeursDispo, setChauffeursDispo] = useState<Chauffeur[]>([]);
-  const [chauffeurId, setChauffeurId] = useState<number | "">("");
-  const [loadingAffect, setLoadingAffect] = useState(false);
 
   // =========================================================
   // HISTORIQUE
@@ -222,24 +228,27 @@ export default function VehiculesPage() {
     setChargement(true);
 
     try {
-      const res = await fetch(`${API}/vehicules`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      };
 
-      if (res.status === 401) {
+      const [resVehicules, resAssurances] = await Promise.all([
+        fetch(`${API}/vehicules`, { headers }),
+        fetch(`${API}/assurances`, { headers }).catch(() => null),
+      ]);
+
+      if (resVehicules.status === 401) {
         toast.error("Votre session a expiré");
         router.replace("/login");
         return;
       }
 
-      if (!res.ok) {
-        throw new Error(await lireErreur(res));
+      if (!resVehicules.ok) {
+        throw new Error(await lireErreur(resVehicules));
       }
 
-      const data = await res.json();
+      const data = await resVehicules.json();
 
       setVehicules(
         Array.isArray(data)
@@ -248,6 +257,78 @@ export default function VehiculesPage() {
             ? data.content
             : []
       );
+
+      if (resAssurances && resAssurances.ok) {
+        try {
+          const listAssurances: AssuranceItem[] = await resAssurances.json();
+          const mapAssurances: Record<number, AssuranceItem> = {};
+          if (Array.isArray(listAssurances)) {
+            listAssurances.forEach((a) => {
+              if (a.vehicule?.id) {
+                mapAssurances[a.vehicule.id] = a;
+              }
+            });
+          }
+          setAssurances(mapAssurances);
+        } catch {}
+      }
+
+      /*
+       * CHAUFFEURS COMPATIBLES
+       *
+       * Les deux référentiels SPAT indiquent une affectation
+       * de service, pas toujours un couple véhicule/chauffeur
+       * permanent.
+       *
+       * La liste affiche donc les chauffeurs compatibles avec
+       * l'affectation du véhicule.
+       */
+      const listeVehicules: Vehicule[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.content)
+          ? data.content
+          : [];
+
+      const resultatsChauffeurs = await Promise.all(
+        listeVehicules.map(async (vehicule) => {
+          try {
+            const res = await fetch(
+              `${API}/vehicules/${vehicule.id}/chauffeurs-compatibles`,
+              {
+                headers,
+                cache: "no-store",
+              }
+            );
+
+            if (!res.ok) {
+              return {
+                vehiculeId: vehicule.id,
+                chauffeurs: [] as ChauffeurAffiche[],
+              };
+            }
+
+            const chauffeurs = (await res.json()) as ChauffeurAffiche[];
+
+            return {
+              vehiculeId: vehicule.id,
+              chauffeurs: Array.isArray(chauffeurs) ? chauffeurs : [],
+            };
+          } catch {
+            return {
+              vehiculeId: vehicule.id,
+              chauffeurs: [] as ChauffeurAffiche[],
+            };
+          }
+        })
+      );
+
+      const mapChauffeurs: Record<number, ChauffeurAffiche[]> = {};
+
+      resultatsChauffeurs.forEach((item) => {
+        mapChauffeurs[item.vehiculeId] = item.chauffeurs;
+      });
+
+      setChauffeursCompatibles(mapChauffeurs);
     } catch (error) {
       console.error(error);
       toast.error(
@@ -278,6 +359,7 @@ export default function VehiculesPage() {
     setAffectation("");
     setEtatGeneralObservations("");
     setStatut("DISPONIBLE");
+    setDateEcheanceAssurance("");
     setVehiculeEnEdition(null);
   };
 
@@ -314,6 +396,7 @@ export default function VehiculesPage() {
     setAffectation(vehicule.affectation || "");
     setEtatGeneralObservations(vehicule.etatGeneralObservations || "");
     setStatut(vehicule.statut || "DISPONIBLE");
+    setDateEcheanceAssurance(assurances[vehicule.id]?.dateExpiration || "");
     setFormOuvert(true);
   };
 
@@ -417,6 +500,46 @@ export default function VehiculesPage() {
         return;
       }
 
+      const reponseVehicule = await res.json().catch(() => null);
+      const vehiculeId = estEdition ? vehiculeEnEdition!.id : reponseVehicule?.id;
+
+      if (vehiculeId && dateEcheanceAssurance.trim()) {
+        const assuranceExistante = assurances[vehiculeId];
+        try {
+          if (assuranceExistante?.id) {
+            await fetch(`${API}/assurances/${assuranceExistante.id}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                vehicule: { id: vehiculeId },
+                numeroPolice: assuranceExistante.numeroPolice || `POL-${immatriculation.trim()}`,
+                dateExpiration: dateEcheanceAssurance.trim(),
+                assureur: assuranceExistante.assureur || "SPAT Assurance",
+              }),
+            });
+          } else {
+            await fetch(`${API}/assurances`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                vehicule: { id: vehiculeId },
+                numeroPolice: `POL-${immatriculation.trim()}`,
+                dateExpiration: dateEcheanceAssurance.trim(),
+                assureur: "SPAT Assurance",
+              }),
+            });
+          }
+        } catch (err) {
+          console.error("Erreur enregistrement assurance :", err);
+        }
+      }
+
       toast.success(
         estEdition
           ? "Véhicule / matériel modifié avec succès"
@@ -447,7 +570,14 @@ export default function VehiculesPage() {
       vehicule.affectation,
       vehicule.etatGeneralObservations,
       vehicule.statut,
-    ].some((valeur) => valeur?.toLowerCase().includes(terme));
+      ...(chauffeursCompatibles[vehicule.id] || []).flatMap((chauffeur) => [
+        chauffeur.nom,
+        chauffeur.prenom,
+        chauffeur.matricule,
+        chauffeur.affectationService,
+      ]),
+      assurances[vehicule.id]?.dateExpiration,
+    ].some((valeur) => String(valeur || "").toLowerCase().includes(terme));
   });
 
   const nombrePages = Math.max(
@@ -569,120 +699,9 @@ export default function VehiculesPage() {
 
       cancel: {
         label: "Annuler",
+        onClick: () => {},
       },
     });
-  };
-
-  // =========================================================
-  // AFFECTER UN CHAUFFEUR
-  // =========================================================
-
-  const ouvrirAffectation = async (v: Vehicule) => {
-    if (lectureSeule) return;
-
-    if (v.statut !== "DISPONIBLE") {
-      toast.error("Seuls les véhicules disponibles peuvent être affectés");
-      return;
-    }
-
-    if (!API) {
-      toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    setVehiculeAAffecter(v);
-    setChauffeurId("");
-    setAffectationOuverte(true);
-
-    try {
-      const res = await fetch(`${API}/chauffeurs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(await lireErreur(res));
-      }
-
-      const data: Chauffeur[] = await res.json();
-
-      const liste = Array.isArray(data) ? data : [];
-
-      setChauffeursDispo(
-        liste.filter(
-          (c) => c.statut === "DISPONIBLE" || c.statut === "SUR_PLACE"
-        )
-      );
-    } catch (error) {
-      setChauffeursDispo([]);
-
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Impossible de charger les chauffeurs disponibles"
-      );
-    }
-  };
-
-  const handleAffecter = async () => {
-    if (lectureSeule) return;
-    if (!vehiculeAAffecter || !chauffeurId) return;
-
-    if (!API) {
-      toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    setLoadingAffect(true);
-
-    try {
-      const res = await fetch(`${API}/affectations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          vehiculeId: vehiculeAAffecter.id,
-          chauffeurId,
-        }),
-      });
-
-      if (!res.ok) {
-        toast.error(await lireErreur(res));
-        return;
-      }
-
-      toast.success(
-        `Chauffeur affecté à ${vehiculeAAffecter.immatriculation}`
-      );
-
-      setAffectationOuverte(false);
-      setVehiculeAAffecter(null);
-      setChauffeurId("");
-
-      await chargerVehicules();
-    } catch {
-      toast.error("Impossible de contacter le serveur");
-    } finally {
-      setLoadingAffect(false);
-    }
   };
 
   // =========================================================
@@ -877,12 +896,18 @@ export default function VehiculesPage() {
           transform: translateY(-1px);
         }
 
+        .vehicule-row:hover {
+          background-color: #f8fafc;
+        }
+
         @media (max-width: 760px) {
           .vehicule-form-grid {
             grid-template-columns: 1fr !important;
           }
         }
       `}</style>
+
+      <EnTete afficherNotifications={false} afficherProfil={false} />
 
       <div
         style={{
@@ -1268,6 +1293,26 @@ export default function VehiculesPage() {
                     </div>
                   </div>
 
+                  {/* DATE ECHEANCE ASSURANCE */}
+                  <div>
+                    <label style={labelStyle}>
+                      Date de renouvellement assurance
+                    </label>
+
+                    <input
+                      type="date"
+                      value={dateEcheanceAssurance}
+                      onChange={(e) =>
+                        setDateEcheanceAssurance(e.target.value)
+                      }
+                      style={inputStyle}
+                    />
+
+                    <div style={helpStyle}>
+                      Date prévue de renouvellement de l&apos;assurance du véhicule (facultatif).
+                    </div>
+                  </div>
+
                   {/* ETAT GENERAL / OBSERVATIONS */}
 
                   <div style={{ gridColumn: "1 / -1" }}>
@@ -1316,156 +1361,6 @@ export default function VehiculesPage() {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
-
-          {/* =================================================
-              MODAL AFFECTATION CHAUFFEUR
-          ================================================= */}
-
-          {affectationOuverte && vehiculeAAffecter && !lectureSeule && (
-            <div style={overlayStyle}>
-              <div
-                style={{
-                  ...modalStyle,
-                  maxWidth: 440,
-                }}
-              >
-                <div style={modalHeaderStyle}>
-                  <h3
-                    style={{
-                      margin: 0,
-                      color: "#111827",
-                      fontSize: 18,
-                    }}
-                  >
-                    Affecter un chauffeur
-                  </h3>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAffectationOuverte(false)
-                    }
-                    style={closeBtnStyle}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    backgroundColor: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    padding: 12,
-                    marginBottom: 18,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      color: "#111827",
-                    }}
-                  >
-                    {vehiculeAAffecter.immatriculation}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 4,
-                      color: "#6b7280",
-                      fontSize: 13,
-                    }}
-                  >
-                    {vehiculeAAffecter.categorie} —{" "}
-                    {vehiculeAAffecter.modeleType}
-                  </div>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>
-                    Chauffeur disponible
-                  </label>
-
-                  <select
-                    value={chauffeurId}
-                    onChange={(e) =>
-                      setChauffeurId(
-                        e.target.value
-                          ? Number(e.target.value)
-                          : ""
-                      )
-                    }
-                    style={inputStyle}
-                  >
-                    <option value="">
-                      Sélectionner un chauffeur
-                    </option>
-
-                    {chauffeursDispo.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.prenom} {c.nom}
-                        {c.telephone
-                          ? ` — ${c.telephone}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  {chauffeursDispo.length === 0 && (
-                    <p
-                      style={{
-                        fontSize: 12,
-                        color: "#dc2626",
-                        marginTop: 6,
-                      }}
-                    >
-                      Aucun chauffeur disponible
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: 10,
-                    marginTop: 24,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAffectationOuverte(false)
-                    }
-                    style={btnSecondary}
-                  >
-                    Annuler
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleAffecter}
-                    disabled={!chauffeurId || loadingAffect}
-                    style={{
-                      ...btnPrimary,
-                      backgroundColor:
-                        !chauffeurId || loadingAffect
-                          ? "#94a3b8"
-                          : "#16a34a",
-                      cursor:
-                        !chauffeurId || loadingAffect
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    {loadingAffect
-                      ? "Affectation..."
-                      : "Confirmer"}
-                  </button>
-                </div>
               </div>
             </div>
           )}
@@ -1752,7 +1647,7 @@ export default function VehiculesPage() {
                   setRecherche(e.target.value);
                   setPageActuelle(1);
                 }}
-                placeholder="Rechercher par catégorie, immatriculation, affectation..."
+                placeholder="Rechercher par catégorie, immatriculation, chauffeur, affectation, assurance..."
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
@@ -1791,42 +1686,49 @@ export default function VehiculesPage() {
               backgroundColor: "white",
               border: "1px solid #e5e7eb",
               borderRadius: 8,
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                tableLayout: "fixed",
+                minWidth: 1320,
+                tableLayout: "auto",
               }}
             >
               <thead>
                 <tr
                   style={{
-                    backgroundColor: "#f9fafb",
+                    backgroundColor: "#ffffff",
                     borderBottom: "1px solid #e5e7eb",
                   }}
                 >
-                  <th style={{ ...thStyle, width: "16%" }}>Catégorie</th>
-                  <th style={{ ...thStyle, width: "18%" }}>Immatriculation</th>
-                  <th style={{ ...thStyle, width: "10%" }}>Année</th>
-                  <th style={{ ...thStyle, width: "24%" }}>Affectation</th>
-                  <th style={{ ...thStyle, width: "14%" }}>Statut</th>
-                  <th style={{ ...thStyle, width: "18%" }}>Actions</th>
+                  <th style={{ ...thStyle, minWidth: 150 }}>Catégorie</th>
+                  <th style={{ ...thStyle, minWidth: 135 }}>Immatriculation</th>
+                  <th style={{ ...thStyle, minWidth: 175 }}>Modèle / Type</th>
+                  <th style={{ ...thStyle, minWidth: 260 }}>Chauffeur(s) compatible(s)</th>
+                  <th style={{ ...thStyle, minWidth: 170 }}>Affectation</th>
+                  <th style={{ ...thStyle, minWidth: 180 }}>
+                    Renouvellement assurance
+                  </th>
+
+                  <th style={{ ...thStyle, minWidth: 105 }}>GPS</th>
+                  <th style={{ ...thStyle, minWidth: 120 }}>Statut</th>
+                  <th style={{ ...thStyle, minWidth: 115 }}>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 {chargement ? (
                   <tr>
-                    <td colSpan={6} style={emptyStyle}>
+                    <td colSpan={9} style={emptyStyle}>
                       Chargement...
                     </td>
                   </tr>
                 ) : vehiculesFiltres.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={emptyStyle}>
+                    <td colSpan={9} style={emptyStyle}>
                       Aucun véhicule ou matériel roulant
                     </td>
                   </tr>
@@ -1834,9 +1736,9 @@ export default function VehiculesPage() {
                   vehiculesPage.map((v) => (
                     <tr
                       key={v.id}
+                      className="vehicule-row"
                       style={{
-                        borderBottom:
-                          "1px solid #f3f4f6",
+                        borderBottom: "1px solid #f3f4f6",
                       }}
                     >
                       <td style={{ ...tdStyle, overflow: "hidden" }}>
@@ -1865,8 +1767,90 @@ export default function VehiculesPage() {
                         {v.immatriculation}
                       </td>
 
-                      <td style={tdStyle}>
-                        {v.annee ?? "—"}
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: "#374151",
+                          whiteSpace: "normal",
+                          lineHeight: 1.35,
+                        }}
+                        title={v.modeleType || ""}
+                      >
+                        {v.modeleType || "—"}
+                      </td>
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          whiteSpace: "normal",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {(chauffeursCompatibles[v.id] || []).length > 0 ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                            }}
+                          >
+                            {(chauffeursCompatibles[v.id] || [])
+                              .slice(0, 2)
+                              .map((chauffeur) => (
+                                <div key={chauffeur.id}>
+                                  <div
+                                    style={{
+                                      color: "#111827",
+                                      fontWeight: 700,
+                                      fontSize: 11.5,
+                                    }}
+                                  >
+                                    {`${chauffeur.prenom || ""} ${
+                                      chauffeur.nom || ""
+                                    }`.trim() ||
+                                      chauffeur.matricule ||
+                                      `Chauffeur #${chauffeur.id}`}
+                                  </div>
+
+                                  {chauffeur.matricule && (
+                                    <div
+                                      style={{
+                                        color: "#6b7280",
+                                        fontSize: 10.5,
+                                      }}
+                                    >
+                                      {chauffeur.matricule}
+                                      {chauffeur.affectationService
+                                        ? ` · ${chauffeur.affectationService}`
+                                        : ""}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+
+                            {(chauffeursCompatibles[v.id] || []).length > 2 && (
+                              <div
+                                style={{
+                                  marginTop: 2,
+                                  color: "#6b7280",
+                                  fontSize: 10.5,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                +{(chauffeursCompatibles[v.id] || []).length - 2} autre(s)
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span
+                            style={{
+                              color: "#9ca3af",
+                              fontSize: 11,
+                            }}
+                          >
+                            Aucun chauffeur compatible
+                          </span>
+                        )}
                       </td>
 
                       <td
@@ -1879,6 +1863,29 @@ export default function VehiculesPage() {
                         title={v.affectation || ""}
                       >
                         {v.affectation || "—"}
+                      </td>
+
+                      <td style={tdStyle}>
+                        {formaterDateFr(assurances[v.id]?.dateExpiration)}
+                      </td>
+
+                      <td style={tdStyle}>
+                        {v.gpsEquipe || v.gpsDeviceId ? (
+                          <span
+                            style={{
+                              color: "#16a34a",
+                              fontWeight: 600,
+                              fontSize: 12,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            🟢 Équipé
+                          </span>
+                        ) : (
+                          <span style={{ color: "#9ca3af" }}>—</span>
+                        )}
                       </td>
 
                       <td style={tdStyle}>
@@ -1946,23 +1953,7 @@ export default function VehiculesPage() {
                             <IconHistory />
                           </button>
 
-                          {v.statut === "DISPONIBLE" && !lectureSeule && (
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              onClick={() =>
-                                ouvrirAffectation(v)
-                              }
-                              style={iconBtn(
-                                "#f0fdf4",
-                                "#16a34a",
-                                "#bbf7d0"
-                              )}
-                              title="Affecter un chauffeur"
-                            >
-                              <IconLink />
-                            </button>
-                          )}
+
                         </div>
                       </td>
                     </tr>
@@ -2352,7 +2343,7 @@ const btnPrimary: React.CSSProperties = {
   padding: "10px 16px",
   backgroundColor: "#dc2626",
   color: "white",
-  border: "none",
+  border: "1px solid #dc2626",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,
@@ -2360,9 +2351,9 @@ const btnPrimary: React.CSSProperties = {
 
 const btnSecondary: React.CSSProperties = {
   padding: "10px 16px",
-  backgroundColor: "#e5e7eb",
-  color: "#374151",
-  border: "none",
+  backgroundColor: "#2563eb",
+  color: "#ffffff",
+  border: "1px solid #2563eb",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,
@@ -2403,9 +2394,7 @@ const tdStyle: React.CSSProperties = {
   color: "#374151",
   verticalAlign: "middle",
   whiteSpace: "nowrap",
-  lineHeight: 1.2,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
+  lineHeight: 1.3,
 };
 
 const paginationBtn: React.CSSProperties = {

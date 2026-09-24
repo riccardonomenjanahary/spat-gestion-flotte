@@ -98,4 +98,37 @@ public class AffectationController {
 
         return ResponseEntity.ok(sauvegarde);
     }
+
+    @org.springframework.transaction.annotation.Transactional
+    @RequestMapping(
+            value = {"/{id}/terminer", "/{id}/cloturer"},
+            method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST}
+    )
+    public ResponseEntity<?> terminerMission(@PathVariable Long id) {
+        Affectation affectation = affectationRepository.findById(id).orElse(null);
+        if (affectation == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        affectation.setDateFin(LocalDateTime.now());
+        affectation.setStatut("TERMINEE");
+        Affectation sauvegarde = affectationRepository.save(affectation);
+
+        if (affectation.getChauffeur() != null) {
+            Chauffeur chauffeur = affectation.getChauffeur();
+            chauffeur.setStatut("DISPONIBLE");
+            chauffeurRepository.save(chauffeur);
+        }
+
+        if (affectation.getVehicule() != null) {
+            Vehicule vehicule = affectation.getVehicule();
+            String statutVehicule = String.valueOf(vehicule.getStatut()).toUpperCase();
+            if (!"MAINTENANCE".equals(statutVehicule) && !"HORS_SERVICE".equals(statutVehicule) && !"REFORME".equals(statutVehicule)) {
+                vehicule.setStatut("DISPONIBLE");
+                vehiculeRepository.save(vehicule);
+            }
+        }
+
+        return ResponseEntity.ok(sauvegarde);
+    }
 }

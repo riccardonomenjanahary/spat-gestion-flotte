@@ -1,12 +1,10 @@
-package com.vehicule.Spat.vehicule.spat_backend.service;
+
+        package com.vehicule.Spat.vehicule.spat_backend.service;
 
 import com.vehicule.Spat.vehicule.spat_backend.dto.DisponibiliteReservationResponse;
-
 import com.vehicule.Spat.vehicule.spat_backend.model.Chauffeur;
 import com.vehicule.Spat.vehicule.spat_backend.model.Reservation;
 import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
-
-import com.vehicule.Spat.vehicule.spat_backend.repository.AffectationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ChauffeurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
@@ -16,29 +14,24 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 
 @Service
 public class DisponibiliteReservationService {
 
     private final ReservationRepository reservationRepository;
-
     private final VehiculeRepository vehiculeRepository;
-
     private final ChauffeurRepository chauffeurRepository;
 
-    private final AffectationRepository affectationRepository;
-
-    // =====================================================
-    // CONSTRUCTEUR
-    // =====================================================
 
     public DisponibiliteReservationService(
             ReservationRepository reservationRepository,
             VehiculeRepository vehiculeRepository,
-            ChauffeurRepository chauffeurRepository,
-            AffectationRepository affectationRepository
+            ChauffeurRepository chauffeurRepository
     ) {
+
         this.reservationRepository =
                 reservationRepository;
 
@@ -47,10 +40,8 @@ public class DisponibiliteReservationService {
 
         this.chauffeurRepository =
                 chauffeurRepository;
-
-        this.affectationRepository =
-                affectationRepository;
     }
+
 
     // =====================================================
     // DISPONIBILITES POUR UNE DEMANDE
@@ -63,56 +54,72 @@ public class DisponibiliteReservationService {
         Reservation reservation =
                 reservationRepository
                         .findById(reservationId)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Demande introuvable : "
-                                                        + reservationId
-                                        )
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Demande introuvable : "
+                                                + reservationId
+                                )
                         );
+
+
+        verifierPeriode(
+                reservation.getDateDebut(),
+                reservation.getDateFin()
+        );
+
 
         DisponibiliteReservationResponse response =
                 new DisponibiliteReservationResponse();
+
 
         response.setReservationId(
                 reservation.getId()
         );
 
+
         response.setTypeSouhaite(
                 reservation.getTypeVehiculeSouhaite()
         );
+
 
         boolean chauffeurRequis =
                 Boolean.TRUE.equals(
                         reservation.getBesoinChauffeur()
                 );
 
+
         response.setChauffeurRequis(
                 chauffeurRequis
         );
 
-        // =================================================
-        // VEHICULES DISPONIBLES
-        // =================================================
 
-        List<
-                DisponibiliteReservationResponse.VehiculeDisponibleDto
-                > correspondants =
-                new ArrayList<>();
-
-        List<
-                DisponibiliteReservationResponse.VehiculeDisponibleDto
-                > suggestions =
-                new ArrayList<>();
+        // =================================================
+        // VEHICULES
+        // =================================================
 
         List<Vehicule> vehicules =
                 vehiculeRepository.findAll();
 
+
+        List<DisponibiliteReservationResponse.VehiculeDisponibleDto>
+                correspondants =
+                new ArrayList<>();
+
+
+        List<DisponibiliteReservationResponse.VehiculeDisponibleDto>
+                suggestions =
+                new ArrayList<>();
+
+
         for (Vehicule vehicule : vehicules) {
 
-            // ---------------------------------------------
-            // DISPONIBILITE REELLE POUR LA PERIODE
-            // ---------------------------------------------
+            if (!vehiculeEligiblePourPlanning(
+                    vehicule
+            )) {
+
+                continue;
+            }
+
 
             if (!estVehiculeDisponiblePourPeriode(
                     vehicule.getId(),
@@ -120,17 +127,16 @@ public class DisponibiliteReservationService {
                     reservation.getDateFin(),
                     reservation.getId()
             )) {
+
                 continue;
             }
+
 
             DisponibiliteReservationResponse.VehiculeDisponibleDto dto =
                     convertirVehicule(
                             vehicule
                     );
 
-            // ---------------------------------------------
-            // TYPE VEHICULE
-            // ---------------------------------------------
 
             if (correspondAuTypeSouhaite(
                     vehicule,
@@ -143,59 +149,55 @@ public class DisponibiliteReservationService {
 
             } else {
 
-                /*
-                 * Ce véhicule est réellement disponible,
-                 * mais son type est différent du type demandé.
-                 *
-                 * Il peut donc être proposé comme alternative.
-                 */
                 suggestions.add(
                         dto
                 );
             }
         }
 
+
         response.setVehiculesCorrespondants(
                 correspondants
         );
+
 
         response.setSuggestionsVehicules(
                 suggestions
         );
 
+
         boolean typeDisponible =
                 !correspondants.isEmpty();
+
 
         response.setTypeSouhaiteDisponible(
                 typeDisponible
         );
 
-        // =================================================
-        // MESSAGE VEHICULE
-        // =================================================
 
         String typeSouhaite =
                 formaterType(
                         reservation.getTypeVehiculeSouhaite()
                 );
 
+
         if (typeDisponible) {
 
             response.setMessage(
                     correspondants.size()
-                            + " véhicule(s) de type "
+                            + " véhicule(s) correspondant au type "
                             + typeSouhaite
-                            + " disponible(s) pour cette période."
+                            + " sont disponibles pour cette période."
             );
 
         } else if (!suggestions.isEmpty()) {
 
             response.setMessage(
-                    "Aucun véhicule de type "
+                    "Aucun "
                             + typeSouhaite
                             + " n'est disponible pour cette période. "
                             + suggestions.size()
-                            + " autre(s) véhicule(s) disponible(s) peuvent être proposés."
+                            + " autre(s) véhicule(s) sont proposés."
             );
 
         } else {
@@ -205,58 +207,122 @@ public class DisponibiliteReservationService {
             );
         }
 
+
         // =================================================
         // CHAUFFEURS
         // =================================================
 
-        if (!chauffeurRequis) {
+        if (chauffeurRequis) {
+
+            List<DisponibiliteReservationResponse.ChauffeurDisponibleDto>
+                    chauffeursDisponibles =
+                    chauffeurRepository
+                            .findAll()
+                            .stream()
+                            .filter(
+                                    this::chauffeurEligiblePourPlanning
+                            )
+                            .filter(chauffeur ->
+                                    estChauffeurDisponiblePourPeriode(
+                                            chauffeur.getId(),
+                                            reservation.getDateDebut(),
+                                            reservation.getDateFin(),
+                                            reservation.getId()
+                                    )
+                            )
+                            .map(
+                                    this::convertirChauffeur
+                            )
+                            .toList();
+
+
+            response.setChauffeursDisponibles(
+                    chauffeursDisponibles
+            );
+
+
+            response.setChauffeurDisponible(
+                    !chauffeursDisponibles.isEmpty()
+            );
+
+        } else {
 
             response.setChauffeurDisponible(
                     true
             );
 
+
             response.setChauffeursDisponibles(
                     new ArrayList<>()
             );
-
-            return response;
         }
 
-        List<
-                DisponibiliteReservationResponse.ChauffeurDisponibleDto
-                > chauffeursDisponibles =
-                new ArrayList<>();
-
-        for (
-                Chauffeur chauffeur :
-                chauffeurRepository.findAll()
-        ) {
-
-            if (estChauffeurDisponiblePourPeriode(
-                    chauffeur.getId(),
-                    reservation.getDateDebut(),
-                    reservation.getDateFin(),
-                    reservation.getId()
-            )) {
-
-                chauffeursDisponibles.add(
-                        convertirChauffeur(
-                                chauffeur
-                        )
-                );
-            }
-        }
-
-        response.setChauffeursDisponibles(
-                chauffeursDisponibles
-        );
-
-        response.setChauffeurDisponible(
-                !chauffeursDisponibles.isEmpty()
-        );
 
         return response;
     }
+
+
+    // =====================================================
+    // PLANNING COMPLET : disponible / occupe / indisponible
+    // =====================================================
+    // La requete existeChevauchementVehicule est deja utilisee
+    // pour autoriser ou refuser une affectation. La reutiliser
+    // garantit que l'affichage et la validation appliquent
+    // exactement le MEME critere de conflit en base.
+    // La liste des vehicules techniquement indisponibles reste
+    // distincte de ceux bloques par un ticket anterieur.
+
+    public List<Map<String, Object>> calculerPlanningVehicules(
+            Long reservationId
+    ) {
+        Reservation reservation = reservationRepository
+                .findById(reservationId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Ticket introuvable : " + reservationId
+                ));
+
+        verifierPeriode(reservation.getDateDebut(), reservation.getDateFin());
+
+        List<Map<String, Object>> resultat = new ArrayList<>();
+
+        for (Vehicule vehicule : vehiculeRepository.findAll()) {
+            boolean eligible = vehiculeEligiblePourPlanning(vehicule);
+            boolean occupeParAutreTicket = eligible
+                    && reservationRepository.existeChevauchementVehicule(
+                    vehicule.getId(),
+                    reservation.getId(),
+                    reservation.getDateDebut(),
+                    reservation.getDateFin()
+            );
+
+            String etat;
+            String raison;
+
+            if (!eligible) {
+                etat = "INDISPONIBLE_TECHNIQUE";
+                raison = "Vehicule indisponible (statut : "
+                        + (vehicule.getStatut() == null
+                        ? "non renseigne" : vehicule.getStatut()) + ")";
+            } else if (occupeParAutreTicket) {
+                etat = "OCCUPE";
+                raison = "Deja reserve sur cette periode par un autre ticket";
+            } else {
+                etat = "DISPONIBLE";
+                raison = "Disponible sur la periode demandee";
+            }
+
+            Map<String, Object> ligne = new LinkedHashMap<>();
+            ligne.put("id", vehicule.getId());
+            ligne.put("immatriculation", vehicule.getImmatriculation());
+            ligne.put("etat", etat);
+            ligne.put("disponible", eligible && !occupeParAutreTicket);
+            ligne.put("raison", raison);
+            resultat.add(ligne);
+        }
+
+        return resultat;
+    }
+
 
     // =====================================================
     // DISPONIBILITE VEHICULE
@@ -269,42 +335,37 @@ public class DisponibiliteReservationService {
             Long reservationAExclure
     ) {
 
-        if (vehiculeId == null
-                || dateDebut == null
-                || dateFin == null) {
+        if (vehiculeId == null) {
+            return false;
+        }
+
+
+        if (!periodeValide(
+                dateDebut,
+                dateFin
+        )) {
 
             return false;
         }
 
-        if (!dateFin.isAfter(dateDebut)) {
-            return false;
-        }
 
         Vehicule vehicule =
                 vehiculeRepository
-                        .findById(vehiculeId)
+                        .findById(
+                                vehiculeId
+                        )
                         .orElse(null);
 
-        if (vehicule == null) {
-            return false;
-        }
 
-        // -------------------------------------------------
-        // STATUT OPERATIONNEL
-        // -------------------------------------------------
-
-        if (!statutVehiculeCompatible(
+        if (!vehiculeEligiblePourPlanning(
                 vehicule
         )) {
 
             return false;
         }
 
-        // -------------------------------------------------
-        // RESERVATIONS DEJA VALIDEES
-        // -------------------------------------------------
 
-        boolean reserveDansReservation =
+        boolean chevauchement =
                 reservationRepository
                         .existeChevauchementVehicule(
                                 vehiculeId,
@@ -313,28 +374,10 @@ public class DisponibiliteReservationService {
                                 dateFin
                         );
 
-        if (reserveDansReservation) {
-            return false;
-        }
 
-        // -------------------------------------------------
-        // AFFECTATIONS REELLES
-        // -------------------------------------------------
-
-        boolean reserveDansAffectation =
-                affectationRepository
-                        .existeChevauchementVehicule(
-                                vehiculeId,
-                                dateDebut,
-                                dateFin
-                        );
-
-        if (reserveDansAffectation) {
-            return false;
-        }
-
-        return true;
+        return !chevauchement;
     }
+
 
     // =====================================================
     // DISPONIBILITE CHAUFFEUR
@@ -347,42 +390,37 @@ public class DisponibiliteReservationService {
             Long reservationAExclure
     ) {
 
-        if (chauffeurId == null
-                || dateDebut == null
-                || dateFin == null) {
+        if (chauffeurId == null) {
+            return false;
+        }
+
+
+        if (!periodeValide(
+                dateDebut,
+                dateFin
+        )) {
 
             return false;
         }
 
-        if (!dateFin.isAfter(dateDebut)) {
-            return false;
-        }
 
         Chauffeur chauffeur =
                 chauffeurRepository
-                        .findById(chauffeurId)
+                        .findById(
+                                chauffeurId
+                        )
                         .orElse(null);
 
-        if (chauffeur == null) {
-            return false;
-        }
 
-        // -------------------------------------------------
-        // STATUT OPERATIONNEL
-        // -------------------------------------------------
-
-        if (!statutChauffeurCompatible(
+        if (!chauffeurEligiblePourPlanning(
                 chauffeur
         )) {
 
             return false;
         }
 
-        // -------------------------------------------------
-        // AUTRES RESERVATIONS
-        // -------------------------------------------------
 
-        boolean reserveDansReservation =
+        boolean chevauchement =
                 reservationRepository
                         .existeChevauchementChauffeur(
                                 chauffeurId,
@@ -391,41 +429,16 @@ public class DisponibiliteReservationService {
                                 dateFin
                         );
 
-        if (reserveDansReservation) {
-            return false;
-        }
 
-        // -------------------------------------------------
-        // AFFECTATIONS EXISTANTES
-        // -------------------------------------------------
-
-        boolean reserveDansAffectation =
-                affectationRepository
-                        .existeChevauchementChauffeur(
-                                chauffeurId,
-                                dateDebut,
-                                dateFin
-                        );
-
-        if (reserveDansAffectation) {
-            return false;
-        }
-
-        return true;
+        return !chevauchement;
     }
 
+
     // =====================================================
-    // STATUT VEHICULE
+    // ELIGIBILITE OPERATIONNELLE VEHICULE
     // =====================================================
 
-    /**
-     * Un véhicule hors service, en maintenance,
-     * transféré ou réformé ne doit jamais être proposé.
-     *
-     * EN_MISSION peut être proposé pour une autre période
-     * à condition que les dates ne se chevauchent pas.
-     */
-    private boolean statutVehiculeCompatible(
+    private boolean vehiculeEligiblePourPlanning(
             Vehicule vehicule
     ) {
 
@@ -435,31 +448,36 @@ public class DisponibiliteReservationService {
             return false;
         }
 
+
         String statut =
                 vehicule
                         .getStatut()
                         .trim()
-                        .toUpperCase(Locale.ROOT);
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
 
-        return "DISPONIBLE".equals(statut)
-                || "EN_MISSION".equals(statut);
+
+        /*
+         * EN_MISSION n'est volontairement pas exclu.
+         *
+         * Un véhicule actuellement en mission peut être
+         * planifié pour une période future si les créneaux
+         * ne se chevauchent pas.
+         */
+        return !statut.equals("MAINTENANCE")
+                && !statut.equals("EN_MAINTENANCE")
+                && !statut.equals("HORS_SERVICE")
+                && !statut.equals("TRANSFERE")
+                && !statut.equals("REFORME");
     }
 
+
     // =====================================================
-    // STATUT CHAUFFEUR
+    // ELIGIBILITE OPERATIONNELLE CHAUFFEUR
     // =====================================================
 
-    /**
-     * Le modèle Chauffeur réel utilise :
-     *
-     * DISPONIBLE
-     * EN_MISSION
-     * ABSENT
-     *
-     * EN_MISSION n'interdit pas une future mission
-     * si les créneaux ne se chevauchent pas.
-     */
-    private boolean statutChauffeurCompatible(
+    private boolean chauffeurEligiblePourPlanning(
             Chauffeur chauffeur
     ) {
 
@@ -469,15 +487,61 @@ public class DisponibiliteReservationService {
             return false;
         }
 
+
         String statut =
                 chauffeur
                         .getStatut()
                         .trim()
-                        .toUpperCase(Locale.ROOT);
+                        .toUpperCase(
+                                Locale.ROOT
+                        );
 
-        return "DISPONIBLE".equals(statut)
-                || "EN_MISSION".equals(statut);
+
+        return statut.equals(
+                "DISPONIBLE"
+        )
+                || statut.equals(
+                "SUR_PLACE"
+        )
+                || statut.equals(
+                "EN_DEPLACEMENT"
+        );
     }
+
+
+    // =====================================================
+    // VALIDATION PERIODE
+    // =====================================================
+
+    private boolean periodeValide(
+            LocalDateTime debut,
+            LocalDateTime fin
+    ) {
+
+        return debut != null
+                && fin != null
+                && fin.isAfter(
+                debut
+        );
+    }
+
+
+    private void verifierPeriode(
+            LocalDateTime debut,
+            LocalDateTime fin
+    ) {
+
+        if (!periodeValide(
+                debut,
+                fin
+        )) {
+
+            throw new IllegalArgumentException(
+                    "La période de la demande est invalide."
+            );
+        }
+    }
+
 
     // =====================================================
     // TYPE VEHICULE
@@ -488,36 +552,68 @@ public class DisponibiliteReservationService {
             String typeSouhaite
     ) {
 
-        /*
-         * Aucun type particulier demandé :
-         * tout véhicule disponible correspond.
-         */
         if (typeSouhaite == null
                 || typeSouhaite.isBlank()) {
 
             return true;
         }
 
-        /*
-         * Si le véhicule n'a pas encore son type
-         * renseigné dans la base, on ne l'invente pas.
-         *
-         * Il sera simplement présenté comme alternative.
-         */
-        if (vehicule.getTypeVehicule() == null
-                || vehicule.getTypeVehicule().isBlank()) {
 
-            return false;
-        }
-
-        return normaliserType(
-                vehicule.getTypeVehicule()
-        ).equals(
-                normaliserType(
-                        typeSouhaite
+        String recherche =
+                (
+                        safe(
+                                vehicule.getCategorie()
+                        )
+                                + " "
+                                + safe(
+                                vehicule.getModeleType()
+                        )
                 )
-        );
+                        .toUpperCase(
+                                Locale.ROOT
+                        )
+                        .replace("-", "")
+                        .replace(" ", "");
+
+
+        String type =
+                typeSouhaite
+                        .trim()
+                        .toUpperCase(
+                                Locale.ROOT
+                        )
+                        .replace("-", "")
+                        .replace(" ", "");
+
+
+        return switch (type) {
+
+            case "4X4" ->
+                    recherche.contains("4X4")
+                            || recherche.contains("4*4")
+                            || recherche.contains("4WD");
+
+            case "BERLINE" ->
+                    recherche.contains("BERLINE");
+
+            case "UTILITAIRE" ->
+                    recherche.contains("UTILITAIRE")
+                            || recherche.contains("PICKUP")
+                            || recherche.contains("CAMIONNETTE");
+
+            case "MINIBUS" ->
+                    recherche.contains("MINIBUS");
+
+            case "AUTRE" ->
+                    true;
+
+            default ->
+                    recherche.contains(
+                            type
+                    );
+        };
     }
+
 
     // =====================================================
     // CONVERSION VEHICULE
@@ -531,32 +627,35 @@ public class DisponibiliteReservationService {
         DisponibiliteReservationResponse.VehiculeDisponibleDto dto =
                 new DisponibiliteReservationResponse.VehiculeDisponibleDto();
 
+
         dto.setId(
                 vehicule.getId()
         );
+
 
         dto.setImmatriculation(
                 vehicule.getImmatriculation()
         );
 
+
         dto.setCategorie(
                 vehicule.getCategorie()
         );
+
 
         dto.setModeleType(
                 vehicule.getModeleType()
         );
 
-        dto.setTypeVehicule(
-                vehicule.getTypeVehicule()
-        );
 
         dto.setStatut(
                 vehicule.getStatut()
         );
 
+
         return dto;
     }
+
 
     // =====================================================
     // CONVERSION CHAUFFEUR
@@ -570,55 +669,49 @@ public class DisponibiliteReservationService {
         DisponibiliteReservationResponse.ChauffeurDisponibleDto dto =
                 new DisponibiliteReservationResponse.ChauffeurDisponibleDto();
 
+
         dto.setId(
                 chauffeur.getId()
         );
 
-        dto.setMatricule(
-                chauffeur.getMatricule()
-        );
 
         dto.setNom(
                 chauffeur.getNom()
         );
 
+
         dto.setPrenom(
                 chauffeur.getPrenom()
         );
+
 
         dto.setTelephone(
                 chauffeur.getTelephone()
         );
 
+
         dto.setStatut(
                 chauffeur.getStatut()
         );
 
+
         return dto;
     }
 
+
     // =====================================================
-    // NORMALISATION TYPE
+    // UTILS
     // =====================================================
 
-    private String normaliserType(
+    private String safe(
             String valeur
     ) {
 
-        if (valeur == null) {
-            return "";
-        }
-
-        return valeur
-                .trim()
-                .toUpperCase(Locale.ROOT)
-                .replace("-", "")
-                .replace(" ", "");
+        return valeur == null
+                ? ""
+                : valeur;
     }
 
-    // =====================================================
-    // FORMAT TYPE
-    // =====================================================
 
     private String formaterType(
             String type
@@ -627,11 +720,14 @@ public class DisponibiliteReservationService {
         if (type == null
                 || type.isBlank()) {
 
-            return "demandé";
+            return "véhicule demandé";
         }
 
+
         return switch (
-                normaliserType(type)
+                type.toUpperCase(
+                        Locale.ROOT
+                )
                 ) {
 
             case "4X4" ->
@@ -645,9 +741,6 @@ public class DisponibiliteReservationService {
 
             case "MINIBUS" ->
                     "minibus";
-
-            case "AUTRE" ->
-                    "autre";
 
             default ->
                     type;

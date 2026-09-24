@@ -7,11 +7,38 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-public interface TransactionCarburantRepository extends JpaRepository<TransactionCarburant, UUID> {
+public interface TransactionCarburantRepository
+        extends JpaRepository<TransactionCarburant, UUID> {
 
-    List<TransactionCarburant> findByVehiculeIdOrderByDateOperationDesc(Long vehiculeId);
+    // =========================================================
+    // METHODES EXISTANTES - CONSERVEES
+    // =========================================================
 
-    List<TransactionCarburant> findAllByOrderByDateOperationDesc();
+    List<TransactionCarburant>
+    findByVehiculeIdOrderByDateOperationDesc(
+            Long vehiculeId
+    );
 
-    List<TransactionCarburant> findByDateOperationBetween(LocalDate debut, LocalDate fin);
+    List<TransactionCarburant>
+    findAllByOrderByDateOperationDesc();
+
+    List<TransactionCarburant>
+    findByDateOperationBetween(
+            LocalDate debut,
+            LocalDate fin
+    );
+
+    // =========================================================
+    // ESPACE CHAUFFEUR
+    // =========================================================
+
+    List<TransactionCarburant>
+    findByChauffeurIdOrderByDateOperationDesc(
+            Long chauffeurId
+    );
+
+    List<TransactionCarburant>
+    findByReservationIdOrderByDateOperationDesc(
+            Long reservationId
+    );
 }

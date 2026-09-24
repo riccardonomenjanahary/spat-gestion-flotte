@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import EnTete from "@/components/EnTete";
 
 interface Chauffeur {
   id: number;
@@ -412,13 +413,19 @@ export default function ChauffeursPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#f3f4f6",
-        padding: 32,
-      }}
-    >
+    <>
+      <EnTete afficherNotifications={false} afficherProfil={false} />
+
+      <div
+        style={{
+          minHeight: "100vh",
+          backgroundColor: "#f3f4f6",
+          padding: "24px 16px",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Contenu centré et limité en largeur, sans changer les fonctions. */}
+        <div style={{ width: "100%", maxWidth: 1050, margin: "0 auto" }}>
       {/* ================= HEADER ================= */}
 
       <div
@@ -684,8 +691,10 @@ export default function ChauffeursPage() {
                     padding:
                       "10px 16px",
                     backgroundColor:
-                      "#e5e7eb",
-                    border: "none",
+                      "#2563eb",
+                    color:
+                      "#ffffff",
+                    border: "1px solid #2563eb",
                     borderRadius: 8,
                     cursor: "pointer",
                     fontWeight: 600,
@@ -755,12 +764,13 @@ export default function ChauffeursPage() {
           border:
             "1px solid #e5e7eb",
           borderRadius: 8,
-          overflow: "hidden",
+          overflowX: "auto",
         }}
       >
         <table
           style={{
             width: "100%",
+            minWidth: 730,
             borderCollapse:
               "collapse",
           }}
@@ -794,9 +804,11 @@ export default function ChauffeursPage() {
                 Statut
               </th>
 
-              <th style={th}>
-                Actions
-              </th>
+              {!lectureSeule && (
+                <th style={th}>
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
 
@@ -804,7 +816,7 @@ export default function ChauffeursPage() {
             {chargement ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={lectureSeule ? 5 : 6}
                   style={{
                     padding: 20,
                     textAlign:
@@ -820,7 +832,7 @@ export default function ChauffeursPage() {
               0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={lectureSeule ? 5 : 6}
                   style={{
                     padding: 20,
                     textAlign:
@@ -866,8 +878,8 @@ export default function ChauffeursPage() {
                     )}
                   </td>
 
-                  <td style={td}>
-                    {!lectureSeule && (
+                  {!lectureSeule && (
+                    <td style={td}>
                       <div
                         style={{
                           display:
@@ -905,15 +917,17 @@ export default function ChauffeursPage() {
                           <IconTrash />
                         </button>
                       </div>
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+        </div>
     </div>
+    </>
   );
 }
 

@@ -22,9 +22,11 @@ interface Vehicule {
 }
 
 interface Chauffeur {
+  id?: number;
   nom: string;
   prenom: string;
   telephone?: string;
+  statut?: string;
 }
 
 interface Mission {
@@ -49,7 +51,7 @@ export default function MissionCard({
   onTerminer,
 }: {
   mission: Mission;
-  onTerminer: (mission: Mission) => void;
+  onTerminer?: (mission: any) => void;
 }) {
   const v = mission.vehicule;
   const c = mission.chauffeur;
@@ -110,9 +112,9 @@ export default function MissionCard({
           {c?.telephone && <div style={{ fontSize: 12, color: "#9ca3af" }}>{c.telephone}</div>}
         </div>
 
-        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-          <div>Début : {formatDate(mission.dateDebut)}</div>
-          <div>Fin : {formatDate(mission.dateFin)}</div>
+        <div style={{ fontSize: 12, color: "#475569", marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+          <div><strong style={{ color: "#1e293b" }}>Début :</strong> {formatDate(mission.dateDebut)}</div>
+          <div><strong style={{ color: "#1e293b" }}>Date fin :</strong> {mission.dateFin ? formatDate(mission.dateFin) : <span style={{ color: "#2563eb", fontWeight: 600 }}>En cours d&apos;exécution</span>}</div>
         </div>
 
         <span
@@ -129,13 +131,14 @@ export default function MissionCard({
           {enCours ? "En cours" : "Terminée"}
         </span>
 
-        {enCours && (
+        {enCours && onTerminer && (
           <button
+            type="button"
             onClick={() => onTerminer(mission)}
             style={{
               marginTop: "auto",
-              padding: "8px 0",
-              backgroundColor: "#d97706",
+              padding: "8px 12px",
+              backgroundColor: "#dc2626",
               color: "white",
               border: "none",
               borderRadius: 6,
@@ -144,7 +147,7 @@ export default function MissionCard({
               cursor: "pointer",
             }}
           >
-            Terminer la mission
+            Clôturer la mission
           </button>
         )}
       </div>

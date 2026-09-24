@@ -5,13 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Users,
-  UserCheck,
-  UserX,
   ShieldCheck,
   UserCog,
 } from "lucide-react";
 
 import RoleGuard from "@/components/RoleGuard";
+import EnTete from "@/components/EnTete";
 import { ROLES } from "@/app/lib/roles";
 
 interface Utilisateur {
@@ -34,28 +33,11 @@ export default function SuperAdminPage() {
 function SuperAdminContent() {
   const router = useRouter();
 
-  const [profilMenuOuvert, setProfilMenuOuvert] = useState(false);
-
-  const [matricule, setMatricule] = useState("");
-
   const [stats, setStats] = useState({
     total: "—",
-    actifs: "—",
-    inactifs: "—",
   });
 
   const [statsChargement, setStatsChargement] = useState(true);
-
-  // =====================================================
-  // INFORMATIONS DU SUPER ADMIN CONNECTÉ
-  // =====================================================
-
-  useEffect(() => {
-    const matriculeStocke =
-      localStorage.getItem("numMatricule") || "";
-
-    setMatricule(matriculeStocke);
-  }, []);
 
   // =====================================================
   // CHARGEMENT DES STATISTIQUES UTILISATEURS
@@ -104,18 +86,8 @@ function SuperAdminContent() {
         const utilisateurs: Utilisateur[] =
           await response.json();
 
-        const actifs = utilisateurs.filter(
-          (utilisateur) => utilisateur.actif === true
-        ).length;
-
-        const inactifs = utilisateurs.filter(
-          (utilisateur) => utilisateur.actif === false
-        ).length;
-
         setStats({
           total: String(utilisateurs.length),
-          actifs: String(actifs),
-          inactifs: String(inactifs),
         });
       } catch (error) {
         console.error(
@@ -135,21 +107,6 @@ function SuperAdminContent() {
   }, [router]);
 
   // =====================================================
-  // DÉCONNEXION
-  // =====================================================
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("numMatricule");
-    localStorage.removeItem("email");
-
-    toast.success("Déconnexion réussie");
-
-    router.replace("/login");
-  };
-
-  // =====================================================
   // REDIRECTION VERS LA GESTION DES UTILISATEURS
   // =====================================================
 
@@ -166,210 +123,9 @@ function SuperAdminContent() {
         backgroundColor: "#f3f4f6",
       }}
     >
-      {/* ================================================= */}
-      {/* EN-TÊTE */}
-      {/* ================================================= */}
+      {/* EN-TÊTE GLOBAL AVEC NOTIFICATIONS */}
 
-      <header
-        style={{
-          height: 90,
-          backgroundColor: "#1e293b",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 32px",
-          borderBottom: "1px solid #334155",
-        }}
-      >
-        {/* LOGO + TITRE */}
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-          }}
-        >
-          <div
-            style={{
-              width: 62,
-              height: 62,
-              borderRadius: 10,
-              backgroundColor: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            <img
-              src="/Logo.png"
-              alt="Logo SPAT"
-              style={{
-                width: 58,
-                height: 58,
-                objectFit: "contain",
-              }}
-            />
-          </div>
-
-          <div>
-            <div
-              style={{
-                color: "white",
-                fontSize: 17,
-                fontWeight: 700,
-              }}
-            >
-              SPAT
-            </div>
-
-            <div
-              style={{
-                color: "#cbd5e1",
-                fontSize: 12,
-                marginTop: 2,
-              }}
-            >
-              Administration des utilisateurs
-            </div>
-          </div>
-        </div>
-
-        {/* PROFIL SUPER ADMIN */}
-
-        <div
-          style={{
-            position: "relative",
-          }}
-        >
-          <button
-            onClick={() =>
-              setProfilMenuOuvert((valeur) => !valeur)
-            }
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.2)",
-              backgroundColor: "rgba(255,255,255,0.1)",
-              color: "white",
-              cursor: "pointer",
-            }}
-            aria-label="Ouvrir le profil"
-          >
-            <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#f3f4f6",
-              }}
-            >
-              <img
-                src="/icon.png"
-                alt="Avatar profil"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                textAlign: "left",
-                lineHeight: 1.2,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                SPAT-Super Admin
-              </div>
-
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#cbd5e1",
-                }}
-              >
-                Super administrateur
-              </div>
-            </div>
-          </button>
-
-          {/* MENU PROFIL */}
-
-          {profilMenuOuvert && (
-            <div
-              style={{
-                position: "absolute",
-                top: 52,
-                right: 0,
-                backgroundColor: "white",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                minWidth: 220,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                zIndex: 20,
-              }}
-            >
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderBottom: "1px solid #f3f4f6",
-                  color: "#111827",
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 700,
-                  }}
-                >
-                  {matricule || "Super Admin"}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6b7280",
-                    marginTop: 2,
-                  }}
-                >
-                  Super administrateur
-                </div>
-              </div>
-
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "10px 14px",
-                  border: "none",
-                  backgroundColor: "transparent",
-                  color: "#dc2626",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                Déconnexion
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <EnTete />
 
       {/* ================================================= */}
       {/* CONTENU PRINCIPAL */}
@@ -434,16 +190,15 @@ function SuperAdminContent() {
         </div>
 
         {/* ================================================= */}
-        {/* STATISTIQUES UTILISATEURS */}
+        {/* STATISTIQUE UTILISATEURS */}
         {/* ================================================= */}
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "minmax(220px, 320px)",
+            justifyContent: "center",
             gap: 16,
-            maxWidth: 800,
             margin: "0 auto 38px auto",
           }}
         >
@@ -455,30 +210,6 @@ function SuperAdminContent() {
               <Users
                 size={21}
                 color="#1e40af"
-              />
-            }
-          />
-
-          <StatCard
-            titre="Comptes actifs"
-            valeur={stats.actifs}
-            chargement={statsChargement}
-            icone={
-              <UserCheck
-                size={21}
-                color="#166534"
-              />
-            }
-          />
-
-          <StatCard
-            titre="Comptes désactivés"
-            valeur={stats.inactifs}
-            chargement={statsChargement}
-            icone={
-              <UserX
-                size={21}
-                color="#991b1b"
               />
             }
           />

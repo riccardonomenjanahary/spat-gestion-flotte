@@ -1,0 +1,14 @@
+services:
+
+  traccar:
+    image: traccar/traccar:6.15.3
+    container_name: spat-traccar
+
+    restart: unless-stopped
+
+    ports:
+      - "5001:5001"
+
+    volumes:
+      - ./conf/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - ./logs:/opt/traccar/logs
