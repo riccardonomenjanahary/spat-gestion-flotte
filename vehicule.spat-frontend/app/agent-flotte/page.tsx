@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -12,6 +13,8 @@ import dynamic from "next/dynamic";
 
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import PersonnelAutocomplete from "@/components/PersonnelAutocomplete";
+import SlideInPanel from "@/app/components/SlideInPanel";
 import { ROLES } from "@/app/lib/roles";
 import { toast } from "sonner";
 
@@ -43,15 +46,10 @@ const FlotteMap = dynamic(
   { ssr: false }
 );
 
-
-// TYPES
-
-
 interface Vehicule {
   id: number;
   immatriculation: string;
 
-  // Compatibilité avec les différentes versions du modèle
   marque?: string | null;
   modele?: string | null;
 
@@ -84,9 +82,106 @@ interface GpsPosition {
   odometreKm?: number | null;
   distanceTotale?: number | null;
   derniereReceptionSpat?: number | null;
+  routeNationale?: string | null;
+  distanceRouteMetres?: number | null;
 }
 
-// Contrat attendu du backend SPAT pour les relevés conservés dans le temps.
+interface RouteNationaleInfo {
+  reference: string | null;
+  nom: string | null;
+  distanceMetres: number | null;
+  verifieeLe: number;
+}
+
+interface RouteOsmWay {
+  tags?: Record<string, string | undefined>;
+  geometry?: Array<{ lat: number; lon: number }>;
+}
+
+function distanceGpsMetres(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const radians = Math.PI / 180;
+  const x = (lon2 - lon1) * radians * 6_371_000 * Math.cos(((lat1 + lat2) / 2) * radians);
+  const y = (lat2 - lat1) * radians * 6_371_000;
+  return Math.hypot(x, y);
+}
+
+function distancePointSegmentMetres(
+  lat: number,
+  lon: number,
+  debut: { lat: number; lon: number },
+  fin: { lat: number; lon: number }
+): number {
+  const radians = Math.PI / 180;
+  const facteurX = 6_371_000 * Math.cos(lat * radians) * radians;
+  const facteurY = 6_371_000 * radians;
+  const ax = (debut.lon - lon) * facteurX;
+  const ay = (debut.lat - lat) * facteurY;
+  const bx = (fin.lon - lon) * facteurX;
+  const by = (fin.lat - lat) * facteurY;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const longueurCarree = dx * dx + dy * dy;
+  const t = longueurCarree === 0
+    ? 0
+    : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / longueurCarree));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+function extraireReferenceNationale(tags: Record<string, string | undefined> = {}): string | null {
+  const valeurs = [tags.ref, tags.nat_ref, tags.official_ref, tags.alt_ref, tags.name, tags.official_name];
+  for (const valeur of valeurs) {
+    if (!valeur) continue;
+    const match = valeur.match(/\b(?:RN|ROUTE\s+NATIONALE)\s*[-.]?\s*(\d{1,3}[A-Z]?)\b/i);
+    if (match) return `RN${match[1].toUpperCase()}`;
+  }
+  return null;
+}
+
+async function rechercherRouteNationale(
+  latitude: number,
+  longitude: number,
+  signal: AbortSignal
+): Promise<RouteNationaleInfo> {
+  const lat = latitude.toFixed(6);
+  const lon = longitude.toFixed(6);
+  const requete = `[out:json][timeout:12];way(around:250,${lat},${lon})["highway"~"^(motorway|trunk|primary|secondary)$"]["ref"];out tags geom;`;
+  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(requete)}`;
+  const reponse = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal,
+    cache: "no-store",
+  });
+  if (!reponse.ok) throw new Error(`Service cartographique indisponible (HTTP ${reponse.status}).`);
+  const donnees = await reponse.json() as { elements?: RouteOsmWay[] };
+  const voies = (donnees.elements || [])
+    .map((voie) => {
+      const reference = extraireReferenceNationale(voie.tags);
+      const points = voie.geometry || [];
+      if (!reference || points.length === 0) return null;
+      let distance = Number.POSITIVE_INFINITY;
+      if (points.length === 1) {
+        distance = distanceGpsMetres(latitude, longitude, points[0].lat, points[0].lon);
+      } else {
+        for (let index = 1; index < points.length; index++) {
+          distance = Math.min(
+            distance,
+            distancePointSegmentMetres(latitude, longitude, points[index - 1], points[index])
+          );
+        }
+      }
+      return { reference, nom: voie.tags?.name || null, distance };
+    })
+    .filter((voie): voie is { reference: string; nom: string | null; distance: number } => voie !== null)
+    .sort((a, b) => a.distance - b.distance);
+  const plusProche = voies[0] && voies[0].distance <= 150 ? voies[0] : null;
+  return {
+    reference: plusProche?.reference || null,
+    nom: plusProche?.nom || null,
+    distanceMetres: plusProche ? Math.round(plusProche.distance) : null,
+    verifieeLe: Date.now(),
+  };
+}
+
 interface GpsReleveHistorique {
   id?: string | number;
   vehiculeId?: number;
@@ -164,6 +259,7 @@ interface Reservation {
 
   typeVehiculeSouhaite?: string | null;
   besoinChauffeur?: boolean | null;
+  incidentCloture?: string | null;
 
   observations?: string | null;
 
@@ -186,7 +282,7 @@ interface TransactionCarburant {
 
   vehicule?: Vehicule | null;
 
-  type: "DOTATION" | "CONSOMMATION" | string;
+  type: "DOTATION" | "CONSOMMATION" | "RECHARGE" | string;
 
   quantiteLitres: number;
   dateOperation: string;
@@ -204,6 +300,11 @@ interface TransactionCarburant {
   justificatif?: string | null;
 
   observation?: string | null;
+  sourceAssurance?: string | null;
+  referencePolice?: string | null;
+  statutIndemnisation?: string | null;
+  montantIndemnisation?: number | null;
+  dateIndemnisation?: string | null;
 
   chauffeur?: Chauffeur | null;
 
@@ -217,14 +318,10 @@ interface Assurance {
 
   numeroPolice?: string | null;
 
-  // Champs déjà utilisés / compatibilité backend
   dateExpiration?: string | null;
   dateEcheance?: string | null;
   dateFin?: string | null;
 
-  // Champs complémentaires du dossier assurance.
-  // Ils restent optionnels afin de rester compatibles avec
-  // les versions actuelles du backend.
   dateDebut?: string | null;
   assureur?: string | null;
   typeCouverture?: string | null;
@@ -256,13 +353,17 @@ interface Sinistre {
   circonstance?: string | null;
   description?: string | null;
 
-  // Compatibilité avec un backend enrichi pour le constat amiable.
   numeroDossier?: string | null;
   constatAmiable?: string | null;
   constat?: string | null;
   constatUrl?: string | null;
   lieu?: string | null;
   observation?: string | null;
+  sourceAssurance?: string | null;
+  referencePolice?: string | null;
+  statutIndemnisation?: string | null;
+  montantIndemnisation?: number | null;
+  dateIndemnisation?: string | null;
 
   statut?: string | null;
 
@@ -276,10 +377,6 @@ type Onglet =
   | "CARBURANT"
   | "ASSURANCES";
 
-// =========================================================
-// PAGE
-// =========================================================
-
 export default function AgentFlottePage() {
   return (
     <RoleGuard role={ROLES.AGENT_FLOTTE}>
@@ -288,20 +385,20 @@ export default function AgentFlottePage() {
   );
 }
 
-// =========================================================
-// CONTENU
-// =========================================================
-
 function AgentFlotteContent() {
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   const [onglet, setOnglet] = useState<Onglet>("SUIVI");
   const [afficherHistoriqueMissions, setAfficherHistoriqueMissions] = useState(false);
+  const [formCarburantOuvert, setFormCarburantOuvert] = useState(false);
+  const [formAssuranceOuvert, setFormAssuranceOuvert] = useState(false);
+  const [formSinistreOuvert, setFormSinistreOuvert] = useState(false);
   const [urgenceZoneMission, setUrgenceZoneMission] = useState<"VILLE_TOAMASINA" | "HORS_TOAMASINA" | "">("");
   const [urgenceTicket, setUrgenceTicket] = useState<Reservation | null>(null);
   const [urgenceEnCours, setUrgenceEnCours] = useState(false);
   const [confirmeDerogationVerrouillage, setConfirmeDerogationVerrouillage] = useState(false);
   const [urgenceSousCategorie, setUrgenceSousCategorie] = useState("URGENCE_OPERATIONNELLE");
+  const [urgenceSousCategorieAutre, setUrgenceSousCategorieAutre] = useState("");
   const [urgenceMotif, setUrgenceMotif] = useState("");
   const [urgenceObjet, setUrgenceObjet] = useState("");
   const [urgenceDepart, setUrgenceDepart] = useState("");
@@ -310,13 +407,14 @@ function AgentFlotteContent() {
   const [urgenceDestination, setUrgenceDestination] = useState("");
   const [tracesUrgence, setTracesUrgence] = useState<ChangementDerniereMinute[]>([]);
 
-
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [transactions, setTransactions] =
     useState<TransactionCarburant[]>([]);
   const [assurances, setAssurances] = useState<Assurance[]>([]);
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
+  const [erreursModulesOptionnels, setErreursModulesOptionnels] = useState<string[]>([]);
+  const [erreurChargementPrincipal, setErreurChargementPrincipal] = useState<string | null>(null);
 
   const [chargement, setChargement] = useState(true);
 
@@ -324,14 +422,10 @@ function AgentFlotteContent() {
   const [erreurGps, setErreurGps] = useState<string | null>(null);
   const [derniereMajGps, setDerniereMajGps] = useState<Date | null>(null);
 
-  // =========================================================
-  // CARBURANT
-  // =========================================================
-
 const [carbVehiculeId, setCarbVehiculeId] = useState("");
 
 const [carbType, setCarbType] =
-  useState<"DOTATION" | "CONSOMMATION">("CONSOMMATION");
+  useState<"DOTATION" | "CONSOMMATION" | "RECHARGE">("CONSOMMATION");
 
 const [carbQuantite, setCarbQuantite] = useState("");
 
@@ -347,7 +441,6 @@ const [carbKilometrage, setCarbKilometrage] =
 
 const [carbStation, setCarbStation] =
   useState("");
-
 
 const [carbJustificatif, setCarbJustificatif] =
   useState("");
@@ -373,10 +466,6 @@ const [carbFiltreJustificatif, setCarbFiltreJustificatif] =
 const [carbPeriode, setCarbPeriode] =
   useState<"TOUT" | "MOIS" | "30J">("MOIS");
 
-  // =========================================================
-  // ASSURANCE
-  // =========================================================
-
   const [assVehiculeId, setAssVehiculeId] = useState("");
   const [assNumeroPolice, setAssNumeroPolice] = useState("");
   const [assDateDebut, setAssDateDebut] = useState("");
@@ -396,10 +485,6 @@ const [carbPeriode, setCarbPeriode] =
   const [assFiltreEtat, setAssFiltreEtat] =
     useState<"TOUS" | "VALIDES" | "J15" | "EXPIREES">("TOUS");
 
-  // =========================================================
-  // SINISTRE
-  // =========================================================
-
   const [sinVehiculeId, setSinVehiculeId] = useState("");
 
   const [sinDate, setSinDate] = useState(() =>
@@ -410,6 +495,8 @@ const [carbPeriode, setCarbPeriode] =
   const [sinCirconstance, setSinCirconstance] = useState("");
   const [sinDescription, setSinDescription] = useState("");
   const [sinConstatAmiable, setSinConstatAmiable] = useState("");
+  const [sinSourceAssurance, setSinSourceAssurance] = useState("POLICE_FLOTTE_SPAT");
+  const [sinReferencePolice, setSinReferencePolice] = useState("");
 
   const [envoiSinistre, setEnvoiSinistre] = useState(false);
 
@@ -419,19 +506,11 @@ const [carbPeriode, setCarbPeriode] =
   const [sinDossierOuvert, setSinDossierOuvert] =
     useState<string | number | null>(null);
 
-  // =========================================================
-  // TOKEN
-  // =========================================================
-
   const getToken = () => {
     if (typeof window === "undefined") return null;
 
     return localStorage.getItem("token");
   };
-
-  // =========================================================
-  // FETCH
-  // =========================================================
 
   const fetchListe = async <T,>(
     url: string,
@@ -452,9 +531,9 @@ const [carbPeriode, setCarbPeriode] =
       );
     }
 
-    const data = await res.json();
-
-    return Array.isArray(data) ? data : [];
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) throw new Error(`Format de réponse invalide pour ${url}.`);
+    return data as T[];
   };
 
   const fetchOptionnel = async <T,>(
@@ -464,6 +543,10 @@ const [carbPeriode, setCarbPeriode] =
     try {
       return await fetchListe<T>(url, token);
     } catch (error) {
+      setErreursModulesOptionnels((precedentes) => [
+        ...precedentes,
+        `${url.replace(API || "", "")}: ${error instanceof Error ? error.message : "échec de chargement"}`,
+      ]);
       console.warn(
         "Module non disponible :",
         url,
@@ -473,10 +556,6 @@ const [carbPeriode, setCarbPeriode] =
       return [];
     }
   };
-
-  // =========================================================
-  // CHARGEMENT
-  // =========================================================
 
   const chargerTracesUrgence = async () => {
     const token = getToken();
@@ -521,6 +600,9 @@ const [carbPeriode, setCarbPeriode] =
         || !urgenceDepart || !urgenceFin || new Date(urgenceFin) <= new Date(urgenceDepart)) {
       toast.error("Complétez les informations et vérifiez les dates."); return;
     }
+    if (urgenceSousCategorie === "AUTRE" && !urgenceSousCategorieAutre.trim()) {
+      toast.error("Précisez la sous-catégorie de l'urgence."); return;
+    }
     const avertissement = urgenceTicket.mobilisabilite === "VERROUILLEE"
       ? "DÉROGATION EXCEPTIONNELLE : la mission initiale est VERROUILLÉE. Son véhicule et son chauffeur seront réaffectés. "
       : "";
@@ -531,7 +613,10 @@ const [carbPeriode, setCarbPeriode] =
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          sousCategorie: urgenceSousCategorie, motifUrgence: urgenceMotif.trim(), motif: urgenceObjet.trim(),
+          sousCategorie: urgenceSousCategorie === "AUTRE"
+            ? `AUTRE — ${urgenceSousCategorieAutre.trim()}`
+            : urgenceSousCategorie,
+          motifUrgence: urgenceMotif.trim(), motif: urgenceObjet.trim(),
           dateDebut: `${urgenceDepart}:00`, dateFin: `${urgenceFin}:00`,
           pointDepart: urgencePointDepart.trim(), destination: urgenceDestination.trim(),
           zoneMission: urgenceZoneMission,
@@ -549,6 +634,7 @@ const [carbPeriode, setCarbPeriode] =
 
   const charger = async () => {
     if (!API) {
+      setErreurChargementPrincipal("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error(
         "NEXT_PUBLIC_API_URL n'est pas configurée."
       );
@@ -569,12 +655,11 @@ const [carbPeriode, setCarbPeriode] =
     }
 
     setChargement(true);
+    setErreurChargementPrincipal(null);
+    setErreursModulesOptionnels([]);
 
     try {
-      /*
-       * Données principales réellement présentes
-       * dans le système.
-       */
+
       const [v, r, c] = await Promise.all([
         fetchListe<Vehicule>(
           `${API}/vehicules`,
@@ -596,11 +681,6 @@ const [carbPeriode, setCarbPeriode] =
       setReservations(r);
       setTransactions(c);
 
-      /*
-       * Ces deux modules restent optionnels
-       * pour éviter de bloquer toute la page
-       * s'ils ne sont pas disponibles.
-       */
       const [a, s] = await Promise.all([
         fetchOptionnel<Assurance>(
           `${API}/assurances`,
@@ -620,6 +700,11 @@ const [carbPeriode, setCarbPeriode] =
         "Erreur chargement Agent Flotte :",
         error
       );
+      setVehicules([]);
+      setReservations([]);
+      setTransactions([]);
+      setErreurChargementPrincipal(error instanceof Error
+        ? error.message : "Données principales indisponibles.");
 
       toast.error(
         "Impossible de charger les données de la flotte."
@@ -636,9 +721,6 @@ const [carbPeriode, setCarbPeriode] =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
-  // Les statuts des missions sont rafraîchis indépendamment de la carte GPS.
-  // La notification persistante doit être créée côté backend par la clôture.
   useEffect(() => {
     if (!API) return;
     let actif = true;
@@ -669,10 +751,6 @@ const [carbPeriode, setCarbPeriode] =
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [API]);
-
-  // =========================================================
-  // GPS - SYNCHRONISATION TOUTES LES 5 SECONDES
-  // =========================================================
 
   useEffect(() => {
     if (!API) return;
@@ -752,10 +830,6 @@ const [carbPeriode, setCarbPeriode] =
     return map;
   }, [positionsGps]);
 
-  // =========================================================
-  // MISSIONS ACTIVES
-  // =========================================================
-
   const missionsActives = useMemo(() => {
     const maintenant = Date.now();
 
@@ -782,8 +856,6 @@ const [carbPeriode, setCarbPeriode] =
     });
   }, [reservations]);
 
-  // Missions explicitement terminees ou cloturees : une date de fin passee
-  // ne prouve pas, a elle seule, qu'une mission est terminee.
   const historiqueMissions = useMemo(
     () => reservations
       .filter((r) => ["TERMINEE", "CLOTUREE"].includes(
@@ -808,9 +880,7 @@ const [carbPeriode, setCarbPeriode] =
     });
     return liens;
   }, [tracesUrgence]);
-  // Afficher l'action même lorsqu'elle est indisponible : l'agent doit
-  // comprendre précisément pourquoi le bouton ne peut pas être utilisé.
-  // Les mêmes conditions métier sont également contrôlées côté backend.
+
   const raisonUrgenceIndisponible = (r: Reservation): string | null => {
     if (changementsParTicket.has(r.id)) {
       return "Un changement de dernière minute est déjà enregistré pour ce ticket.";
@@ -818,7 +888,7 @@ const [carbPeriode, setCarbPeriode] =
     if (r.statut !== "VALIDEE") {
       return "La mission doit d’abord être validée au niveau 2.";
     }
-    // FLEXIBLE : circuit normal ; VERROUILLEE : dérogation explicite dans le formulaire.
+
     if (r.mobilisabilite && !["FLEXIBLE", "VERROUILLEE"].includes(r.mobilisabilite)) {
       return "Mobilisabilité non reconnue : vérifiez le ticket avec le service logistique.";
     }
@@ -836,14 +906,9 @@ const [carbPeriode, setCarbPeriode] =
   };
   const urgencePossible = (r: Reservation) => raisonUrgenceIndisponible(r) === null;
 
-  // La vue normale conserve TOUS les tickets, y compris les archives.
   const ticketsAffiches = afficherHistoriqueMissions
     ? historiqueMissions
     : reservations;
-
-  // =========================================================
-  // MAP MISSIONS PAR VEHICULE
-  // =========================================================
 
   const missionParVehicule = useMemo(() => {
     const map = new Map<number, Reservation>();
@@ -859,10 +924,6 @@ const [carbPeriode, setCarbPeriode] =
 
     return map;
   }, [missionsActives]);
-
-  // =========================================================
-  // PROCHAINE MISSION
-  // =========================================================
 
   const prochaineMissionParVehicule = useMemo(() => {
     const maintenant = Date.now();
@@ -892,10 +953,6 @@ const [carbPeriode, setCarbPeriode] =
     return map;
   }, [reservations]);
 
-  // =========================================================
-  // STATISTIQUES
-  // =========================================================
-
   const disponibles = vehicules.filter(
     (v) => v.statut === "DISPONIBLE"
   ).length;
@@ -905,13 +962,6 @@ const [carbPeriode, setCarbPeriode] =
       r.statut === "EN_ATTENTE" ||
       r.statut === "A_AFFECTER"
   ).length;
-
-  // =========================================================
-  // CARBURANT
-  // =========================================================
-// =========================================================
-// STATISTIQUES CARBURANT
-// =========================================================
 
 const transactionsCarburantFiltrees = useMemo(() => {
   const maintenant = new Date();
@@ -937,10 +987,6 @@ const transactionsCarburantFiltrees = useMemo(() => {
       return false;
     }
 
-    // -------------------------------
-    // Période
-    // -------------------------------
-
     if (
       carbPeriode === "MOIS" &&
       date < debutMois
@@ -955,10 +1001,6 @@ const transactionsCarburantFiltrees = useMemo(() => {
       return false;
     }
 
-    // -------------------------------
-    // Véhicule
-    // -------------------------------
-
     if (
       carbFiltreVehicule &&
       String(t.vehicule?.id) !==
@@ -967,20 +1009,12 @@ const transactionsCarburantFiltrees = useMemo(() => {
       return false;
     }
 
-    // -------------------------------
-    // Type
-    // -------------------------------
-
     if (
       carbFiltreType &&
       t.type !== carbFiltreType
     ) {
       return false;
     }
-
-    // -------------------------------
-    // Justificatif
-    // -------------------------------
 
     if (
       carbFiltreJustificatif === "FOURNI" &&
@@ -995,10 +1029,6 @@ const transactionsCarburantFiltrees = useMemo(() => {
     ) {
       return false;
     }
-
-    // -------------------------------
-    // Recherche
-    // -------------------------------
 
     if (recherche) {
       const texte = [
@@ -1230,10 +1260,11 @@ const carburantStats = useMemo(() => {
     toast.success(
       carbType === "DOTATION"
         ? "Dotation enregistrée avec succès."
-        : "Consommation enregistrée avec succès."
+        : carbType === "RECHARGE"
+          ? "Recharge électrique enregistrée avec succès."
+          : "Consommation enregistrée avec succès."
     );
 
-    // Réinitialisation
     setCarbVehiculeId("");
     setCarbQuantite("");
     setCarbPrixUnitaire("");
@@ -1241,6 +1272,7 @@ const carburantStats = useMemo(() => {
     setCarbStation("");
     setCarbJustificatif("");
     setCarbObservation("");
+    setFormCarburantOuvert(false);
 
     await charger();
 
@@ -1260,11 +1292,6 @@ const carburantStats = useMemo(() => {
   }
 };
 
-
-  // =========================================================
-  // ASSURANCE
-  // =========================================================
-
   const reinitialiserFormulaireAssurance = () => {
     setAssuranceEditionId(null);
     setAssVehiculeId("");
@@ -1276,11 +1303,13 @@ const carburantStats = useMemo(() => {
     setAssMontantPrime("");
     setAssObservation("");
     setAssDocumentPolice("");
+    setFormAssuranceOuvert(false);
   };
 
   const preparerModificationAssurance = (
     assurance: Assurance
   ) => {
+    setFormAssuranceOuvert(true);
     setAssuranceEditionId(assurance.id);
     setAssVehiculeId(
       assurance.vehicule?.id
@@ -1402,19 +1431,9 @@ const carburantStats = useMemo(() => {
         numeroPolice:
           assNumeroPolice.trim(),
 
-        /*
-         * dateExpiration est conservé car c'est le champ
-         * déjà utilisé par le backend actuel.
-         */
         dateExpiration:
           assDateExpiration,
 
-        /*
-         * Champs complémentaires : si le backend actuel
-         * les possède, ils seront persistés. Sinon la
-         * compatibilité avec les champs principaux est
-         * conservée.
-         */
         dateDebut:
           assDateDebut || null,
 
@@ -1499,10 +1518,6 @@ const carburantStats = useMemo(() => {
     }
   };
 
-  // =========================================================
-  // SINISTRE
-  // =========================================================
-
   const soumettreSinistre = async (
     e: React.FormEvent
   ) => {
@@ -1567,13 +1582,11 @@ const carburantStats = useMemo(() => {
             description:
               sinDescription.trim() || null,
 
-            /*
-             * Référence / emplacement du constat amiable.
-             * Le champ est optionnel pour préserver la
-             * compatibilité avec les dossiers existants.
-             */
             constatAmiable:
               sinConstatAmiable.trim() || null,
+            sourceAssurance: sinSourceAssurance,
+            referencePolice: sinReferencePolice.trim() || null,
+            statutIndemnisation: "NON_DEMANDEE",
           }),
         }
       );
@@ -1597,6 +1610,9 @@ const carburantStats = useMemo(() => {
       setSinCirconstance("");
       setSinDescription("");
       setSinConstatAmiable("");
+      setSinSourceAssurance("POLICE_FLOTTE_SPAT");
+      setSinReferencePolice("");
+      setFormSinistreOuvert(false);
 
       await charger();
 
@@ -1618,10 +1634,6 @@ const carburantStats = useMemo(() => {
       setEnvoiSinistre(false);
     }
   };
-
-  // =========================================================
-  // ASSURANCES / SINISTRES — SUIVI, ALERTES ET REPORTING
-  // =========================================================
 
   const assurancesFiltrees = useMemo(() => {
     const recherche =
@@ -1836,6 +1848,47 @@ const carburantStats = useMemo(() => {
     [sinistres, sinDossierOuvert]
   );
 
+  const exporterHistoriqueMissions = () => {
+    exporterCsvGenerique(`historique_missions_${new Date().toISOString().slice(0, 10)}.csv`, [
+      ["Ticket", "Demandeur", "Entité", "Motif", "Départ", "Fin", "Point de départ", "Destination", "Véhicule", "Chauffeur", "Statut", "Incident"],
+      ...historiqueMissions.map((mission) => [
+        `TKT-${String(mission.id).padStart(5, "0")}`,
+        [mission.demandeurPrenom, mission.demandeurNom].filter(Boolean).join(" ") || mission.demandeur?.nomComplet || "—",
+        mission.demandeurEntite || "—",
+        mission.motif || "—",
+        mission.dateDebut,
+        mission.dateFin,
+        mission.pointDepart || "—",
+        mission.destination || "—",
+        mission.vehicule?.immatriculation || "Non affecté",
+        [mission.chauffeur?.prenom, mission.chauffeur?.nom].filter(Boolean).join(" ") || "—",
+        mission.statut || "—",
+        mission.incidentCloture || "Aucun",
+      ]),
+    ]);
+    toast.success("Historique des missions exporté au format CSV.");
+  };
+
+  const exporterHistoriqueCarburant = () => {
+    exporterCsvGenerique(`historique_carburant_${new Date().toISOString().slice(0, 10)}.csv`, [
+      ["Date", "Véhicule", "Type", "Quantité (L)", "Prix unitaire", "Montant", "Kilométrage", "Station", "Mission", "Justificatif", "Observation"],
+      ...transactionsCarburantFiltrees.map((operation) => [
+        operation.dateOperation,
+        operation.vehicule?.immatriculation || "—",
+        operation.type,
+        operation.quantiteLitres,
+        operation.prixUnitaire,
+        operation.montantTotal,
+        operation.kilometrage,
+        operation.station,
+        operation.mission,
+        operation.justificatif,
+        operation.observation,
+      ]),
+    ]);
+    toast.success("Historique carburant exporté au format CSV.");
+  };
+
   const exporterAssurances = () => {
     exporterCsvGenerique(
       `assurances_${new Date()
@@ -1942,10 +1995,6 @@ const carburantStats = useMemo(() => {
     );
   };
 
-  // =========================================================
-  // CHARGEMENT
-  // =========================================================
-
   if (chargement) {
     return (
       <div className="agent-flotte-page">
@@ -1964,18 +2013,21 @@ const carburantStats = useMemo(() => {
     );
   }
 
-  // =========================================================
-  // INTERFACE
-  // =========================================================
-
   return (
     <div className="agent-flotte-page">
       <EnTete afficherNotifications />
 
       <div className="agent-flotte-main">
-        {/* ================================================ */}
-        {/* TITRE */}
-        {/* ================================================ */}
+        {erreurChargementPrincipal && (
+          <div role="alert" style={{ marginBottom: 14, padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b", fontSize: 13 }}>
+            Données principales indisponibles : {erreurChargementPrincipal}. Les indicateurs et listes de cette page ne sont pas à jour.
+          </div>
+        )}
+        {erreursModulesOptionnels.length > 0 && (
+          <div role="alert" style={{ marginBottom: 14, padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b", fontSize: 13 }}>
+            Certaines données n’ont pas été synchronisées depuis l’API : {erreursModulesOptionnels.join(" · ")}
+          </div>
+        )}
 
         <div className="dashboard-title" style={{
           display: "flex",
@@ -1987,32 +2039,12 @@ const carburantStats = useMemo(() => {
         }}>
           <div>
 
-            <p
-              style={{
-                margin: "6px 0 0",
-                color: "#64748b",
-                fontSize: 14,
-              }}
-            >
-              Suivi quotidien des véhicules,
-              missions, consommations,
-              assurances et échéances.
-            </p>
           </div>
-
-          <button
-            type="button"
-            onClick={charger}
-            style={refreshButton}
-          >
-            <RefreshCw size={16} />
-            Actualiser
+          <button type="button" className="btn-spat btn-bleu" onClick={() => { window.location.href = "/agent-flotte/carnet-bord"; }}>
+            Carnet de bord
           </button>
-        </div>
 
-        {/* ================================================ */}
-        {/* KPI */}
-        {/* ================================================ */}
+        </div>
 
         <div
           style={{
@@ -2049,10 +2081,6 @@ const carburantStats = useMemo(() => {
           />
         </div>
 
-        {/* ================================================ */}
-        {/* ONGLETS */}
-        {/* ================================================ */}
-
         <div
           style={{
             display: "flex",
@@ -2072,7 +2100,7 @@ const carburantStats = useMemo(() => {
           </OngletButton>
 
           <OngletButton
-            couleur="bleu"
+            couleur="rouge"
             actif={onglet === "DEMANDES"}
             onClick={() => setOnglet("DEMANDES")}
             icon={<ClipboardList size={16} />}
@@ -2090,7 +2118,7 @@ const carburantStats = useMemo(() => {
           </OngletButton>
 
           <OngletButton
-            couleur="rouge"
+            couleur="orange"
             actif={onglet === "ASSURANCES"}
             onClick={() => setOnglet("ASSURANCES")}
             icon={<ShieldCheck size={16} />}
@@ -2098,10 +2126,6 @@ const carburantStats = useMemo(() => {
             Assurances / Sinistres
           </OngletButton>
         </div>
-
-        {/* ================================================ */}
-        {/* SUIVI DES VEHICULES */}
-        {/* ================================================ */}
 
         <div className="dashboard-content">
         {onglet === "SUIVI" && (
@@ -2116,10 +2140,6 @@ const carburantStats = useMemo(() => {
             derniereMajGps={derniereMajGps}
           />
         )}
-
-        {/* ================================================ */}
-        {/* DEMANDES / MISSIONS */}
-        {/* ================================================ */}
 
         {onglet === "DEMANDES" && (
           <section className="panel-scroll">
@@ -2150,25 +2170,39 @@ const carburantStats = useMemo(() => {
                   : `Historique des missions terminées et clôturées (${historiqueMissions.length})`}
               </button>
               {afficherHistoriqueMissions && (
-                <span style={smallMuted}>
-                  Missions terminées et clôturées enregistrées dans l'application.
-                </span>
+                <>
+
+                  <button type="button" className="btn-spat btn-orange" onClick={exporterHistoriqueMissions} disabled={historiqueMissions.length === 0} style={{ ...refreshButton, opacity: historiqueMissions.length ? 1 : 0.5 }}>
+                    <Download size={15} /> Exporter CSV
+                  </button>
+                </>
               )}
             </div>
 
             {urgenceTicket && (
+              <SlideInPanel
+                open={urgenceTicket !== null}
+                eyebrow="Ticket / mission"
+                title={`Urgence de dernière minute — TKT-${String(urgenceTicket.id).padStart(5, "0")}`}
+                onClose={() => { if (!urgenceEnCours) setUrgenceTicket(null); }}
+              >
               <form onSubmit={soumettreUrgence} style={{...cardStyleHistorique, marginBottom: 16, border: "2px solid #dc2626", display: "grid", gap: 10}}>
                 <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap: 12}}>
                   <strong style={{color:"#b91c1c"}}>Urgence de dernière minute — TKT-{String(urgenceTicket.id).padStart(5,"0")}</strong>
                   <button type="button" onClick={() => setUrgenceTicket(null)} disabled={urgenceEnCours} style={refreshButton}><X size={14}/> Annuler</button>
                 </div>
-                
+
                 <label style={labelStyle}>Sous-catégorie *
-                  <select required value={urgenceSousCategorie} onChange={e=>setUrgenceSousCategorie(e.target.value)} style={inputStyle}>
+                  <select required value={urgenceSousCategorie} onChange={e=>{ setUrgenceSousCategorie(e.target.value); if (e.target.value !== "AUTRE") setUrgenceSousCategorieAutre(""); }} style={inputStyle}>
                     <option value="URGENCE_OPERATIONNELLE">Urgence opérationnelle</option>
                     <option value="REUNION_IMPREVUE">Réunion imprévue</option><option value="AUTRE">Autre urgence justifiée</option>
                   </select>
                 </label>
+                {urgenceSousCategorie === "AUTRE" && (
+                  <label style={labelStyle}>Précisez la sous-catégorie *
+                    <input required maxLength={255} value={urgenceSousCategorieAutre} onChange={e=>setUrgenceSousCategorieAutre(e.target.value)} style={inputStyle} placeholder="Décrivez l'urgence" />
+                  </label>
+                )}
                 <label style={labelStyle}>Motif de l'urgence *
                   <textarea required maxLength={1000} value={urgenceMotif} onChange={e=>setUrgenceMotif(e.target.value)} rows={2} style={inputStyle}/>
                 </label>
@@ -2200,7 +2234,7 @@ const carburantStats = useMemo(() => {
                 {urgenceTicket.mobilisabilite === "VERROUILLEE" && (
                   <div style={{padding:12, border:"1px solid #fca5a5", borderRadius:8, background:"#fef2f2", color:"#b91c1c", fontSize:12, lineHeight:1.5}}>
                     <strong>Mission initiale verrouillée — dérogation exceptionnelle.</strong>
-                    <p style={{margin:"5px 0 8px"}}>La réaffectation annulera son créneau initial et nécessitera sa reprogrammation. L'opération, son auteur et son motif seront tracés, et le chauffeur ainsi que le demandeur initial seront informés.</p>
+                    <p style={{margin:"5px 0 8px"}}>Le créneau initial sera annulé et la mission devra être reprogrammée.</p>
                     <label style={{display:"flex", alignItems:"flex-start", gap:9, cursor:"pointer"}}>
                       <input type="checkbox" checked={confirmeDerogationVerrouillage}
                         onChange={e=>setConfirmeDerogationVerrouillage(e.target.checked)}
@@ -2209,10 +2243,11 @@ const carburantStats = useMemo(() => {
                     </label>
                   </div>
                 )}
-                <button type="submit" disabled={urgenceEnCours || (urgenceTicket.mobilisabilite === "VERROUILLEE" && !confirmeDerogationVerrouillage)} style={{...refreshButton, backgroundColor:"#dc2626",borderColor:"#dc2626",opacity:urgenceEnCours?.6:1, justifySelf:"start", alignSelf:"start", width:"fit-content", maxWidth:"100%", minWidth:0, textAlign:"center"}}>
+                <button type="submit" className="btn-spat btn-rouge" disabled={urgenceEnCours || (urgenceTicket.mobilisabilite === "VERROUILLEE" && !confirmeDerogationVerrouillage)} style={{...refreshButton, opacity:urgenceEnCours?.6:1, justifySelf:"start", alignSelf:"start", width:"fit-content", maxWidth:"100%", minWidth:0, textAlign:"center"}}>
                   <Zap size={15}/>{urgenceEnCours ? "Création en cours..." : "Créer le ticket urgent et reprogrammer l'initial"}
                 </button>
               </form>
+              </SlideInPanel>
             )}
 
             {ticketsAffiches.length === 0 ? (
@@ -2413,35 +2448,25 @@ const carburantStats = useMemo(() => {
           </section>
         )}
 
-        {/* ================================================ */}
-        {/* CARBURANT */}
-        {/* ================================================ */}
-
         {onglet === "CARBURANT" && (
   <section className="panel-scroll">
 
     <SectionTitre
       titre="Suivi du carburant"
-      
+
     />
 
-    {/* Référentiel du document de consommation réservé aux véhicules équipés GPS. */}
     <NormesCarburantGps
       vehicules={vehicules}
       positionsGps={positionsGps}
       transactions={transactions}
     />
 
-    {/* Suivi distinct des véhicules sans GPS identifié : relevés kilométriques manuels. */}
     <SuiviCarburantSansGps
       vehicules={vehicules}
       positionsGps={positionsGps}
       transactions={transactions}
     />
-
-    {/* ================================================= */}
-    {/* KPI CARBURANT */}
-    {/* ================================================= */}
 
     <div
       style={{
@@ -2505,15 +2530,7 @@ const carburantStats = useMemo(() => {
 
     </div>
 
-    {/* ================================================= */}
-    {/* SAISIE + RESUME */}
-    {/* ================================================= */}
-
     <div style={twoColumns}>
-
-      {/* =============================================== */}
-      {/* NOUVELLE SAISIE */}
-      {/* =============================================== */}
 
       <Card>
 
@@ -2525,17 +2542,25 @@ const carburantStats = useMemo(() => {
             />
           }
         >
-          Nouvelle opération
+          Saisie carburant
         </CardTitre>
 
-       
+        <button type="button" className={`btn-spat ${formCarburantOuvert ? "btn-neutre" : "btn-rouge"}`}
+          aria-expanded={formCarburantOuvert}
+          onClick={() => setFormCarburantOuvert((ouvert) => !ouvert)}>
+          {formCarburantOuvert ? "Fermer le formulaire" : "Nouvelle opération"}
+        </button>
 
-        <form
+        <SlideInPanel
+          open={formCarburantOuvert}
+          eyebrow="Gestion de flotte"
+          title="Nouvelle opération carburant"
+          onClose={() => setFormCarburantOuvert(false)}
+        >
+        {formCarburantOuvert && (<form
           onSubmit={soumettreCarburant}
           style={formStyle}
         >
-
-          {/* VEHICULE */}
 
           <Champ label="Véhicule *">
 
@@ -2558,16 +2583,15 @@ const carburantStats = useMemo(() => {
                 <option
                   key={v.id}
                   value={v.id}
+                  disabled={vehiculeEstIndisponible(v)}
                 >
-                  {libelleVehicule(v)}
+                  {libelleVehicule(v)}{vehiculeEstIndisponible(v) ? ` · ${formatStatutVehicule(v.statut)}` : ""}
                 </option>
               ))}
 
             </select>
 
           </Champ>
-
-          {/* TYPE + QUANTITE */}
 
           <div style={twoInputColumns}>
 
@@ -2579,7 +2603,8 @@ const carburantStats = useMemo(() => {
                   setCarbType(
                     e.target.value as
                       | "DOTATION"
-                      | "CONSOMMATION"
+                        | "CONSOMMATION"
+                        | "RECHARGE"
                   )
                 }
                 style={inputStyle}
@@ -2593,11 +2618,15 @@ const carburantStats = useMemo(() => {
                   Dotation
                 </option>
 
+                <option value="RECHARGE">
+                  Recharge électrique
+                </option>
+
               </select>
 
             </Champ>
 
-            <Champ label="Quantité (L) *">
+            <Champ label="Quantité *">
 
               <input
                 type="number"
@@ -2618,8 +2647,6 @@ const carburantStats = useMemo(() => {
 
           </div>
 
-          {/* DATE + KM */}
-
           <div style={twoInputColumns}>
 
             <Champ label="Date *">
@@ -2638,7 +2665,7 @@ const carburantStats = useMemo(() => {
 
             </Champ>
 
-            <Champ label="Kilométrage au compteur (relevé manuel)">
+            <Champ label="Kilométrage au compteur">
 
               <input
                 type="number"
@@ -2668,11 +2695,9 @@ const carburantStats = useMemo(() => {
 
           </div>
 
-          {/* PRIX */}
-
           <div style={twoInputColumns}>
 
-            <Champ label="Prix unitaire (Ar/L)">
+            <Champ label="Prix unitaire">
 
               <input
                 type="number"
@@ -2716,8 +2741,6 @@ const carburantStats = useMemo(() => {
 
           </div>
 
-          {/* STATION */}
-
           <Champ label="Station / fournisseur">
 
             <select
@@ -2748,8 +2771,6 @@ const carburantStats = useMemo(() => {
 
           </Champ>
 
-          {/* JUSTIFICATIF */}
-
           <Champ label="Justificatif">
 
             <input
@@ -2764,8 +2785,6 @@ const carburantStats = useMemo(() => {
             />
 
           </Champ>
-
-          {/* OBSERVATION */}
 
           <Champ label="Observation">
 
@@ -2786,8 +2805,6 @@ const carburantStats = useMemo(() => {
 
           </Champ>
 
-          {/* BOUTON */}
-
           <ActionButton
             couleur="vert"
             disabled={envoiCarburant}
@@ -2801,13 +2818,10 @@ const carburantStats = useMemo(() => {
 
           </ActionButton>
 
-        </form>
+        </form>)}
+        </SlideInPanel>
 
       </Card>
-
-      {/* =============================================== */}
-      {/* DERNIERES OPERATIONS */}
-      {/* =============================================== */}
 
       <Card>
 
@@ -2848,10 +2862,7 @@ const carburantStats = useMemo(() => {
                       <div
                         style={smallMuted}
                       >
-                        {t.type ===
-                        "DOTATION"
-                          ? "Dotation"
-                          : "Consommation"}
+                        {libelleTypeOperation(t.type)}
 
                         {" • "}
 
@@ -2931,10 +2942,6 @@ const carburantStats = useMemo(() => {
 
     </div>
 
-    {/* ================================================= */}
-    {/* HISTORIQUE COMPLET */}
-    {/* ================================================= */}
-
     <Card>
 
       <div className="agent-flotte-liste-entete">
@@ -2943,9 +2950,10 @@ const carburantStats = useMemo(() => {
       >
         Historique des consommations et dotations
       </CardTitre>
+      <button type="button" className="btn-spat btn-orange" onClick={exporterHistoriqueCarburant} disabled={transactionsCarburantFiltrees.length === 0} style={{ ...refreshButton, opacity: transactionsCarburantFiltrees.length ? 1 : 0.5 }}>
+        <Download size={15} /> Exporter CSV
+      </button>
 </div>
-
-      {/* FILTRES */}
 
       <div
         style={{
@@ -2956,8 +2964,6 @@ const carburantStats = useMemo(() => {
           marginBottom: 15,
         }}
       >
-
-        {/* RECHERCHE */}
 
        <div
   style={{
@@ -2985,8 +2991,6 @@ const carburantStats = useMemo(() => {
           />
         </div>
 
-        {/* PERIODE */}
-
         <select
           value={carbPeriode}
           onChange={(e) =>
@@ -3011,8 +3015,6 @@ const carburantStats = useMemo(() => {
             Toute la période
           </option>
         </select>
-
-        {/* VEHICULE */}
 
         <select
           value={carbFiltreVehicule}
@@ -3039,8 +3041,6 @@ const carburantStats = useMemo(() => {
 
         </select>
 
-        {/* TYPE */}
-
         <select
           value={carbFiltreType}
           onChange={(e) =>
@@ -3063,9 +3063,11 @@ const carburantStats = useMemo(() => {
             Dotation
           </option>
 
-        </select>
+          <option value="RECHARGE">
+            Recharge électrique
+          </option>
 
-        {/* JUSTIFICATIF */}
+        </select>
 
         <select
           value={carbFiltreJustificatif}
@@ -3092,8 +3094,6 @@ const carburantStats = useMemo(() => {
         </select>
 
       </div>
-
-      {/* TABLE */}
 
       {transactionsCarburantFiltrees.length ===
       0 ? (
@@ -3192,10 +3192,7 @@ const carburantStats = useMemo(() => {
                           fontWeight: 700,
                         }}
                       >
-                        {t.type ===
-                        "DOTATION"
-                          ? "Dotation"
-                          : "Consommation"}
+                        {libelleTypeOperation(t.type)}
                       </span>
 
                     </Td>
@@ -3316,21 +3313,12 @@ const carburantStats = useMemo(() => {
   </section>
 )}
 
-
-        {/* ================================================ */}
-        {/* ASSURANCES ET SINISTRES */}
-        {/* ================================================ */}
-
         {onglet === "ASSURANCES" && (
           <section className="panel-scroll">
             <SectionTitre
               titre="Assurances et sinistres"
-            
-            />
 
-            {/* ================================================= */}
-            {/* KPI ASSURANCES / SINISTRES */}
-            {/* ================================================= */}
+            />
 
             <div
               style={{
@@ -3378,10 +3366,6 @@ const carburantStats = useMemo(() => {
               />
             </div>
 
-            {/* ================================================= */}
-            {/* SAISIE ASSURANCE + SINISTRE */}
-            {/* ================================================= */}
-
             <div
               style={{
                 ...twoColumns,
@@ -3389,9 +3373,6 @@ const carburantStats = useMemo(() => {
                 marginBottom: 18,
               }}
             >
-              {/* =============================================== */}
-              {/* POLICE ASSURANCE */}
-              {/* =============================================== */}
 
               <Card>
                 <CardTitre
@@ -3407,6 +3388,14 @@ const carburantStats = useMemo(() => {
                     : "Nouvelle police d'assurance"}
                 </CardTitre>
 
+                {assuranceEditionId == null && (
+                  <button type="button" className={`btn-spat ${formAssuranceOuvert ? "btn-neutre" : "btn-rouge"}`}
+                    aria-expanded={formAssuranceOuvert}
+                    onClick={() => setFormAssuranceOuvert((ouvert) => !ouvert)}>
+                    {formAssuranceOuvert ? "Fermer le formulaire" : "Nouvelle police d'assurance"}
+                  </button>
+                )}
+
                 {assuranceEditionId != null && (
                   <div
                     style={{
@@ -3421,14 +3410,17 @@ const carburantStats = useMemo(() => {
                     <strong>
                       Modification d&apos;une police existante
                     </strong>
-                    <span>
-                      Mettez à jour l&apos;échéance ou les
-                      informations puis enregistrez.
-                    </span>
+
                   </div>
                 )}
 
-                <form
+                <SlideInPanel
+                  open={formAssuranceOuvert || assuranceEditionId != null}
+                  eyebrow="Gestion de flotte"
+                  title={assuranceEditionId != null ? "Modifier la police d’assurance" : "Nouvelle police d’assurance"}
+                  onClose={reinitialiserFormulaireAssurance}
+                >
+                {(formAssuranceOuvert || assuranceEditionId != null) && <form
                   onSubmit={soumettreAssurance}
                   style={formStyle}
                 >
@@ -3451,8 +3443,9 @@ const carburantStats = useMemo(() => {
                         <option
                           key={v.id}
                           value={v.id}
+                          disabled={vehiculeEstIndisponible(v)}
                         >
-                          {libelleVehicule(v)}
+                          {libelleVehicule(v)}{vehiculeEstIndisponible(v) ? ` · ${formatStatutVehicule(v.statut)}` : ""}
                         </option>
                       ))}
                     </select>
@@ -3530,7 +3523,7 @@ const carburantStats = useMemo(() => {
                       />
                     </Champ>
 
-                    <Champ label="Prime (Ar)">
+                    <Champ label="Prime">
                       <input
                         type="number"
                         min="0"
@@ -3610,12 +3603,9 @@ const carburantStats = useMemo(() => {
                       </button>
                     )}
                   </div>
-                </form>
+                </form>}
+                </SlideInPanel>
               </Card>
-
-              {/* =============================================== */}
-              {/* DECLARATION SINISTRE */}
-              {/* =============================================== */}
 
               <Card>
                 <CardTitre
@@ -3629,9 +3619,19 @@ const carburantStats = useMemo(() => {
                   Nouveau dossier de sinistre
                 </CardTitre>
 
-               
+                <button type="button" className={`btn-spat ${formSinistreOuvert ? "btn-neutre" : "btn-rouge"}`}
+                  aria-expanded={formSinistreOuvert}
+                  onClick={() => setFormSinistreOuvert((ouvert) => !ouvert)}>
+                  {formSinistreOuvert ? "Fermer le formulaire" : "Nouveau dossier de sinistre"}
+                </button>
 
-                <form
+                <SlideInPanel
+                  open={formSinistreOuvert}
+                  eyebrow="Gestion de flotte"
+                  title="Nouveau dossier de sinistre"
+                  onClose={() => setFormSinistreOuvert(false)}
+                >
+                {formSinistreOuvert && <form
                   onSubmit={soumettreSinistre}
                   style={formStyle}
                 >
@@ -3654,8 +3654,9 @@ const carburantStats = useMemo(() => {
                         <option
                           key={v.id}
                           value={v.id}
+                          disabled={vehiculeEstIndisponible(v)}
                         >
-                          {libelleVehicule(v)}
+                          {libelleVehicule(v)}{vehiculeEstIndisponible(v) ? ` · ${formatStatutVehicule(v.statut)}` : ""}
                         </option>
                       ))}
                     </select>
@@ -3677,6 +3678,13 @@ const carburantStats = useMemo(() => {
                     </Champ>
 
                     <Champ label="Conducteur *">
+                      <PersonnelAutocomplete
+                        label="Conducteur"
+                        style={{ marginBottom: 8 }}
+                        onSelect={(personnel) =>
+                          setSinConducteur(`${personnel.prenom} ${personnel.nom}`.trim())
+                        }
+                      />
                       <input
                         value={sinConducteur}
                         onChange={(e) =>
@@ -3738,18 +3746,19 @@ const carburantStats = useMemo(() => {
                       style={inputStyle}
                     />
 
-                    <div
-                      style={{
-                        marginTop: 5,
-                        color: "#94a3b8",
-                        fontSize: 10,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      La pièce est rattachée au dossier si le
-                      backend expose le champ de constat.
-                    </div>
                   </Champ>
+
+                  <div style={twoInputColumns}>
+                    <Champ label="Prise en charge assurance">
+                      <select value={sinSourceAssurance} onChange={e => setSinSourceAssurance(e.target.value)} style={inputStyle}>
+                        <option value="POLICE_FLOTTE_SPAT">Police flotte SPAT</option>
+                        <option value="ASSURANCE_BAILLEUR">Assurance du bailleur (leasing)</option>
+                      </select>
+                    </Champ>
+                    <Champ label="Référence de police">
+                      <input value={sinReferencePolice} onChange={e => setSinReferencePolice(e.target.value)} placeholder="N° de police / dossier bailleur" style={inputStyle} />
+                    </Champ>
+                  </div>
 
                   <ActionButton
                     couleur="rouge"
@@ -3761,13 +3770,10 @@ const carburantStats = useMemo(() => {
                       ? "Déclaration..."
                       : "Créer le dossier de sinistre"}
                   </ActionButton>
-                </form>
+                </form>}
+                </SlideInPanel>
               </Card>
             </div>
-
-            {/* ================================================= */}
-            {/* SUIVI DES POLICES */}
-            {/* ================================================= */}
 
             <Card>
               <div className="agent-flotte-liste-entete"
@@ -3792,7 +3798,7 @@ const carburantStats = useMemo(() => {
                 <button
                   type="button"
                   onClick={exporterAssurances}
-                  style={{...refreshButton, backgroundColor: "#dc2626", borderColor: "#dc2626"}}
+                  className="btn-spat btn-orange"
                 >
                   <Download size={15} />
                   Exporter CSV
@@ -4043,10 +4049,6 @@ const carburantStats = useMemo(() => {
               )}
             </Card>
 
-            {/* ================================================= */}
-            {/* DOSSIERS DE SINISTRES */}
-            {/* ================================================= */}
-
             <div style={{ marginTop: 18 }}>
               <Card>
                 <div className="agent-flotte-liste-entete"
@@ -4074,7 +4076,7 @@ const carburantStats = useMemo(() => {
                   <button
                     type="button"
                     onClick={exporterSinistres}
-                    style={{...refreshButton, backgroundColor: "#dc2626", borderColor: "#dc2626"}}
+                    className="btn-spat btn-orange"
                   >
                     <Download size={15} />
                     Exporter CSV
@@ -4319,10 +4321,6 @@ const carburantStats = useMemo(() => {
               </Card>
             </div>
 
-            {/* ================================================= */}
-            {/* DETAIL SINISTRE */}
-            {/* ================================================= */}
-
             {sinistreSelectionne && (
               <div
                 style={{
@@ -4476,6 +4474,9 @@ const carburantStats = useMemo(() => {
                         "Non renseigné"
                       }
                     />
+
+                    <DetailInfo label="Prise en charge" value={sinistreSelectionne.sourceAssurance === "ASSURANCE_BAILLEUR" ? "Assurance du bailleur" : sinistreSelectionne.sourceAssurance === "POLICE_FLOTTE_SPAT" ? "Police flotte SPAT" : "—"} />
+                    <DetailInfo label="Indemnisation" value={`${sinistreSelectionne.statutIndemnisation || "NON_DEMANDEE"}${sinistreSelectionne.montantIndemnisation != null ? ` · ${sinistreSelectionne.montantIndemnisation} Ar` : ""}`} />
                   </div>
 
                   <div
@@ -4905,7 +4906,7 @@ const carburantStats = useMemo(() => {
     flex: 1;
     min-width: 0;
     display: grid;
-    grid-template-columns: repeat(5,minmax(90px,1fr));
+    grid-template-columns: repeat(6,minmax(90px,1fr));
   }
 
   .gps-info {
@@ -5032,15 +5033,9 @@ const carburantStats = useMemo(() => {
   }
 `}</style>
     </div>
-    
-
 
   );
 }
-
-// =========================================================
-// NOUVEAU PANNEAU GPS
-// =========================================================
 
 function SuiviFlottePanel({
   vehicules,
@@ -5073,22 +5068,21 @@ function SuiviFlottePanel({
   );
 
   const [selection, setSelection] = useState<number | null>(null);
-  // Permet de recentrer aussi lorsqu'on clique une seconde fois sur le même véhicule.
-  // Ne change pas au rafraîchissement GPS : la carte n'est pas recréée toutes les 5 secondes.
+
   const [versionCentrage, setVersionCentrage] = useState(0);
   const [recherche, setRecherche] = useState("");
   const [listeOuverte, setListeOuverte] = useState(true);
+  const [routesNationales, setRoutesNationales] = useState<Record<number, RouteNationaleInfo>>({});
+  const [routesEnCours, setRoutesEnCours] = useState<Record<number, boolean>>({});
+  const [erreursRoute, setErreursRoute] = useState<Record<number, string>>({});
   const [vueGps, setVueGps] = useState<VueSuiviGps>("CARTE");
   const [dateHistorique, setDateHistorique] = useState(dateLocaleGps);
-  const [versionHistorique, setVersionHistorique] = useState(0);
   const [chargementHistorique, setChargementHistorique] = useState(false);
   const [erreurHistorique, setErreurHistorique] = useState<string | null>(null);
   const [relevesHistorique, setRelevesHistorique] = useState<GpsReleveHistorique[]>([]);
   const [distanceJourApi, setDistanceJourApi] = useState<number | null>(null);
   const API = process.env.NEXT_PUBLIC_API_URL;
 
-  // Ces relevés doivent venir d'un historique persisté côté serveur : le dernier
-  // point GPS /gps/positions ne peut pas reconstituer les trajets d'hier.
   useEffect(() => {
     if (vueGps === "CARTE" || selection == null) return;
     const controleur = new AbortController();
@@ -5112,7 +5106,7 @@ function SuiviFlottePanel({
         });
         if (!reponse.ok) {
           if (reponse.status === 404) {
-            throw new Error("Historique GPS non disponible : l'endpoint /gps/historique doit être ajouté au backend et les relevés GPS doivent y être conservés.");
+            throw new Error("Aucun historique GPS n’a été retourné pour ce véhicule et cette date (HTTP 404). Vérifier le déploiement backend et l’enregistrement des relevés.");
           }
           if (reponse.status === 401 || reponse.status === 403) {
             throw new Error(`Accès à l'historique refusé (HTTP ${reponse.status}). Vérifier l'autorisation AGENT_FLOTTE côté backend.`);
@@ -5145,7 +5139,7 @@ function SuiviFlottePanel({
     };
     void chargerHistorique();
     return () => controleur.abort();
-  }, [API, selection, dateHistorique, vueGps, versionHistorique]);
+  }, [API, selection, dateHistorique, vueGps]);
 
   const relevesAvecDistance = useMemo(() => {
     let precedent: number | null = null;
@@ -5157,8 +5151,7 @@ function SuiviFlottePanel({
       if (km !== null && km >= 0) {
         if (precedent !== null) {
           const ecart = km - precedent;
-          // Une baisse d'odomètre = remise à zéro. Un écart > 1 500 km
-          // entre deux relevés est écarté, en attendant confirmation serveur.
+
           if (ecart >= 0 && ecart <= 1500) {
             distanceSegmentKm = ecart;
             total += ecart;
@@ -5228,13 +5221,108 @@ function SuiviFlottePanel({
     ? gpsParVehicule.get(vehiculeSelectionne.id) || null
     : null;
 
+  const positionRouteRef = useRef<{ vehiculeId: number; latitude: number; longitude: number } | null>(null);
+  const cacheRoutesRef = useRef(new Map<number, {
+    latitude: number;
+    longitude: number;
+    resultat: RouteNationaleInfo;
+  }>());
+  const derniereRequeteRouteRef = useRef(0);
+  const latitudeRoute = positionSelectionnee?.latitude == null ? NaN : Number(positionSelectionnee.latitude);
+  const longitudeRoute = positionSelectionnee?.longitude == null ? NaN : Number(positionSelectionnee.longitude);
+  positionRouteRef.current = selection !== null && Number.isFinite(latitudeRoute) && Number.isFinite(longitudeRoute)
+    && Math.abs(latitudeRoute) <= 90 && Math.abs(longitudeRoute) <= 180
+    && !(latitudeRoute === 0 && longitudeRoute === 0)
+    ? { vehiculeId: selection, latitude: latitudeRoute, longitude: longitudeRoute }
+    : null;
+
+  useEffect(() => {
+    let rechercheEnCours = false;
+    let annule = false;
+    let controleur: AbortController | null = null;
+
+    const actualiserRoute = async () => {
+      const position = positionRouteRef.current;
+      if (annule || rechercheEnCours || !position || position.vehiculeId !== selection) return;
+
+      const maintenant = Date.now();
+      const cache = cacheRoutesRef.current.get(position.vehiculeId);
+      const distanceDepuisVerification = cache
+        ? distanceGpsMetres(cache.latitude, cache.longitude, position.latitude, position.longitude)
+        : Number.POSITIVE_INFINITY;
+      if (cache && distanceDepuisVerification < 120 && maintenant - cache.resultat.verifieeLe < 10 * 60 * 1000) {
+        setRoutesNationales((anciennes) => ({ ...anciennes, [position.vehiculeId]: cache.resultat }));
+        setErreursRoute((anciennes) => {
+          const suivantes = { ...anciennes };
+          delete suivantes[position.vehiculeId];
+          return suivantes;
+        });
+        setRoutesEnCours((anciennes) => ({ ...anciennes, [position.vehiculeId]: false }));
+        return;
+      }
+
+      if (maintenant - derniereRequeteRouteRef.current < 60_000) return;
+      rechercheEnCours = true;
+      controleur = new AbortController();
+      derniereRequeteRouteRef.current = maintenant;
+      setRoutesEnCours((anciennes) => ({ ...anciennes, [position.vehiculeId]: true }));
+      setErreursRoute((anciennes) => {
+        const suivantes = { ...anciennes };
+        delete suivantes[position.vehiculeId];
+        return suivantes;
+      });
+
+      try {
+        const resultat = await rechercherRouteNationale(
+          position.latitude,
+          position.longitude,
+          controleur.signal
+        );
+        if (annule) return;
+        cacheRoutesRef.current.set(position.vehiculeId, {
+          latitude: position.latitude,
+          longitude: position.longitude,
+          resultat,
+        });
+        setRoutesNationales((anciennes) => ({ ...anciennes, [position.vehiculeId]: resultat }));
+      } catch (erreur) {
+        if (!annule && !(erreur instanceof DOMException && erreur.name === "AbortError")) {
+          setErreursRoute((anciennes) => ({
+            ...anciennes,
+            [position.vehiculeId]: "Recherche de route indisponible",
+          }));
+        }
+      } finally {
+        rechercheEnCours = false;
+        if (!annule) setRoutesEnCours((anciennes) => ({ ...anciennes, [position.vehiculeId]: false }));
+      }
+    };
+
+    void actualiserRoute();
+    const intervalle = window.setInterval(() => void actualiserRoute(), 15_000);
+    return () => {
+      annule = true;
+      window.clearInterval(intervalle);
+      controleur?.abort();
+    };
+  }, [selection]);
+
+  const routeSelectionnee = selection == null ? null : routesNationales[selection] || null;
+  const routeSelectionneeTexte = routesEnCours[selection ?? -1]
+    ? "Recherche de la route…"
+    : erreursRoute[selection ?? -1]
+      ? "Recherche indisponible"
+      : routeSelectionnee?.reference
+        ? `${routeSelectionnee.reference}${routeSelectionnee.distanceMetres != null ? ` · à ${routeSelectionnee.distanceMetres} m` : ""}`
+        : routeSelectionnee
+          ? "Aucune route nationale répertoriée à proximité"
+          : "Recherche en attente";
+
   const positionsCartographie = useMemo(() => {
     if (selection === null) return [];
     const p = gpsParVehicule.get(selection);
     if (!p) return [];
 
-    // Une position absente ou hors limites ne peut pas servir au recentrage.
-    // Certains serveurs renvoient les coordonnées sous forme de chaînes JSON.
     const latitude = p.latitude == null ? NaN : Number(p.latitude);
     const longitude = p.longitude == null ? NaN : Number(p.longitude);
     if (
@@ -5243,8 +5331,15 @@ function SuiviFlottePanel({
       (latitude === 0 && longitude === 0)
     ) return [];
 
-    return [{ ...p, latitude, longitude }];
-  }, [selection, gpsParVehicule]);
+    const route = selection == null ? null : routesNationales[selection];
+    return [{
+      ...p,
+      latitude,
+      longitude,
+      routeNationale: route?.reference || null,
+      distanceRouteMetres: route?.distanceMetres ?? null,
+    }];
+  }, [selection, gpsParVehicule, routesNationales]);
   const statutSelection = positionSelectionnee?.statutGps || "Hors ligne";
   const vitesseSelection = positionSelectionnee?.vitesse ?? 0;
   const odometreSelection = positionSelectionnee?.odometreKm;
@@ -5261,19 +5356,18 @@ function SuiviFlottePanel({
       <div className="gps-history-toolbar" aria-label="Mode de suivi GPS">
         <strong style={{ fontSize: 13, color: "#334155" }}>Suivi GPS SPAT</strong>
         <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-          <button type="button" aria-pressed={vueGps === "CARTE"}
-            onClick={() => setVueGps("CARTE")}
-            style={{ ...refreshButton, backgroundColor: vueGps === "CARTE" ? "#2563eb" : "#64748b", borderColor: vueGps === "CARTE" ? "#2563eb" : "#64748b" }}>
-            <MapPin size={15} /> Carte en direct
+          <button type="button" className="btn-spat btn-bleu" aria-pressed={vueGps === "CARTE"}
+            onClick={() => setVueGps("CARTE")}>
+            <MapPin size={15} /> Carte GPS
           </button>
-          <button type="button" aria-pressed={vueGps === "HISTORIQUE"}
+          <button type="button" className="btn-spat btn-violet" aria-pressed={vueGps === "HISTORIQUE"}
             onClick={() => setVueGps("HISTORIQUE")}
-            style={{ ...refreshButton, backgroundColor: vueGps === "HISTORIQUE" ? "#16a34a" : "#15803d", borderColor: "#15803d" }}>
+            >
             <Route size={15} /> Distance / historique
           </button>
-          <button type="button" aria-pressed={vueGps === "JOURNAL"}
+          <button type="button" className="btn-spat btn-rouge" aria-pressed={vueGps === "JOURNAL"}
             onClick={() => setVueGps("JOURNAL")}
-            style={{ ...refreshButton, backgroundColor: vueGps === "JOURNAL" ? "#dc2626" : "#b91c1c", borderColor: "#dc2626" }}>
+            >
             <ClipboardList size={15} /> Journal des données
           </button>
           {vueGps !== "CARTE" && (
@@ -5282,10 +5376,6 @@ function SuiviFlottePanel({
               <input id="jour-gps-spat" type="date" value={dateHistorique}
                 onChange={(e) => setDateHistorique(e.target.value)}
                 style={{ ...inputStyle, width: 153, minHeight: 39 }} />
-              <button type="button" onClick={() => setVersionHistorique((v) => v + 1)}
-                style={refreshButton} aria-label="Actualiser l'historique GPS">
-                <RefreshCw size={15} /> Actualiser
-              </button>
             </>
           )}
         </div>
@@ -5294,13 +5384,14 @@ function SuiviFlottePanel({
         {vueGps === "CARTE" ? <div className="gps-map">
           {positionsCartographie.length > 0 ? (
             <FlotteMap
-              // Le composant de carte initialise parfois son centre uniquement au montage.
-              // On le remonte donc au clic pour qu'il lise la position du véhicule choisi.
-              // La clé reste stable lorsque les données GPS sont simplement rafraîchies.
+
               key={`vehicule-${selection ?? "aucun"}-centrage-${versionCentrage}`}
               positions={positionsCartographie}
               height="100%"
               showHeader={false}
+              showFullscreenControl
+              focusZoom={19}
+              maxZoom={22}
             />
           ) : (
             <div className="gps-no-position">
@@ -5344,7 +5435,7 @@ function SuiviFlottePanel({
                   <div style={{ fontSize: 30, fontWeight: 800, color: "#166534", marginTop: 3 }}>
                     {distanceAffichee === null ? "Indisponible" : `${distanceAffichee.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km`}
                   </div>
-                  
+
                 </div>
                 <div style={cardStyleHistorique}>
                   <strong style={{ color: "#334155" }}>Historique du {dateHistorique}</strong>
@@ -5356,13 +5447,13 @@ function SuiviFlottePanel({
                     <GpsResumeJour titre="Odomètre final" valeur={formatterKmCourt(nombreGps(relevesHistorique[relevesHistorique.length - 1].odometreKm))} />
                   </div>
                 </div>
-               
+
               </div>
             ) : (
               <div style={cardStyleHistorique}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                   <strong style={{ color: "#334155" }}>{relevesHistorique.length} relevé(s) enregistrés</strong>
-                  <button type="button" style={{ ...refreshButton, backgroundColor: "#dc2626", borderColor: "#dc2626" }}
+                  <button type="button" className="btn-spat btn-orange"
                     onClick={exporterJournalGps}><Download size={15} /> Exporter CSV</button>
                 </div>
                 <div style={{ overflowX: "auto", maxHeight: "min(54vh, 520px)", overflowY: "auto" }}>
@@ -5515,6 +5606,10 @@ function SuiviFlottePanel({
                 value={`${Math.round(Number(vitesseSelection) || 0)} km/h`}
               />
               <GpsInfo
+                label="Route nationale · OSM"
+                value={routeSelectionneeTexte}
+              />
+              <GpsInfo
                 label="Kilométrage"
                 value={formatterKmCourt(odometreSelection)}
               />
@@ -5534,7 +5629,6 @@ function SuiviFlottePanel({
   );
 }
 
-// Date locale, sans dérive UTC autour de minuit.
 function dateLocaleGps() {
   const maintenant = new Date();
   return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, "0")}-${String(maintenant.getDate()).padStart(2, "0")}`;
@@ -5568,13 +5662,6 @@ function nombreAfficheGps(valeur: unknown, decimales: number): string {
   return n === null ? "—" : n.toLocaleString("fr-FR", { maximumFractionDigits: decimales });
 }
 
-
-// =========================================================
-// NORMES CARBURANT — REFERENCES FOURNIES POUR VEHICULES GPS
-// =========================================================
-// Le classeur transmis renseigne NEUF immatriculations, pas dix.
-// Ne jamais attribuer à la dixième une norme calculée ou empruntée
-// à un modèle voisin : une référence absente reste à renseigner.
 const REFERENCES_CONSOMMATION_GPS: Record<
   string,
   { min: number; max: number; categorie: string }
@@ -5611,9 +5698,7 @@ type RatioCarburantGPS = {
 function calculerRatioCarburantIndicatif(
   operations: TransactionCarburant[]
 ): RatioCarburantGPS | null {
-  // Première et dernière observation kilométrique datées, sur deux jours
-  // distincts ; pas de soustraction du kilométrage GPS actuel à une date
-  // antérieure sans litres couvrant exactement la même période.
+
   const points = operations.flatMap((t) => {
     const jour = jourOperationCarburant(t.dateOperation);
     const km = t.kilometrage == null ? NaN : Number(t.kilometrage);
@@ -5648,13 +5733,19 @@ function NormesCarburantGps({
   transactions: TransactionCarburant[];
 }) {
   const lignes = useMemo(() => {
+    const operationsParVehicule = new Map<number, TransactionCarburant[]>();
+    transactions.forEach((operation) => {
+      const vehiculeId = operation.vehicule?.id;
+      if (vehiculeId == null) return;
+      const operations = operationsParVehicule.get(vehiculeId) ?? [];
+      operations.push(operation);
+      operationsParVehicule.set(vehiculeId, operations);
+    });
     const pointsGps = new Map<number, GpsPosition>();
     positionsGps.forEach((p) => {
       if (p.vehiculeId != null) pointsGps.set(p.vehiculeId, p);
     });
 
-    // La liste correspond aux véhicules enregistrés comme équipés GPS,
-    // ou effectivement renvoyés par le service /gps/positions.
     return vehicules
       .filter((v) => v.gpsEquipe === true || v.gpsDeviceId != null || pointsGps.has(v.id))
       .sort((a, b) => a.immatriculation.localeCompare(b.immatriculation, "fr", { numeric: true }))
@@ -5663,7 +5754,7 @@ function NormesCarburantGps({
           normaliserPlaqueGps(vehicule.immatriculation)
         ] ?? null;
         const gps = pointsGps.get(vehicule.id) ?? null;
-        const operations = transactions.filter((t) => t.vehicule?.id === vehicule.id);
+        const operations = operationsParVehicule.get(vehicule.id) ?? [];
         const mesure = calculerRatioCarburantIndicatif(operations);
         const kmGps = gps?.odometreKm == null ? null : Number(gps.odometreKm);
         return {
@@ -5694,10 +5785,7 @@ function NormesCarburantGps({
           <h3 style={{ margin: 0, color: "#1e293b", fontSize: 16 }}>
             Normes de consommation — véhicules équipés GPS
           </h3>
-          <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>
-            Référentiel transmis : 9 immatriculations, fourchettes en L/100 km.
-            Les véhicules sans norme correspondante restent « Norme à renseigner ».
-          </p>
+
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, fontWeight: 700, color: "#334155" }}>
           <span style={{ padding: "7px 9px", borderRadius: 7, background: "#f1f5f9" }}>
@@ -5711,16 +5799,9 @@ function NormesCarburantGps({
           </span>
         </div>
       </div>
-      <p style={{ margin: "0 0 12px", padding: 10, background: "#f8fafc", borderRadius: 7, fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
-        Le compteur GPS est affiché à titre de suivi. Le ratio indicatif utilise les litres
-        enregistrés comme « Consommation » entre deux relevés kilométriques datés dans les opérations carburant :
-        litres ÷ kilomètres parcourus × 100. Une distance inférieure à 100 km ne déclenche pas d’alerte.
-        Il ne s’agit pas d’une mesure directe de carburant par le GPS ; des saisies incomplètes peuvent fausser la comparaison.
-      </p>
+
       {lignes.length === 0 ? (
-        <div style={{ padding: 18, textAlign: "center", color: "#64748b", fontSize: 12 }}>
-          Aucun véhicule équipé GPS trouvé dans les données. Vérifiez /vehicules et /gps/positions.
-        </div>
+        <div style={{ padding: 18, textAlign: "center", color: "#64748b", fontSize: 12 }}>Aucun véhicule équipé GPS disponible.</div>
       ) : (
         <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
           <table style={{ minWidth: 1120, width: "100%", borderCollapse: "collapse", fontSize: 12, color: "#334155" }}>
@@ -5774,31 +5855,32 @@ function NormesCarburantGps({
           </table>
         </div>
       )}
-      <p style={{ margin: "9px 0 0", fontSize: 11, color: "#64748b" }}>
-        Si un véhicule ne possède pas deux relevés kilométriques datés et des litres de consommation entre eux,
-        renseignez le kilométrage lors des opérations carburant : aucun ratio ne sera inventé.
-      </p>
+
     </section>
   );
 }
 
-// =========================================================
-// SUIVI CARBURANT SANS GPS : kilométrages relevés manuellement.
-// Aucune norme n'est appliquée à ces véhicules faute de document validé.
-// =========================================================
 function SuiviCarburantSansGps({ vehicules, positionsGps, transactions }: {
   vehicules: Vehicule[];
   positionsGps: GpsPosition[];
   transactions: TransactionCarburant[];
 }) {
   const lignes = useMemo(() => {
+    const operationsParVehicule = new Map<number, TransactionCarburant[]>();
+    transactions.forEach((operation) => {
+      const vehiculeId = operation.vehicule?.id;
+      if (vehiculeId == null) return;
+      const operations = operationsParVehicule.get(vehiculeId) ?? [];
+      operations.push(operation);
+      operationsParVehicule.set(vehiculeId, operations);
+    });
     const idsGps = new Set(positionsGps.map((p) => p.vehiculeId));
     return vehicules
       .filter((v) => v.gpsEquipe !== true && v.gpsDeviceId == null && !idsGps.has(v.id))
       .slice()
       .sort((a, b) => a.immatriculation.localeCompare(b.immatriculation, "fr", { numeric: true }))
       .map((vehicule) => {
-        const operations = transactions.filter((t) => t.vehicule?.id === vehicule.id);
+        const operations = operationsParVehicule.get(vehicule.id) ?? [];
         const points = operations
           .flatMap((t) => {
             const jour = jourOperationCarburant(t.dateOperation);
@@ -5827,12 +5909,7 @@ function SuiviCarburantSansGps({ vehicules, positionsGps, transactions }: {
           Ratios disponibles : {nombreAvecRatio}/{lignes.length}
         </span>
       </div>
-      <p style={{ fontSize: 12, color: "#475569", lineHeight: 1.55, margin: "8px 0 12px" }}>
-        Pour chaque véhicule sans GPS, l'Agent Flotte renseigne le kilométrage au compteur dans « Nouvelle opération ».
-        Le ratio est calculé à partir des relevés datés et des litres de « Consommation » saisis sur la même période.
-        Le document reçu ne fournit pas de norme pour ces véhicules : aucune alerte de dépassement n'est déclenchée.
-        L'absence d'un indicateur GPS dans la fiche véhicule ne prouve pas à elle seule que le véhicule n'est pas équipé.
-      </p>
+
       {lignes.length === 0 ? (
         <div style={{ padding: 12, fontSize: 12, color: "#64748b" }}>Aucun véhicule sans GPS identifié dans le parc chargé.</div>
       ) : (
@@ -5858,9 +5935,7 @@ function SuiviCarburantSansGps({ vehicules, positionsGps, transactions }: {
           </table>
         </div>
       )}
-      <p style={{ margin: "9px 0 0", color: "#64748b", fontSize: 11 }}>
-        Les litres saisis doivent correspondre au carburant réellement consommé entre les deux compteurs, et non uniquement aux achats ou dotations ; vérifier le niveau de réservoir.
-      </p>
+
     </section>
   );
 }
@@ -5922,10 +5997,6 @@ function GpsInfo({
     </div>
   );
 }
-
-// =========================================================
-// COMPOSANTS UI
-// =========================================================
 
 function Kpi({
   icon,
@@ -6029,15 +6100,16 @@ function OngletButton({
   children,
 }: {
   actif: boolean;
-  couleur: "bleu" | "vert" | "rouge";
+  couleur: "bleu" | "vert" | "rouge" | "orange";
   onClick: () => void;
   icon: ReactNode;
   children: ReactNode;
 }) {
-  const fond = couleur === "vert" ? "#16a34a" : couleur === "rouge" ? "#dc2626" : "#2563eb";
+  const classeCouleur = `btn-${couleur}`;
   return (
     <button
       type="button"
+      className={`btn-spat ${classeCouleur}`}
       onClick={onClick}
       aria-pressed={actif}
       style={{
@@ -6046,15 +6118,11 @@ function OngletButton({
         justifyContent: "center",
         minHeight: 43,
         gap: 8,
-        border: `1px solid ${fond}`,
-        backgroundColor: fond,
-        color: "#ffffff",
-        borderRadius: 9,
         padding: "10px 14px",
         cursor: "pointer",
         fontSize: 13,
         fontWeight: 700,
-        boxShadow: actif ? `0 0 0 3px ${fond}33, 0 4px 10px rgba(15,23,42,.12)` : "0 3px 8px rgba(15,23,42,.08)",
+        boxShadow: actif ? "0 0 0 3px rgba(15,23,42,.12), 0 4px 10px rgba(15,23,42,.12)" : "0 3px 8px rgba(15,23,42,.08)",
         filter: actif ? "none" : "saturate(.88)",
       }}
     >
@@ -6144,6 +6212,7 @@ function ActionButton({
   return (
     <button
       type="submit"
+      className={`btn-spat btn-${couleur}`}
       disabled={disabled}
       style={{
         display: "inline-flex",
@@ -6151,10 +6220,6 @@ function ActionButton({
         justifyContent: "center",
         gap: 7,
         padding: "10px 14px",
-        border: "none",
-        borderRadius: 8,
-        backgroundColor: couleur === "vert" ? "#16a34a" : couleur === "bleu" ? "#2563eb" : "#dc2626",
-        color: "#ffffff",
         minHeight: 43,
         boxShadow: "0 3px 9px rgba(15,23,42,.10)",
         fontSize: 13,
@@ -6193,7 +6258,6 @@ function BlocVide({
     </div>
   );
 }
-
 
 function InfoMission({
   icon,
@@ -6319,10 +6383,6 @@ function Td({
     </td>
   );
 }
-
-// =========================================================
-// BADGES
-// =========================================================
 
 function StatutVehicule({
   statut,
@@ -6537,7 +6597,6 @@ function TypeDemandeBadge({
   );
 }
 
-
 function DetailInfo({
   label,
   value,
@@ -6637,11 +6696,6 @@ function DetailBloc({
     </div>
   );
 }
-
-
-// =========================================================
-// HELPERS ASSURANCES / SINISTRES
-// =========================================================
 
 type EtatAssuranceCode =
   | "VALIDE"
@@ -6997,10 +7051,12 @@ function exporterCsvGenerique(
   );
 }
 
-// =========================================================
-// HELPERS
-// =========================================================
-
+function libelleTypeOperation(type?: string | null) {
+  const valeur = String(type || "").toUpperCase();
+  if (valeur === "DOTATION") return "Dotation";
+  if (valeur === "RECHARGE") return "Recharge électrique";
+  return "Consommation";
+}
 
 function nomBeneficiaire(
   reservation: Reservation
@@ -7115,10 +7171,11 @@ function formatStatutVehicule(
   statut: string
 ) {
   const map: Record<string, string> = {
-    DISPONIBLE: "Disponible",
+    DISPONIBLE: "Apte au service",
     EN_MISSION: "En mission",
-    MAINTENANCE: "Maintenance",
-    EN_MAINTENANCE: "Maintenance",
+    MAINTENANCE: "En panne / maintenance",
+    EN_MAINTENANCE: "En panne / maintenance",
+    EN_PANNE: "En panne",
     HORS_SERVICE: "Hors service",
     TRANSFERE: "Transféré",
     REFORME: "Réformé",
@@ -7131,6 +7188,21 @@ function formatStatutVehicule(
     statut ||
     "—"
   );
+}
+
+function vehiculeEstIndisponible(vehicule: Vehicule) {
+  return [
+    "MAINTENANCE",
+    "EN_MAINTENANCE",
+    "EN_PANNE",
+    "HORS_SERVICE",
+    "INDISPONIBLE",
+    "INDISPONIBLE_TECHNIQUE",
+    "REQUISITIONNE",
+    "EN_MISSION",
+    "REFORME",
+    "TRANSFERE",
+  ].includes(String(vehicule.statut || "").trim().toUpperCase());
 }
 
 function formaterDate(
@@ -7175,10 +7247,6 @@ function formaterDateSimple(
     "fr-FR"
   );
 }
-
-// =========================================================
-// STYLES
-// =========================================================
 
 const labelStyle: CSSProperties = {
   display: "block",
@@ -7268,7 +7336,6 @@ const businessRuleBox: CSSProperties = {
   lineHeight: 1.5,
 };
 
-
 const expressBadgeStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -7292,20 +7359,21 @@ const regulariserBadgeStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-
 const refreshButton: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   gap: 7,
   minHeight: 40,
-  padding: "9px 13px",
-  backgroundColor: "#2563eb",
+  padding: "10px 16px",
+  backgroundColor: "#1d4ed8",
   color: "#ffffff",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 10,
   boxShadow: "0 3px 9px rgba(15,23,42,.10)",
   cursor: "pointer",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 700,
+  transition: "all 150ms ease",
 };
+

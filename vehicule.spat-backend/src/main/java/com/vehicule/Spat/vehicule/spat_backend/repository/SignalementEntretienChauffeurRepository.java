@@ -9,6 +9,8 @@ import java.util.List;
 public interface SignalementEntretienChauffeurRepository
         extends JpaRepository<SignalementEntretienChauffeur, Long> {
 
+    boolean existsByReservationId(Long reservationId);
+
     List<SignalementEntretienChauffeur>
     findByChauffeurIdOrderByDateSignalementDesc(
             Long chauffeurId

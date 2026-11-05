@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,9 +9,12 @@ import {
   KeyRound,
   Search,
   Mail,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import PersonnelAutocomplete from "@/components/PersonnelAutocomplete";
 import { ROLES } from "@/app/lib/roles";
 interface Utilisateur {
   id: number;
@@ -24,15 +27,15 @@ interface Utilisateur {
   doitChangerMotDePasse?: boolean;
 }
 const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
+  CO_ADMIN: {
+    bg: "#e0f2fe",
+    text: "#075985",
+    label: "Co-administrateur (lecture seule)",
+  },
   AGENT_FLOTTE: {
     bg: "#dcfce7",
     text: "#166534",
     label: "Agent Flotte",
-  },
-  CHAUFFEUR: {
-    bg: "#fce7f3",
-    text: "#9d174d",
-    label: "Chauffeur",
   },
   CHEF_DIRECTION: {
     bg: "#e0f2fe",
@@ -43,6 +46,16 @@ const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
     bg: "#f3e8ff",
     text: "#6b21a8",
     label: "Assistant de Direction",
+  },
+  AGENT_PAR_INTERIM_ASSISTANT: {
+    bg: "#fef3c7",
+    text: "#92400e",
+    label: "Agent par intérim — Assistant de Direction",
+  },
+  AGENT_PAR_INTERIM_CHEF: {
+    bg: "#fef3c7",
+    text: "#92400e",
+    label: "Agent par intérim — Chef de Direction",
   },
   CHEF_SERVICE_LOGISTIQUE: {
     bg: "#dbeafe",
@@ -57,7 +70,22 @@ const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
   MECANICIEN_DID: {
     bg: "#fef3c7",
     text: "#92400e",
-    label: "Mécanicien diagnostiqueur DID",
+    label: "Chef d’Atelier / Mécanicien DID",
+  },
+  CHEF_ATELIER: {
+    bg: "#fef3c7",
+    text: "#92400e",
+    label: "Chef d’Atelier",
+  },
+  DIRECTION_GENERALE: {
+    bg: "#f1f5f9",
+    text: "#334155",
+    label: "Direction Générale (lecture seule)",
+  },
+  CONTROLE_GESTION: {
+    bg: "#f1f5f9",
+    text: "#334155",
+    label: "Contrôle de gestion (lecture seule)",
   },
   DIRECTEUR_DFP: {
     bg: "#e0e7ff",
@@ -67,20 +95,24 @@ const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
 };
 
 const DIRECTIONS_SPAT = [
-  { id: 1, nom: "Direction Générale" },
+  { id: 1, nom: "Direction Générale(DG)" },
   { id: 2, nom: "Direction Audit et Gestion des risques" },
-  { id: 3, nom: "Direction des Affaires juridiques" },
-  { id: 4, nom: "Direction de la Capitainerie" },
-  { id: 5, nom: "Direction Infrastructure et Développement" },
+  { id: 3, nom: "Direction des Affaires juridiques(DAJ)" },
+  { id: 4, nom: "Direction de la Capitainerie(DirCap)" },
+  { id: 5, nom: "Direction Infrastructure et Développement(DID)" },
   { id: 6, nom: "Direction Marketing" },
-  { id: 7, nom: "Direction de l’exploitation" },
-  { id: 8, nom: "Direction Financière et Performance" },
-  { id: 9, nom: "Direction des Ressources Humaines" },
-  { id: 10, nom: "Direction Digitalisation et Innovation" },
+  { id: 7, nom: "Direction de l’exploitation(DIREX)" },
+  { id: 8, nom: "Direction Financière et Performance(DFP)" },
+  { id: 9, nom: "Direction des Ressources Humaines(DRH)" },
+  { id: 10, nom: "Direction Digitalisation et Innovation(DDI)" },
+  { id: 11, nom: "Secrétariat Général(SG)" },
+  { id: 12, nom: "Direction Marketing et Communication(DMC)" },
+  { id: 13, nom: "Direction des Affaires Générales(DAGR)" },
 ] as const;
 
 function roleAvecDirection(role: string): boolean {
-  return role === ROLES.CHEF_DIRECTION || role === ROLES.ASSISTANT_DIRECTION;
+  return role === ROLES.CHEF_DIRECTION || role === ROLES.ASSISTANT_DIRECTION
+    || role === ROLES.AGENT_PAR_INTERIM_ASSISTANT || role === ROLES.AGENT_PAR_INTERIM_CHEF;
 }
 
 function nomDirection(directionId?: number | null) {
@@ -88,22 +120,22 @@ function nomDirection(directionId?: number | null) {
   return DIRECTIONS_SPAT.find((d) => d.id === directionId)?.nom || "—";
 }
 
-const avatarPalette = [
-  "#dc2626",
-  "#2563eb",
-  "#16a34a",
-  "#d97706",
-  "#7c3aed",
-  "#0891b2",
-];
-function couleurAvatar(id: number) {
-  return avatarPalette[id % avatarPalette.length];
+function getToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
 }
-function initiales(nomComplet: string) {
-  if (!nomComplet) return "?";
-  const morceaux = nomComplet.trim().split(/\s+/);
-  return ((morceaux[0]?.[0] || "") + (morceaux[1]?.[0] || "")).toUpperCase();
+
+async function lireErreur(res: Response) {
+  const texte = await res.text();
+  if (!texte) return "Une erreur est survenue.";
+  try {
+    const json = JSON.parse(texte);
+    return json.message || texte;
+  } catch {
+    return texte;
+  }
 }
+
 export default function SuperAdminUtilisateursPage() {
   return (
     <RoleGuard role={ROLES.SUPER_ADMIN}>
@@ -115,7 +147,9 @@ function SuperAdminUtilisateursContent() {
   const router = useRouter();
   const API = process.env.NEXT_PUBLIC_API_URL;
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
+  const [emailsParMatricule, setEmailsParMatricule] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const [formOuvert, setFormOuvert] = useState(false);
   const [modeEdition, setModeEdition] = useState(false);
@@ -133,23 +167,10 @@ function SuperAdminUtilisateursContent() {
   const [utilisateurReset, setUtilisateurReset] =
     useState<Utilisateur | null>(null);
   const [resetEnCours, setResetEnCours] = useState(false);
-  const getToken = () => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("token");
-  };
-  const lireErreur = async (res: Response) => {
-    const texte = await res.text();
-    if (!texte) return "Une erreur est survenue.";
-    try {
-      const json = JSON.parse(texte);
-      return json.message || texte;
-    } catch {
-      return texte;
-    }
-  };
-  const chargerUtilisateurs = async () => {
+  const chargerUtilisateurs = useCallback(async () => {
     const token = getToken();
     if (!API) {
+      setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
       setChargement(false);
       return;
@@ -159,6 +180,7 @@ function SuperAdminUtilisateursContent() {
       return;
     }
     setChargement(true);
+    setErreurChargement(null);
     try {
       const res = await fetch(`${API}/admin/utilisateurs`, {
         headers: {
@@ -167,22 +189,35 @@ function SuperAdminUtilisateursContent() {
         },
       });
       if (res.status === 401) {
-        toast.error("Votre session a expiré");
+        const message = "Votre session a expiré. Reconnectez-vous pour charger les utilisateurs.";
+        setErreurChargement(message);
+        toast.error(message);
         router.replace("/login");
         return;
       }
       if (res.status === 403) {
-        toast.error(
-          "Le Super Admin n'est pas autorisé à accéder aux utilisateurs"
-        );
+        const message = "Accès refusé (403). Redémarrez l'API avec les droits Super Admin mis à jour, puis reconnectez-vous.";
+        setErreurChargement(message);
+        toast.error(message);
         return;
       }
       if (!res.ok) {
         throw new Error(await lireErreur(res));
       }
-      const data: Utilisateur[] = await res.json();
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse utilisateurs invalide.");
+      const comptes = data as Utilisateur[];
+      setEmailsParMatricule(
+        Object.fromEntries(
+          comptes.flatMap((utilisateur) =>
+            utilisateur.email
+              ? [[utilisateur.matricule.trim(), utilisateur.email]]
+              : []
+          )
+        )
+      );
       setUtilisateurs(
-        data.filter(
+        comptes.filter(
           (u) =>
             u.role !== "ADMIN" &&
             u.role !== "SUPER_ADMIN" &&
@@ -191,24 +226,22 @@ function SuperAdminUtilisateursContent() {
       );
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Impossible de charger les utilisateurs"
-      );
+      const message = error instanceof Error
+        ? error.message
+        : "Impossible de charger les utilisateurs";
+      setErreurChargement(message);
+      toast.error(message);
     } finally {
       setChargement(false);
     }
-  };
+  }, [API, router]);
   useEffect(() => {
-    chargerUtilisateurs();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void chargerUtilisateurs();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [chargerUtilisateurs]);
 
-  /*
-   * Lorsqu'une notification "mot de passe oublié" envoie vers :
-   * /super-admin/utilisateurs?matricule=XXXX
-   * la liste se filtre automatiquement sur le matricule concerné.
-   */
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -220,8 +253,24 @@ function SuperAdminUtilisateursContent() {
         ?.trim();
 
     if (matriculeNotification) {
-      setRecherche(matriculeNotification);
+      const timer = window.setTimeout(() => {
+        setRecherche(matriculeNotification);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const roleInterim = params.get("interimRole");
+    if (roleInterim !== ROLES.AGENT_PAR_INTERIM_ASSISTANT && roleInterim !== ROLES.AGENT_PAR_INTERIM_CHEF) return;
+    const timer = window.setTimeout(() => {
+      setNouveauRole(roleInterim);
+      setDirectionId(params.get("directionId") || "");
+      setFormOuvert(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   const resetForm = () => {
     setNom("");
@@ -365,7 +414,9 @@ function SuperAdminUtilisateursContent() {
         toast.success("Utilisateur modifié avec succès");
       } else {
         toast.success(
-          "Utilisateur créé. Les informations de connexion ont été envoyées par email."
+          nouveauRole === ROLES.AGENT_PAR_INTERIM_ASSISTANT || nouveauRole === ROLES.AGENT_PAR_INTERIM_CHEF
+            ? "Compte par intérim créé. L'agent a reçu une notification et son matricule et mot de passe par email."
+            : "Utilisateur créé. Les informations de connexion ont été envoyées par email."
         );
       }
       fermerFormulaire();
@@ -416,9 +467,31 @@ function SuperAdminUtilisateursContent() {
       },
       cancel: {
         label: "Annuler",
-        onClick: () => {},
+        onClick: () => { },
       },
     });
+  };
+  const basculerStatut = async (u: Utilisateur) => {
+    const token = getToken();
+    if (!API || !token) {
+      toast.error("Session ou configuration invalide");
+      return;
+    }
+    try {
+      const actif = !u.actif;
+      const res = await fetch(`${API}/admin/utilisateurs/${u.id}/actif?actif=${actif}`, {
+        method: "PATCH",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        toast.error(await lireErreur(res));
+        return;
+      }
+      toast.success(actif ? "Compte activé" : "Compte désactivé");
+      await chargerUtilisateurs();
+    } catch {
+      toast.error("Impossible de modifier le statut du compte");
+    }
   };
   const ouvrirResetMotDePasse = (u: Utilisateur) => {
     if (!u.email) {
@@ -489,7 +562,7 @@ function SuperAdminUtilisateursContent() {
       } else {
         toast.success(
           message ||
-            `Un nouveau mot de passe a été généré automatiquement et envoyé à ${utilisateurReset.email}.`
+          `Un nouveau mot de passe a été généré automatiquement et envoyé à ${utilisateurReset.email}.`
         );
       }
 
@@ -571,18 +644,7 @@ function SuperAdminUtilisateursContent() {
             >
               ← Retour
             </button>
-            <h2
-              style={{
-                position: "absolute",
-                left: "50%",
-                transform: "translateX(-50%)",
-                color: "#1e293b",
-                margin: 0,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Gestion des comptes utilisateurs
-            </h2>
+
             <div
               style={{
                 display: "flex",
@@ -592,33 +654,32 @@ function SuperAdminUtilisateursContent() {
             >
               <button
                 type="button"
-                onClick={() =>
-                  router.push("/super-admin/chauffeurs-comptes")
-                }
+                onClick={() => router.push("/super-admin/personnels")}
                 style={{
-                  padding: "10px 16px",
+                  padding: "10px 18px",
                   backgroundColor: "#ffffff",
-                  color: "#1e40af",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: 6,
-                  fontWeight: 600,
+                  color: "#047857",
+                  border: "1.5px solid #a7f3d0",
+                  borderRadius: 10,
+                  fontWeight: 700,
                   cursor: "pointer",
+                  transition: "all 150ms ease",
                 }}
               >
-                Comptes chauffeurs
+                Liste des personnels
               </button>
 
               <button
                 type="button"
+                className="btn-spat btn-rouge"
                 onClick={ouvrirCreation}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
                   border: "none",
-                  borderRadius: 6,
-                  fontWeight: 600,
+                  borderRadius: 10,
+                  fontWeight: 700,
                   cursor: "pointer",
+                  transition: "all 150ms ease",
                 }}
               >
                 + Ajouter un utilisateur
@@ -696,6 +757,18 @@ function SuperAdminUtilisateursContent() {
                     gap: 16,
                   }}
                 >
+                  <PersonnelAutocomplete
+                    label="Personnel à associer"
+                    emailsParMatricule={emailsParMatricule}
+                    placeholder="Saisissez un mot clé"
+                    style={{ gridColumn: "1 / -1" }}
+                    onSelect={(personnel) => {
+                      setNom(personnel.nom);
+                      setPrenom(personnel.prenom);
+                      setNumMatricule(personnel.matricule);
+                      setEmail(personnel.email || "");
+                    }}
+                  />
                   <div>
                     <label style={labelStyle}>Nom *</label>
                     <input
@@ -749,14 +822,20 @@ function SuperAdminUtilisateursContent() {
                       <option value="AGENT_FLOTTE">
                         Agent Flotte
                       </option>
-                      <option value="CHAUFFEUR">
-                        Chauffeur
+                      <option value={ROLES.AGENT_SURETE}>
+                        Agent de sûreté
                       </option>
                       <option value={ROLES.CHEF_DIRECTION}>
                         Chef de Direction des employés
                       </option>
                       <option value={ROLES.ASSISTANT_DIRECTION}>
                         Assistant de Direction
+                      </option>
+                      <option value={ROLES.AGENT_PAR_INTERIM_ASSISTANT}>
+                        Agent par intérim — Assistant de Direction
+                      </option>
+                      <option value={ROLES.AGENT_PAR_INTERIM_CHEF}>
+                        Agent par intérim — Chef de Direction
                       </option>
                       <option value="CHEF_SERVICE_LOGISTIQUE">
                         Chef Service Logistique
@@ -765,10 +844,13 @@ function SuperAdminUtilisateursContent() {
                         Chef DGAL
                       </option>
                       <option value="MECANICIEN_DID">
-                        Mécanicien diagnostiqueur DID
+                        Chef d’Atelier / Mécanicien DID
                       </option>
                       <option value="DIRECTEUR_DFP">
                         Directeur DFP
+                      </option>
+                      <option value={ROLES.CO_ADMIN}>
+                        Co-administrateur (lecture seule)
                       </option>
                     </select>
                   </div>
@@ -842,7 +924,7 @@ function SuperAdminUtilisateursContent() {
                       </div>
                     </>
                   )}
-                  
+
                   <div
                     style={{
                       gridColumn: "1/-1",
@@ -922,7 +1004,7 @@ function SuperAdminUtilisateursContent() {
                       marginBottom: 6,
                     }}
                   >
-                    <strong>Matricule :</strong>{" "}
+                    <span>Matricule :</span>{" "}
                     {utilisateurReset.matricule}
                   </div>
                   <div
@@ -935,7 +1017,7 @@ function SuperAdminUtilisateursContent() {
                     }}
                   >
                     <Mail size={14} />
-                    <strong>Email :</strong>{" "}
+                    <span>Email :</span>{" "}
                     {utilisateurReset.email}
                   </div>
                 </div>
@@ -952,15 +1034,7 @@ function SuperAdminUtilisateursContent() {
                       marginBottom: 14,
                     }}
                   >
-                    <strong>
-                      Génération automatique du nouveau mot de passe
-                    </strong>
-
-                    <div style={{ marginTop: 6 }}>
-                      Le système va générer automatiquement un nouveau mot de
-                      passe sécurisé et l&apos;envoyer à l&apos;adresse email
-                      de l&apos;utilisateur.
-                    </div>
+                    Un nouveau mot de passe sera envoyé par email.
                   </div>
 
                   <div
@@ -974,13 +1048,7 @@ function SuperAdminUtilisateursContent() {
                       lineHeight: 1.5,
                       marginBottom: 20,
                     }}
-                  >
-                    Après confirmation, l&apos;ancien mot de passe ne
-                    fonctionnera plus. Le nouveau mot de passe ne sera pas
-                    temporaire : il restera valable jusqu&apos;à ce que
-                    l&apos;utilisateur le change ou qu&apos;une nouvelle
-                    réinitialisation soit effectuée.
-                  </div>
+                  >L’ancien mot de passe sera invalidé.</div>
 
                   <div
                     style={{
@@ -1063,7 +1131,7 @@ function SuperAdminUtilisateursContent() {
                 ) : utilisateursFiltres.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={emptyStyle}>
-                      Aucun utilisateur
+                      {erreurChargement || "Aucun utilisateur"}
                     </td>
                   </tr>
                 ) : (
@@ -1083,43 +1151,11 @@ function SuperAdminUtilisateursContent() {
                         }}
                       >
                         <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "50%",
-                                backgroundColor:
-                                  couleurAvatar(u.id),
-                                color: "white",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 700,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {initiales(u.nomComplet)}
-                            </div>
-                            <div
-                              style={{
-                                fontWeight: 600,
-                                color: "#111827",
-                              }}
-                            >
-                              {u.nomComplet}
-                            </div>
+                          <div style={{ fontWeight: 600, color: "#111827" }}>
+                            {u.nomComplet}
                           </div>
                         </td>
-                        <td style={tdStyle}>
-                          {u.matricule}
-                        </td>
+                        <td style={tdStyle}>{u.matricule}</td>
                         <td style={tdStyle}>
                           {u.email ? (
                             <div
@@ -1182,6 +1218,19 @@ function SuperAdminUtilisateursContent() {
                               flexWrap: "nowrap",
                             }}
                           >
+                            <button
+                              type="button"
+                              onClick={() => void basculerStatut(u)}
+                              style={iconBtn(
+                                u.actif ? "#f0fdf4" : "#fef2f2",
+                                u.actif ? "#15803d" : "#dc2626",
+                                u.actif ? "#bbf7d0" : "#fecaca"
+                              )}
+                              title={u.actif ? "Désactiver le compte" : "Activer le compte"}
+                              aria-label={`${u.actif ? "Désactiver" : "Activer"} ${u.nomComplet}`}
+                            >
+                              {u.actif ? <ToggleRight size={17} /> : <ToggleLeft size={17} />}
+                            </button>
                             <button
                               type="button"
                               onClick={() =>
@@ -1295,22 +1344,24 @@ const closeBtnStyle: CSSProperties = {
   color: "#374151",
 };
 const btnPrimary: CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#dc2626",
+  padding: "11px 18px",
+  backgroundColor: "#bc1019",
   color: "white",
   border: "none",
-  borderRadius: 8,
+  borderRadius: 10,
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
+  transition: "all 150ms ease",
 };
 const btnSecondary: CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#e5e7eb",
-  color: "#374151",
+  padding: "11px 18px",
+  backgroundColor: "#334155",
+  color: "#ffffff",
   border: "none",
-  borderRadius: 8,
+  borderRadius: 10,
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
+  transition: "all 150ms ease",
 };
 const thStyle: CSSProperties = {
   textAlign: "left",

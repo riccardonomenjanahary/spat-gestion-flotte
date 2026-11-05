@@ -13,10 +13,13 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface ReservationRepository
         extends JpaRepository<Reservation, Long> {
+
+    boolean existsByMotifAndDateDebut(String motif, LocalDateTime dateDebut);
 
     // =====================================================
     // LISTES
@@ -27,12 +30,19 @@ public interface ReservationRepository
             Long demandeurId
     );
 
+    List<Reservation> findByVehiculeId(Long vehiculeId);
+
     List<Reservation>
     findAllByOrderByDateCreationDesc();
 
     List<Reservation>
     findByStatutOrderByDateCreationDesc(
             String statut
+    );
+
+    boolean existsByVehiculeIdAndStatutIn(
+            Long vehiculeId,
+            Collection<String> statuts
     );
 
     // =====================================================
@@ -101,8 +111,10 @@ public interface ReservationRepository
     // =====================================================
 
     /**
-     * EN_ATTENTE est maintenant inclus car le Chef de Direction
-     * sélectionne déjà le véhicule lors de la création du ticket.
+     * EN_ATTENTE est inclus car le véhicule est déjà réservé à la création.
+     * Pour les missions rapides de l'Assistant, dateFin correspond à la fin
+     * estimée; les anciennes missions sans estimation restent bloquantes
+     * jusqu'à leur clôture.
      *
      * Une mission FLEXIBLE peut être réorganisée en cas d'urgence,
      * mais elle ne doit pas créer une double affectation automatique.
@@ -121,14 +133,24 @@ public interface ReservationRepository
         )
 
         AND r.statut IN (
+            'PLANIFIEE',
+            'EN_COURS',
             'EN_ATTENTE',
             'EN_ATTENTE_AVIS_DID',
             'VALIDEE_N1',
-            'VALIDEE'
+                        'VALIDEE',
+                        'CLOTUREE'
         )
 
-        AND r.dateDebut < :dateFin
-        AND r.dateFin > :dateDebut
+                AND r.dateDebut < :dateFin
+                AND (
+                        r.dateFin > :dateDebut
+                        OR (
+                                r.modeCreation = 'ASSISTANT_DIRECTION'
+                                AND r.statut = 'EN_ATTENTE'
+                                AND r.dureeEstimeeMinutes IS NULL
+                        )
+                )
         """)
     boolean existeChevauchementVehicule(
             @Param("vehiculeId")
@@ -142,6 +164,23 @@ public interface ReservationRepository
 
             @Param("dateFin")
             LocalDateTime dateFin
+    );
+
+    @Query("""
+        SELECT r FROM Reservation r
+        WHERE r.vehicule IS NOT NULL
+          AND r.vehicule.id = :vehiculeId
+          AND (:reservationId IS NULL OR r.id <> :reservationId)
+          AND r.statut IN ('PLANIFIEE','EN_COURS','EN_ATTENTE','EN_ATTENTE_AVIS_DID','VALIDEE_N1','VALIDEE','CLOTUREE')
+          AND r.dateDebut < :dateFin
+          AND (r.dateFin > :dateDebut OR (r.modeCreation = 'ASSISTANT_DIRECTION' AND r.statut = 'EN_ATTENTE' AND r.dureeEstimeeMinutes IS NULL))
+        ORDER BY r.dateFin ASC
+        """)
+    List<Reservation> trouverChevauchementsVehicule(
+            @Param("vehiculeId") Long vehiculeId,
+            @Param("reservationId") Long reservationId,
+            @Param("dateDebut") LocalDateTime dateDebut,
+            @Param("dateFin") LocalDateTime dateFin
     );
 
     // =====================================================
@@ -162,6 +201,8 @@ public interface ReservationRepository
         )
 
         AND r.statut IN (
+            'PLANIFIEE',
+            'EN_COURS',
             'EN_ATTENTE',
             'EN_ATTENTE_AVIS_DID',
             'VALIDEE_N1',

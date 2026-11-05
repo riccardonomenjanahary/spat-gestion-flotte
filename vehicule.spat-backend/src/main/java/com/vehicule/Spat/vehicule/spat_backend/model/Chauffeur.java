@@ -24,6 +24,11 @@ public class Chauffeur {
     @JsonAlias("permis")
     private String numeroPermis;
 
+    private java.time.LocalDate dateExpirationPermis;
+
+    public java.time.LocalDate getDateExpirationPermis() { return dateExpirationPermis; }
+    public void setDateExpirationPermis(java.time.LocalDate date) { this.dateExpirationPermis = date; }
+
     @Column(name = "affectation_service")
     private String affectationService;
 

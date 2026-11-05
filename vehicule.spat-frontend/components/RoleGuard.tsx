@@ -18,10 +18,6 @@ export default function RoleGuard({
   const [autorise, setAutorise] = useState(false);
   const [verification, setVerification] = useState(true);
 
-  // Permet d'utiliser soit :
-  // role="SUPER_ADMIN"
-  // soit :
-  // roles={["ADMIN", "DIRECTEUR_DFP"]}
   const rolesAutorises: Role[] = roles ?? (role ? [role] : []);
 
   const rolesKey = rolesAutorises.join(",");
@@ -30,15 +26,7 @@ export default function RoleGuard({
     const token = localStorage.getItem("token");
     const roleUtilisateur = localStorage.getItem("role") as Role | null;
 
-    console.log("RoleGuard →", {
-      rolesAutorises,
-      roleUtilisateur,
-      tokenPresent: !!token,
-    });
-
-    // ==============================
-    // PAS DE TOKEN
-    // ==============================
+    
 
     if (!token) {
       setAutorise(false);
@@ -47,10 +35,6 @@ export default function RoleGuard({
       router.replace("/login");
       return;
     }
-
-    // ==============================
-    // AUCUN ROLE CONFIGURE
-    // ==============================
 
     if (rolesAutorises.length === 0) {
       console.error(
@@ -64,10 +48,6 @@ export default function RoleGuard({
       return;
     }
 
-    // ==============================
-    // ROLE NON AUTORISE
-    // ==============================
-
     if (
       !roleUtilisateur ||
       !rolesAutorises.includes(roleUtilisateur)
@@ -79,17 +59,9 @@ export default function RoleGuard({
       return;
     }
 
-    // ==============================
-    // UTILISATEUR AUTORISE
-    // ==============================
-
     setAutorise(true);
     setVerification(false);
   }, [router, rolesKey]);
-
-  // ==============================
-  // CHARGEMENT
-  // ==============================
 
   if (verification) {
     return (
@@ -104,17 +76,9 @@ export default function RoleGuard({
     );
   }
 
-  // ==============================
-  // NON AUTORISE
-  // ==============================
-
   if (!autorise) {
     return null;
   }
-
-  // ==============================
-  // AUTORISE
-  // ==============================
 
   return <>{children}</>;
 }

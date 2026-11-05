@@ -33,6 +33,13 @@ public class Reservation {
     @JoinColumn(name = "chauffeur_id")
     private Chauffeur chauffeur;
 
+    @ManyToOne
+    @JoinColumn(name = "conducteur_moto_id")
+    private ConducteurAutorise conducteurMoto;
+
+    public ConducteurAutorise getConducteurMoto() { return conducteurMoto; }
+    public void setConducteurMoto(ConducteurAutorise conducteur) { conducteurMoto = conducteur; }
+
     // =====================================================
     // UTILISATEUR AYANT CREE / SAISI LA DEMANDE
     // =====================================================
@@ -285,6 +292,19 @@ public class Reservation {
 
     @Column(length = 1000)
     private String observations;
+
+    /**
+     * Compte rendu d'incident saisi par le chauffeur à la clôture.
+     * Vide ou null si la mission s'est déroulée sans incident.
+     */
+    @Column(name = "incident_cloture", length = 2000)
+    private String incidentCloture;
+
+    @Column(name = "duree_utilisation_minutes")
+    private Integer dureeUtilisationMinutes;
+
+    @Column(name = "duree_estimee_minutes")
+    private Integer dureeEstimeeMinutes;
 
     // =====================================================
     // REFUS NIVEAU 1
@@ -773,6 +793,30 @@ public class Reservation {
 
     public void setObservations(String observations) {
         this.observations = observations;
+    }
+
+    public String getIncidentCloture() {
+        return incidentCloture;
+    }
+
+    public void setIncidentCloture(String incidentCloture) {
+        this.incidentCloture = incidentCloture;
+    }
+
+    public Integer getDureeUtilisationMinutes() {
+        return dureeUtilisationMinutes;
+    }
+
+    public void setDureeUtilisationMinutes(Integer dureeUtilisationMinutes) {
+        this.dureeUtilisationMinutes = dureeUtilisationMinutes;
+    }
+
+    public Integer getDureeEstimeeMinutes() {
+        return dureeEstimeeMinutes;
+    }
+
+    public void setDureeEstimeeMinutes(Integer dureeEstimeeMinutes) {
+        this.dureeEstimeeMinutes = dureeEstimeeMinutes;
     }
 
 

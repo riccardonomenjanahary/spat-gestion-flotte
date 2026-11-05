@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { FileDown, FileText, Printer } from "lucide-react";
+import { FileDown, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   exportCsv,
+  exportExcel,
   exportPdf,
-  imprimerTableau,
   type ExportColumn,
 } from "@/app/lib/exportUtils";
 
@@ -21,8 +21,8 @@ interface ExportButtonsProps<T> {
   orientation?: "portrait" | "landscape";
   logoUrl?: string;
   afficherCsv?: boolean;
+  afficherExcel?: boolean;
   afficherPdf?: boolean;
-  afficherImpression?: boolean;
 }
 
 export default function ExportButtons<T>({
@@ -34,8 +34,8 @@ export default function ExportButtons<T>({
   orientation = "landscape",
   logoUrl = "/logo.png",
   afficherCsv = true,
+  afficherExcel = true,
   afficherPdf = true,
-  afficherImpression = true,
 }: ExportButtonsProps<T>) {
   const [pdfEnCours, setPdfEnCours] = useState(false);
 
@@ -74,13 +74,14 @@ export default function ExportButtons<T>({
     }
   };
 
-  const imprimer = () => {
+  const telechargerExcel = () => {
     if (!verifierDonnees()) return;
     try {
-      imprimerTableau(config);
+      exportExcel(config);
+      toast.success("Export Excel généré.");
     } catch (error) {
-      console.error("Erreur impression :", error);
-      toast.error(error instanceof Error ? error.message : "Impossible d'ouvrir l'impression.");
+      console.error("Erreur export Excel :", error);
+      toast.error("Impossible de générer le fichier Excel.");
     }
   };
 
@@ -89,9 +90,10 @@ export default function ExportButtons<T>({
       {afficherPdf && (
         <button
           type="button"
+          className="btn-spat btn-jaune"
           onClick={telechargerPdf}
           disabled={pdfEnCours}
-          style={{ ...buttonStyle, ...pdfButtonStyle, opacity: pdfEnCours ? 0.6 : 1, cursor: pdfEnCours ? "wait" : "pointer" }}
+          style={{ ...buttonStyle, opacity: pdfEnCours ? 0.6 : 1, cursor: pdfEnCours ? "wait" : "pointer" }}
           title="Télécharger le rapport PDF"
         >
           <FileText size={16} />
@@ -100,18 +102,19 @@ export default function ExportButtons<T>({
       )}
 
       {afficherCsv && (
-        <button type="button" onClick={telechargerCsv} style={{ ...buttonStyle, ...csvButtonStyle }} title="Exporter au format CSV">
+        <button type="button" className="btn-spat btn-orange" onClick={telechargerCsv} style={buttonStyle} title="Exporter au format CSV">
           <FileDown size={16} />
           CSV
         </button>
       )}
 
-      {afficherImpression && (
-        <button type="button" onClick={imprimer} style={{ ...buttonStyle, ...printButtonStyle }} title="Imprimer ou enregistrer en PDF">
-          <Printer size={16} />
-          Imprimer
+      {afficherExcel && (
+        <button type="button" className="btn-spat btn-vert" onClick={telechargerExcel} style={buttonStyle} title="Exporter au format Excel">
+          <FileDown size={16} />
+          Excel
         </button>
       )}
+
     </div>
   );
 }
@@ -125,33 +128,18 @@ const containerStyle: CSSProperties = {
 };
 
 const buttonStyle: CSSProperties = {
-  minHeight: 36,
-  padding: "8px 14px",
-  borderRadius: 8,
+  minHeight: 38,
+  padding: "8px 16px",
+  borderRadius: 10,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 700,
   cursor: "pointer",
   whiteSpace: "nowrap",
+  border: "none",
+  transition: "all 150ms ease",
 };
 
-const pdfButtonStyle: CSSProperties = {
-  backgroundColor: "#dc2626",
-  color: "#ffffff",
-  border: "1px solid #dc2626",
-};
-
-const csvButtonStyle: CSSProperties = {
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  border: "1px solid #2563eb",
-};
-
-const printButtonStyle: CSSProperties = {
-  backgroundColor: "#16a34a",
-  color: "#ffffff",
-  border: "1px solid #16a34a",
-};

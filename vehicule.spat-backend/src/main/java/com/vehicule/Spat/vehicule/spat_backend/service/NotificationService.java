@@ -1,7 +1,9 @@
 package com.vehicule.Spat.vehicule.spat_backend.service;
 
+import com.vehicule.Spat.vehicule.spat_backend.model.Direction;
 import com.vehicule.Spat.vehicule.spat_backend.model.Notification;
 import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
+import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
 import com.vehicule.Spat.vehicule.spat_backend.repository.NotificationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 
@@ -15,9 +17,21 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
+
+    /** Compatibilité des modules DGAL avec le circuit de notification après commit. */
+    @Transactional
+    public Notification creerNotification(String type, String niveau, String titre, String message,
+            String matricule, String email, String role, String lien,
+            Long reservationId, Long maintenanceId, Long vehiculeId) {
+        return creerPourMatricule(matricule, type, "WARNING".equalsIgnoreCase(niveau) ? "IMPORTANT" : niveau, titre, message, lien,
+                reservationId, maintenanceId, vehiculeId, true);
+    }
 
     private final NotificationRepository notificationRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -312,6 +326,92 @@ public class NotificationService {
         return transactionIsolee.execute(status ->
                 creerPourMatricule(matricule.trim(), type, niveau, titre, message,
                         lien, reservationId, maintenanceId, vehiculeId, envoyerEmail));
+    }
+
+    /**
+     * Notifie les assistantes de direction rattachées aux Directions du
+     * véhicule (voitures de service mutualisées partagées entre plusieurs
+     * Directions), en excluant la Direction à l'origine de l'action.
+     *
+     * Utilisé pour informer « l'autre Direction » qu'une voiture redevient
+     * libre ou qu'une demande d'entretien la concerne. Chaque destinataire
+     * est traité dans une transaction indépendante : un échec ne doit ni
+     * annuler l'action métier, ni bloquer les autres destinataires.
+     */
+    public List<Notification> creerPourDirectionsVehiculeIsole(
+            Vehicule vehicule,
+            Long directionAExclure,
+            String type,
+            String niveau,
+            String titre,
+            String message,
+            String lien,
+            Long reservationId,
+            Long maintenanceId,
+            boolean envoyerEmail
+    ) {
+        List<Notification> creees = new ArrayList<>();
+        if (vehicule == null || vehicule.getDirections() == null
+                || vehicule.getDirections().isEmpty()) {
+            return creees;
+        }
+
+        Set<Long> directionsVehicule = vehicule.getDirections().stream()
+                .filter(Objects::nonNull)
+                .map(Direction::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (directionsVehicule.isEmpty()) {
+            return creees;
+        }
+
+        final Long vehiculeId = vehicule.getId();
+        TransactionTemplate transactionIsolee =
+                new TransactionTemplate(transactionManager);
+        transactionIsolee.setPropagationBehavior(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        List<Utilisateur> destinataires;
+        try {
+            destinataires = transactionIsolee.execute(status ->
+                    utilisateurRepository.findAll().stream()
+                            .filter(Utilisateur::isActif)
+                            .filter(u -> u.getRole() != null
+                                    && "ASSISTANT_DIRECTION".equals(
+                                            u.getRole().trim()
+                                                    .replaceFirst("^ROLE_", "")
+                                                    .toUpperCase(Locale.ROOT)))
+                            .filter(u -> u.getDirectionId() != null
+                                    && directionsVehicule.contains(u.getDirectionId()))
+                            .filter(u -> directionAExclure == null
+                                    || !directionAExclure.equals(u.getDirectionId()))
+                            .toList());
+        } catch (Exception e) {
+            System.err.println("Notification direction rattachée : recherche des "
+                    + "destinataires impossible pour le véhicule " + vehiculeId
+                    + " : " + e.getClass().getSimpleName() + " : " + e.getMessage());
+            return creees;
+        }
+        if (destinataires == null || destinataires.isEmpty()) {
+            return creees;
+        }
+
+        for (Utilisateur destinataire : destinataires) {
+            try {
+                Notification notification = transactionIsolee.execute(status ->
+                        creerPourUtilisateur(destinataire, type, niveau, titre,
+                                message, lien, reservationId, maintenanceId,
+                                vehiculeId, envoyerEmail));
+                if (notification != null) {
+                    creees.add(notification);
+                }
+            } catch (Exception e) {
+                System.err.println("Notification direction rattachée impossible pour "
+                        + destinataire.getMatricule() + " : "
+                        + e.getClass().getSimpleName() + " : " + e.getMessage());
+            }
+        }
+        return creees;
     }
 
     @Transactional(readOnly = true)

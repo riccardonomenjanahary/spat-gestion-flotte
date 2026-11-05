@@ -59,7 +59,7 @@ export default function VehiculePositionCard({
         overflow: "hidden",
       }}
     >
-      {/* Infos à gauche */}
+
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
@@ -97,7 +97,6 @@ export default function VehiculePositionCard({
         </div>
       </div>
 
-      {/* Carte à droite */}
       <div style={{ height: 200 }}>
         <MapContainer
           center={[vehicule.latitude, vehicule.longitude]}

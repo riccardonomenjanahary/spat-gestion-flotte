@@ -2,11 +2,17 @@ package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.model.Affectation;
 import com.vehicule.Spat.vehicule.spat_backend.model.Chauffeur;
+import com.vehicule.Spat.vehicule.spat_backend.model.Direction;
 import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
+import com.vehicule.Spat.vehicule.spat_backend.dto.AffectationDirectionsVehiculeRequest;
 import com.vehicule.Spat.vehicule.spat_backend.repository.AffectationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ChauffeurRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.DirectionRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.MaintenanceRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
+import com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance;
+import com.vehicule.Spat.vehicule.spat_backend.model.CategorieVehicule;
 import com.vehicule.Spat.vehicule.spat_backend.service.ChauffeurAutoService;
 
 import org.springframework.http.HttpStatus;
@@ -27,20 +33,26 @@ public class VehiculeController {
     private final VehiculeRepository vehiculeRepository;
     private final AffectationRepository affectationRepository;
     private final ReservationRepository reservationRepository;
+    private final MaintenanceRepository maintenanceRepository;
     private final ChauffeurRepository chauffeurRepository;
+    private final DirectionRepository directionRepository;
     private final ChauffeurAutoService chauffeurAutoService;
 
     public VehiculeController(
             VehiculeRepository vehiculeRepository,
             AffectationRepository affectationRepository,
             ReservationRepository reservationRepository,
+            MaintenanceRepository maintenanceRepository,
             ChauffeurRepository chauffeurRepository,
+            DirectionRepository directionRepository,
             ChauffeurAutoService chauffeurAutoService
     ) {
         this.vehiculeRepository = vehiculeRepository;
         this.affectationRepository = affectationRepository;
         this.reservationRepository = reservationRepository;
+        this.maintenanceRepository = maintenanceRepository;
         this.chauffeurRepository = chauffeurRepository;
+        this.directionRepository = directionRepository;
         this.chauffeurAutoService = chauffeurAutoService;
     }
 
@@ -69,6 +81,71 @@ public class VehiculeController {
                                 .notFound()
                                 .build()
                 );
+    }
+
+    /**
+     * Affecte un véhicule à un groupe de Directions.
+     *
+     * Dispositif DGAL : un véhicule mutualisé peut être
+     * partagé par plusieurs Directions (jusqu'à 3, ex.
+     * DID/DAJ/DAGR). Le texte d'affectation historique
+     * est synchronisé pour l'affichage existant.
+     */
+    @PutMapping("/{id}/directions")
+    @Transactional
+    public ResponseEntity<?> affecterDirections(
+            @PathVariable Long id,
+            @RequestBody AffectationDirectionsVehiculeRequest request
+    ) {
+        if (request == null || request.getDirectionIds() == null) {
+            return ResponseEntity.badRequest().body("La liste des directions est obligatoire.");
+        }
+        List<Long> directionIds = request.getDirectionIds();
+        Vehicule vehiculeCible = vehiculeRepository.findById(id).orElse(null);
+        if (vehiculeCible == null) return ResponseEntity.notFound().build();
+        if (directionIds.stream().anyMatch(directionId -> directionId == null)) {
+            return ResponseEntity.badRequest().body("Une direction sélectionnée est invalide.");
+        }
+        if (directionIds.stream().distinct().count() != directionIds.size()) {
+            return ResponseEntity.badRequest().body("Une direction ne peut être sélectionnée qu'une seule fois.");
+        }
+        if (directionIds.size() > 5) {
+            return ResponseEntity.badRequest().body("Cinq directions au maximum par véhicule.");
+        }
+        if (CategorieVehicule.estMotoElectrique(vehiculeCible.getCategorie())) {
+            if (directionIds.size() > 1) {
+                return ResponseEntity.badRequest().body("Une moto électrique ne peut être affectée qu'à une seule Direction.");
+            }
+            if (directionIds.stream().anyMatch(directionId -> directionId.equals(1L))) {
+                return ResponseEntity.badRequest().body("Aucune moto électrique ne peut être affectée à la Direction Générale.");
+            }
+        }
+
+        List<Direction> directions = directionIds.stream()
+                .map(directionRepository::findById)
+                .map(direction -> direction.orElse(null))
+                .toList();
+
+        if (directions.stream().anyMatch(direction -> direction == null)) {
+            return ResponseEntity.badRequest().body("Une direction sélectionnée est invalide.");
+        }
+
+        return java.util.Optional.of(vehiculeCible)
+                .<ResponseEntity<?>>map(vehicule -> {
+
+                    vehicule.setDirections(
+                            new java.util.LinkedHashSet<>(directions)
+                    );
+
+                    String affectation = directions.stream()
+                            .map(Direction::getCode)
+                            .reduce((gauche, droite) -> gauche + ", " + droite)
+                            .orElse("Aucune direction");
+                    vehicule.setAffectation(affectation);
+
+                    return ResponseEntity.ok(vehiculeRepository.save(vehicule));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // =========================================================
@@ -456,7 +533,35 @@ public class VehiculeController {
                                     .trim()
                     );
 
-                    if (donnees.getStatut() == null
+                    // -----------------------------------------
+                    // DISPOSITIF DGAL
+                    // -----------------------------------------
+
+                    vehicule.setModeDetention(
+                            donnees.getModeDetention() != null
+                                    && !donnees.getModeDetention().isBlank()
+                                    ? donnees.getModeDetention().trim().toUpperCase()
+                                    : null
+                    );
+
+                    vehicule.setDateProchainEntretien(donnees.getDateProchainEntretien());
+                    vehicule.setDateExpirationVisiteTechnique(
+                            donnees.getDateExpirationVisiteTechnique()
+                    );
+
+                    boolean entretienActif = maintenanceRepository
+                            .existsByVehiculeIdAndOrigineDemandeIsNotNullAndStatutIn(
+                                    vehicule.getId(),
+                                    java.util.Set.of(
+                                            StatutMaintenance.EN_ATTENTE_VALIDATION_ENTRETIEN,
+                                            StatutMaintenance.ENTRETIEN_AUTORISE,
+                                            StatutMaintenance.ENTRETIEN_TERMINE
+                                    )
+                            );
+
+                    if (entretienActif) {
+                        vehicule.setStatut("MAINTENANCE");
+                    } else if (donnees.getStatut() == null
                             || donnees
                             .getStatut()
                             .isBlank()) {
@@ -497,7 +602,10 @@ public class VehiculeController {
     @GetMapping("/{id}/chauffeurs-compatibles")
     @Transactional(readOnly = true)
     public ResponseEntity<?> chauffeursCompatibles(
-            @PathVariable Long id
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFin,
+            @RequestParam(defaultValue = "false") boolean manuel
     ) {
 
         Vehicule vehicule =
@@ -512,11 +620,13 @@ public class VehiculeController {
                     .build();
         }
 
-        List<Map<String, Object>> response =
-                chauffeurAutoService
-                        .trouverChauffeursCompatibles(
-                                vehicule
-                        )
+        List<Chauffeur> chauffeurs = manuel
+                ? chauffeurAutoService.trouverChauffeursDisponiblesManuellement(dateDebut, dateFin, null)
+                : dateDebut != null && dateFin != null
+                ? chauffeurAutoService.trouverChauffeursCompatiblesDisponibles(vehicule, dateDebut, dateFin, null)
+                : chauffeurAutoService.trouverChauffeursCompatibles(vehicule);
+
+        List<Map<String, Object>> response = chauffeurs
                         .stream()
                         .map(
                                 this::chauffeurVersMap

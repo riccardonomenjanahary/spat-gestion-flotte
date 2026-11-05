@@ -1,18 +1,41 @@
 package com.vehicule.Spat.vehicule.spat_backend.config;
 
 import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
+import com.vehicule.Spat.vehicule.spat_backend.model.Assurance;
+import com.vehicule.Spat.vehicule.spat_backend.model.Justificatif;
+import com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance;
+import com.vehicule.Spat.vehicule.spat_backend.model.TypeJustificatif;
+import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
+import com.vehicule.Spat.vehicule.spat_backend.repository.AssuranceRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.JustificatifRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.MaintenanceRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
+import com.vehicule.Spat.vehicule.spat_backend.service.StockageFichiersService;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.List;
 
 @Configuration
 public class VehiculeDataInitializer {
 
     @Bean
+    @Order(2)
     CommandLineRunner initialiserVehicules(
-            VehiculeRepository vehiculeRepository
+            VehiculeRepository vehiculeRepository,
+            AssuranceRepository assuranceRepository,
+            JustificatifRepository justificatifRepository,
+            MaintenanceRepository maintenanceRepository,
+            UtilisateurRepository utilisateurRepository,
+            StockageFichiersService stockageFichiersService
     ) {
 
         return args -> {
@@ -21,9 +44,13 @@ public class VehiculeDataInitializer {
             // VOITURES DE SERVICE
             // =====================================================
 
+            // =====================================================
+            // DISPOSITIF DGAL - VEHICULE DE PATROUILLE ET D'URGENCE
+            // =====================================================
+
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Véhicule de patrouille et d'urgence",
                     "1205TCA",
                     "TOYOTA REVO",
                     2024,
@@ -32,70 +59,111 @@ public class VehiculeDataInitializer {
                     "DISPONIBLE"
             );
 
+            // =====================================================
+            // DISPOSITIF DGAL - VOITURES DE SERVICE MUTUALISEES
+            // =====================================================
+
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "1218TCA",
                     "TOYOTA REVO",
                     2024,
-                    "Garage / Missionnaire",
+                    "DFP, DIRCAP",
                     "Bon état (En salle de peinture)",
                     "MAINTENANCE"
             );
 
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "5174AH",
                     "TOYOTA REVO",
                     2019,
-                    "Garage / Missionnaire",
+                    "SG, DG",
                     "Bon état",
                     "DISPONIBLE"
             );
 
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "5533AE",
                     "TOYOTA VIGO",
                     2007,
-                    "Garage",
+                    "DID, DAJ, DAGR",
                     "État moyen",
                     "DISPONIBLE"
             );
 
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "6742AJ",
                     "HILUX ATMO",
                     2024,
-                    "Garage",
+                    "DRH, DDI",
                     "État moyen",
                     "DISPONIBLE"
             );
 
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "6743AJ",
                     "HILUX ATMO",
                     2024,
-                    "Garage",
+                    "DIREX, DMC",
                     "État moyen",
                     "DISPONIBLE"
             );
 
             ajouterSiAbsent(
                     vehiculeRepository,
-                    "Voiture de service",
+                    "Voiture de service mutualisée",
                     "5334AJ",
                     "HILUX ATMO",
                     2025,
-                    "Garage",
+                    "DID, DAJ, DAGR",
                     "État moyen",
                     "DISPONIBLE"
+            );
+
+            // =====================================================
+            // DISPOSITIF DGAL - VEHICULES DE MISSION
+            // =====================================================
+
+            ajouterSiAbsent(
+                    vehiculeRepository,
+                    "Véhicule de mission",
+                    "01614WWA",
+                    "TOYOTA PICK-UP",
+                    2026,
+                    "Garage",
+                    "État neuf",
+                    "DISPONIBLE"
+            );
+
+            ajouterSiAbsent(
+                    vehiculeRepository,
+                    "Véhicule de mission",
+                    "01615WWA",
+                    "TOYOTA PICK-UP",
+                    2026,
+                    "Garage",
+                    "État neuf",
+                    "DISPONIBLE"
+            );
+
+            // Jeu de données de test local : les véhicules DGAL demandés
+            // sont disponibles et possèdent des documents valides.
+            preparerVehiculesTest(
+                    vehiculeRepository,
+                    assuranceRepository,
+                    justificatifRepository,
+                    maintenanceRepository,
+                    utilisateurRepository,
+                    stockageFichiersService
             );
 
 
@@ -289,6 +357,52 @@ public class VehiculeDataInitializer {
                     "État neuf",
                     "DISPONIBLE"
             );
+
+
+            // =====================================================
+            // MOTOS ÉLECTRIQUES HORWIN
+            // =====================================================
+
+            String[] immatriculationsMotos = {
+                    "47101WWT",
+                    "47102WWT",
+                    "47103WWT",
+                    "47104WWT",
+                    "47105WWT",
+                    "47106WWT",
+                    "47107WWT",
+                    "47108WWT",
+                    "14403WWT",
+                    "14404WWT"
+            };
+
+            for (String immatriculation : immatriculationsMotos) {
+                ajouterSiAbsent(
+                        vehiculeRepository,
+                        "Moto électrique",
+                        immatriculation,
+                        "HORWIN",
+                        2026,
+                        "Garage",
+                        "État neuf",
+                        "DISPONIBLE"
+                );
+            }
+
+                        // Les affectations officielles du dispositif DGAL sont
+                        // synchronisées uniquement si le véhicule est encore
+                        // affecté au garage (ou sans affectation), pour préserver
+                        // les choix faits ensuite dans Admin > Véhicules.
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47102WWT", "DFP");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47103WWT", "DDI");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47104WWT", "DIRCAP");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47105WWT", "DAJ");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47107WWT", "DIREX");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "14404WWT", "DRH");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47101WWT", "SG");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47106WWT", "DMC");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "47108WWT", "DAGR");
+                        affecterMotoSiNonConfiguree(vehiculeRepository, "14403WWT", "DID");
 
 
             // =====================================================
@@ -600,6 +714,111 @@ public class VehiculeDataInitializer {
         };
     }
 
+    private void preparerVehiculesTest(
+            VehiculeRepository vehiculeRepository,
+            AssuranceRepository assuranceRepository,
+            JustificatifRepository justificatifRepository,
+            MaintenanceRepository maintenanceRepository,
+            UtilisateurRepository utilisateurRepository,
+            StockageFichiersService stockageFichiersService
+    ) {
+        List<String> immatriculations = List.of(
+                "01614WWA", "01615WWA", "5174AH", "6743AJ", "1218TCA",
+                "6742AJ", "5533AE", "5334AJ", "47103WWT"
+        );
+        LocalDate expiration = LocalDate.now().plusYears(2);
+
+        for (String immatriculation : immatriculations) {
+            vehiculeRepository.findByImmatriculationIgnoreCase(immatriculation).ifPresent(vehicule -> {
+                vehicule.setStatut("DISPONIBLE");
+                if (immatriculation.equalsIgnoreCase("01614WWA") || immatriculation.equalsIgnoreCase("01615WWA")) {
+                    vehicule.setAffectation("Service Logistique DGAL");
+                }
+                vehicule.setDateExpirationVisiteTechnique(expiration);
+                vehicule.setDateProchainEntretien(LocalDate.now().plusMonths(6));
+                vehicule.setModeDetention("PROPRIETE");
+                vehiculeRepository.save(vehicule);
+
+                if (immatriculation.equalsIgnoreCase("47103WWT")) {
+                    maintenanceRepository
+                            .findByVehiculeIdAndOrigineDemandeIsNotNullAndStatutIn(
+                                    vehicule.getId(),
+                                    List.of(
+                                            StatutMaintenance.EN_ATTENTE_VALIDATION_ENTRETIEN,
+                                            StatutMaintenance.ENTRETIEN_AUTORISE,
+                                            StatutMaintenance.ENTRETIEN_TERMINE,
+                                            StatutMaintenance.EN_COURS,
+                                            StatutMaintenance.PLANIFIEE
+                                    )
+                            )
+                            .forEach(maintenance -> {
+                                maintenance.setStatut(StatutMaintenance.ENTRETIEN_ANNULE);
+                                maintenance.setDateCloture(java.time.LocalDateTime.now());
+                                maintenanceRepository.save(maintenance);
+                            });
+                }
+
+                if (assuranceRepository.findByVehiculeIdOrderByDateExpirationDesc(vehicule.getId()).stream().noneMatch(a ->
+                        a.getDateExpiration() != null && !a.getDateExpiration().isBefore(expiration))) {
+                    Assurance assurance = new Assurance();
+                    assurance.setVehicule(vehicule);
+                    assurance.setNumeroPolice("TEST-DGAL-" + immatriculation);
+                    assurance.setDateDebut(LocalDate.now().minusMonths(1));
+                    assurance.setDateExpiration(expiration);
+                    assurance.setAssureur("Assureur de test SPAT");
+                    assurance.setTypeCouverture("Tous risques - données de test");
+                    assurance.setObservation("Document de test pour recette locale");
+                    assurance.setDocumentPolice("assurance-test-dgal.pdf");
+                    assuranceRepository.save(assurance);
+                }
+
+                utilisateurRepository.findByRole("ADMIN").stream().findFirst().ifPresent(admin -> {
+                    creerJustificatifTest(justificatifRepository, stockageFichiersService, vehicule, admin,
+                            TypeJustificatif.CARTE_GRISE, "Carte grise de test - " + immatriculation + ".pdf");
+                    creerJustificatifTest(justificatifRepository, stockageFichiersService, vehicule, admin,
+                            TypeJustificatif.VISITE_TECHNIQUE, "Visite technique de test - " + immatriculation + ".pdf");
+                    creerJustificatifTest(justificatifRepository, stockageFichiersService, vehicule, admin,
+                            TypeJustificatif.ASSURANCE, "Assurance de test - " + immatriculation + ".pdf");
+                });
+            });
+        }
+    }
+
+    private void creerJustificatifTest(
+            JustificatifRepository justificatifRepository,
+            StockageFichiersService stockageFichiersService,
+            Vehicule vehicule,
+            Utilisateur admin,
+            TypeJustificatif type,
+            String nomFichier
+    ) {
+        boolean existe = justificatifRepository.findByVehiculeOrderByDateDepotDesc(vehicule).stream()
+                .anyMatch(j -> j.getType() == type && Boolean.TRUE.equals(j.getValide()));
+        if (existe) return;
+
+        String nomStocke = "test-" + vehicule.getId() + "-" + type.name().toLowerCase() + ".pdf";
+        try {
+            Path fichier = stockageFichiersService.resoudreChemin(nomStocke);
+            Files.createDirectories(fichier.getParent());
+            if (!Files.exists(fichier)) {
+                Files.writeString(fichier, "%PDF-1.4\n% Document de test SPAT\n%%EOF\n");
+            }
+            Justificatif justificatif = new Justificatif();
+            justificatif.setType(type);
+            justificatif.setNomFichier(nomFichier);
+            justificatif.setNomStocke(nomStocke);
+            justificatif.setTailleOctets(Files.size(fichier));
+            justificatif.setContentType("application/pdf");
+            justificatif.setVehicule(vehicule);
+            justificatif.setDeposePar(admin);
+            justificatif.setValide(true);
+            justificatif.setLibelle("Document de test pour recette locale");
+            justificatifRepository.save(justificatif);
+        } catch (IOException e) {
+            throw new IllegalStateException("Impossible de préparer le document de test " + nomFichier, e);
+        }
+    }
+
 
     // =========================================================
     // AJOUTER UNIQUEMENT SI LE VEHICULE N'EXISTE PAS
@@ -642,6 +861,21 @@ public class VehiculeDataInitializer {
 
         repository.save(vehicule);
     }
+
+        private void affecterMotoSiNonConfiguree(
+                        VehiculeRepository repository,
+                        String immatriculation,
+                        String affectation
+        ) {
+                repository.findByImmatriculationIgnoreCase(immatriculation).ifPresent(vehicule -> {
+                        String affectationActuelle = vehicule.getAffectation();
+                        if (affectationActuelle == null || affectationActuelle.isBlank()
+                                        || "GARAGE".equalsIgnoreCase(affectationActuelle.trim())) {
+                                vehicule.setAffectation(affectation);
+                                repository.save(vehicule);
+                        }
+                });
+        }
 
 
     // =========================================================

@@ -1,14 +1,10 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
+import dynamic from "next/dynamic";
+import type { GpsPosition } from "@/components/FlotteMap";
 
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+const FlotteMap = dynamic(() => import("@/components/FlotteMap"), {
+  ssr: false,
 });
 
 interface Vehicule {
@@ -16,6 +12,8 @@ interface Vehicule {
   immatriculation: string;
   modele?: string;
   statut: string;
+  gpsEquipe?: boolean | null;
+  gpsDeviceId?: number | null;
   latitude?: number;
   longitude?: number;
   dernierePositionLe?: string;
@@ -37,6 +35,7 @@ interface Mission {
   dateFin?: string | null;
   vehicule?: Vehicule;
   chauffeur?: Chauffeur;
+  positionGps?: GpsPosition | null;
 }
 
 const statutColor: Record<string, { bg: string; text: string }> = {
@@ -48,15 +47,32 @@ const statutColor: Record<string, { bg: string; text: string }> = {
 
 export default function MissionCard({
   mission,
-  onTerminer,
+  positionGps,
 }: {
   mission: Mission;
-  onTerminer?: (mission: any) => void;
+  positionGps?: GpsPosition | null;
 }) {
   const v = mission.vehicule;
   const c = mission.chauffeur;
   const enCours = !mission.dateFin;
-  const aPosition = v?.latitude != null && v?.longitude != null;
+  const gpsEquipe = Boolean(v?.gpsEquipe || v?.gpsDeviceId != null || positionGps);
+  const positionValide =
+    gpsEquipe &&
+    positionGps?.latitude != null &&
+    positionGps.longitude != null &&
+    Number.isFinite(Number(positionGps.latitude)) &&
+    Number.isFinite(Number(positionGps.longitude)) &&
+    !(Number(positionGps.latitude) === 0 && Number(positionGps.longitude) === 0);
+  const positionsCarte: GpsPosition[] = positionValide && v && positionGps
+    ? [{
+        ...positionGps,
+        vehiculeId: v.id,
+        gpsDeviceId: positionGps.gpsDeviceId || v.gpsDeviceId || v.id,
+        immatriculation: positionGps.immatriculation || v.immatriculation,
+        latitude: Number(positionGps.latitude),
+        longitude: Number(positionGps.longitude),
+      }]
+    : [];
 
   const colors = v ? statutColor[v.statut] || { bg: "#f3f4f6", text: "#4b5563" } : { bg: "#f3f4f6", text: "#4b5563" };
 
@@ -113,8 +129,8 @@ export default function MissionCard({
         </div>
 
         <div style={{ fontSize: 12, color: "#475569", marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-          <div><strong style={{ color: "#1e293b" }}>Début :</strong> {formatDate(mission.dateDebut)}</div>
-          <div><strong style={{ color: "#1e293b" }}>Date fin :</strong> {mission.dateFin ? formatDate(mission.dateFin) : <span style={{ color: "#2563eb", fontWeight: 600 }}>En cours d&apos;exécution</span>}</div>
+          <div><span style={{ color: "#1e293b" }}>Début :</span> {formatDate(mission.dateDebut)}</div>
+          <div><span style={{ color: "#1e293b" }}>Date fin :</span> {mission.dateFin ? formatDate(mission.dateFin) : <span style={{ color: "#2563eb", fontWeight: 600 }}>En cours d&apos;exécution</span>}</div>
         </div>
 
         <span
@@ -131,60 +147,15 @@ export default function MissionCard({
           {enCours ? "En cours" : "Terminée"}
         </span>
 
-        {enCours && onTerminer && (
-          <button
-            type="button"
-            onClick={() => onTerminer(mission)}
-            style={{
-              marginTop: "auto",
-              padding: "8px 12px",
-              backgroundColor: "#dc2626",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Clôturer la mission
-          </button>
-        )}
       </div>
 
       <div style={{ height: 220 }}>
-        {aPosition && v ? (
-          <MapContainer
-            center={[v.latitude as number, v.longitude as number]}
-            zoom={14}
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom={false}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <Marker position={[v.latitude as number, v.longitude as number]}>
-              <Popup>
-                <strong>{v.immatriculation}</strong>
-              </Popup>
-            </Marker>
-          </MapContainer>
-        ) : (
-          <div
-            style={{
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#9ca3af",
-              fontSize: 13,
-              backgroundColor: "#f9fafb",
-            }}
-          >
-            Aucune position GPS
-          </div>
-        )}
+        <FlotteMap
+          positions={positionsCarte}
+          height="100%"
+          showHeader={false}
+          emptyMessage="GPS indisponible"
+        />
       </div>
     </div>
   );

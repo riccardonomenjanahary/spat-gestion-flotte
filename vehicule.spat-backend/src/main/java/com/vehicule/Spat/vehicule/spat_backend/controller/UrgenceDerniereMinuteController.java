@@ -73,6 +73,10 @@ public class UrgenceDerniereMinuteController {
         if (d.zoneMission == null || !List.of("VILLE_TOAMASINA", "HORS_TOAMASINA").contains(d.zoneMission.trim())) {
             return ResponseEntity.badRequest().body("Choisissez la zone du nouveau trajet : VILLE_TOAMASINA ou HORS_TOAMASINA.");
         }
+        if ("VILLE_TOAMASINA".equals(d.zoneMission.trim())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Les missions dans Toamasina sont réservées à l'Assistant de direction.");
+        }
         if (!d.dateFin.isAfter(d.dateDebut) || d.dateDebut.isBefore(LocalDateTime.now().minusMinutes(2))) {
             return ResponseEntity.badRequest().body("La date de début doit être immédiate ou future ; la fin doit suivre le début.");
         }

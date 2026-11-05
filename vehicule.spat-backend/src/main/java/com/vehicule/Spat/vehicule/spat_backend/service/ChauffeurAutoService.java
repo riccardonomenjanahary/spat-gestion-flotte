@@ -108,6 +108,10 @@ public class ChauffeurAutoService {
                 .filter(
                         this::chauffeurEligibleOperationnellement
                 )
+                .filter(chauffeur -> dateDebut == null || dateFin == null
+                        || (chauffeur.getNumeroPermis() != null && !chauffeur.getNumeroPermis().isBlank()
+                        && chauffeur.getDateExpirationPermis() != null
+                        && !chauffeur.getDateExpirationPermis().isBefore(dateFin.toLocalDate())))
                 .filter(chauffeur -> {
 
                     /*
@@ -133,6 +137,26 @@ public class ChauffeurAutoService {
 
                     return !chevauchement;
                 })
+                .toList();
+    }
+
+    /**
+     * Liste utilisée par le Chef Logistique pour les missions hors ville :
+     * le choix est manuel et ne dépend d'aucune affectation véhicule/chauffeur.
+     */
+    public List<Chauffeur> trouverChauffeursDisponiblesManuellement(
+            LocalDateTime dateDebut, LocalDateTime dateFin, Long reservationAExclure) {
+        return chauffeurRepository.findAll().stream()
+                .filter(this::chauffeurEligibleOperationnellement)
+                .filter(chauffeur -> chauffeur.getNumeroPermis() != null
+                        && !chauffeur.getNumeroPermis().isBlank()
+                        && chauffeur.getDateExpirationPermis() != null
+                        && (dateFin == null || !chauffeur.getDateExpirationPermis().isBefore(dateFin.toLocalDate())))
+                .filter(chauffeur -> dateDebut == null || dateFin == null || !reservationRepository
+                        .existeChevauchementChauffeur(chauffeur.getId(), reservationAExclure, dateDebut, dateFin))
+                .sorted(Comparator.comparingInt(this::prioriteStatut)
+                        .thenComparing(chauffeur -> normaliser(chauffeur.getMatricule()))
+                        .thenComparing(chauffeur -> normaliser(chauffeur.getNom())))
                 .toList();
     }
 

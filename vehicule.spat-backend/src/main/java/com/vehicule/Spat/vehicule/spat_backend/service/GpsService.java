@@ -124,6 +124,13 @@ public class GpsService {
                         CookiePolicy.ACCEPT_ALL
                 );
 
+        // Le mode sans GPS doit pouvoir démarrer sans initialiser de client réseau.
+        if (!gpsEnabled) {
+            this.restClient = null;
+            this.authHttpClient = null;
+            return;
+        }
+
         this.restClient =
                 RestClient.builder()
                         .baseUrl(this.gpsBaseUrl)

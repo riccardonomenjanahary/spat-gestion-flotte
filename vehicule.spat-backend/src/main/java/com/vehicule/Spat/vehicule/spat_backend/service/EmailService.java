@@ -5,10 +5,14 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import jakarta.mail.internet.MimeMessage;
 
 import java.util.concurrent.CompletableFuture;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class EmailService {
@@ -62,6 +66,56 @@ public class EmailService {
     // ============================================================
     // EMAIL CREATION DE COMPTE
     // ============================================================
+
+    @Async("mailTaskExecutor")
+    public CompletableFuture<Boolean> envoyerCreationCompteInterim(
+            String destinataire,
+            String nomComplet,
+            String matricule,
+            String motDePasseTemporaire,
+            String fonction,
+            String direction
+    ) {
+
+        try {
+
+            SimpleMailMessage message =
+                    new SimpleMailMessage();
+
+            message.setFrom(expediteur);
+            message.setTo(destinataire);
+
+            message.setSubject(
+                    "Votre compte par intérim - Portail Flotte SPAT"
+            );
+
+            message.setText(
+                    "Bonjour " + nomComplet + ",\n\n"
+                            + "Un compte par intérim vous a été créé sur le portail de gestion de la flotte SPAT.\n\n"
+                            + "Fonction : " + fonction + "\n"
+                            + "Direction : " + direction + "\n\n"
+                            + "Matricule : " + matricule + "\n"
+                            + "Mot de passe temporaire : " + motDePasseTemporaire + "\n\n"
+                            + "Pour des raisons de sécurité, veuillez modifier ce mot de passe après votre première connexion.\n\n"
+                            + "Cordialement,\n"
+                            + "Administration du portail SPAT"
+            );
+
+            mailSender.send(message);
+
+            return CompletableFuture.completedFuture(true);
+
+        } catch (Exception e) {
+
+            afficherErreurEmail(
+                    "CREATION COMPTE INTERIM",
+                    destinataire,
+                    e
+            );
+
+            return CompletableFuture.completedFuture(false);
+        }
+    }
 
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> envoyerCreationCompte(
@@ -132,6 +186,55 @@ public class EmailService {
     // ============================================================
     // EMAIL REINITIALISATION MOT DE PASSE
     // ============================================================
+
+    public boolean envoyerMotDePasseTemporaireOublie(
+            String destinataire,
+            String nomComplet,
+            String matricule,
+            String motDePasseTemporaire
+    ) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(expediteur);
+            message.setTo(destinataire);
+            message.setSubject("Mot de passe temporaire - Portail Flotte SPAT");
+            message.setText(
+                    "Bonjour " + nomComplet + ",\n\n"
+                            + "Vous avez demandé un mot de passe temporaire pour votre compte SPAT.\n\n"
+                            + "Matricule : " + matricule + "\n"
+                            + "Mot de passe temporaire : " + motDePasseTemporaire + "\n\n"
+                            + "Ce mot de passe expire dans une heure. Utilisez-le dans le formulaire « Mot de passe oublié » pour choisir un nouveau mot de passe.\n"
+                            + "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\n"
+                            + "Cordialement,\nAdministration du portail SPAT"
+            );
+            mailSender.send(message);
+            return true;
+        } catch (Exception e) {
+            afficherErreurEmail("MOT DE PASSE TEMPORAIRE OUBLIE", destinataire, e);
+            return false;
+        }
+    }
+
+    public boolean envoyerOrdreMission(String destinataire, String nomDemandeur, Long reservationId,
+                                       byte[] pdf, String nomFichier) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(expediteur);
+            helper.setTo(destinataire);
+            helper.setSubject("Ordre de mission à signer — OM-" + String.format("%08d", reservationId));
+            helper.setText("Bonjour " + (nomDemandeur == null ? "" : nomDemandeur) + ",\n\n"
+                    + "Veuillez trouver en pièce jointe votre ordre de mission.\n"
+                    + "Merci de l'imprimer, le signer manuellement, puis de le transmettre au Service Logistique.\n\n"
+                    + "Cordialement,\nPortail Flotte SPAT");
+            helper.addAttachment(nomFichier, new ByteArrayResource(pdf), "application/pdf");
+            mailSender.send(mime);
+            return true;
+        } catch (Exception e) {
+            afficherErreurEmail("ORDRE DE MISSION", destinataire, e);
+            return false;
+        }
+    }
 
     @Async("mailTaskExecutor")
     public CompletableFuture<Boolean> envoyerReinitialisationMotDePasse(

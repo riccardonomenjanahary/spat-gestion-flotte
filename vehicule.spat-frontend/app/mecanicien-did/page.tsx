@@ -11,8 +11,12 @@ import {
 
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import SignalementsIncidentsWorkflow from "@/components/SignalementsIncidentsWorkflow";
+import IncidentSignalementButton from "@/components/IncidentSignalementButton";
 import { ROLES } from "@/app/lib/roles";
 import { toast } from "sonner";
+import { ajouterEnteteSpatPdf } from "@/app/lib/pdfBranding";
+import FicheControleVehicule, { FicheControleData } from "@/components/FicheControleVehicule";
 
 import {
   CheckCircle2,
@@ -22,17 +26,11 @@ import {
   Download,
   Eye,
   PlusCircle,
-  RefreshCw,
   Search,
-  Send,
   Wrench,
   X,
-  XCircle,
+  FileText,
 } from "lucide-react";
-
-// =========================================================
-// TYPES
-// =========================================================
 
 interface Vehicule {
   id: number;
@@ -64,7 +62,14 @@ interface Maintenance {
     nombrePassagers?: number | null;
     listePassagers?: string | null;
     observations?: string | null;
+    zoneMission?: string | null;
     statut?: string | null;
+    chauffeur?: {
+      id?: number | null;
+      nom?: string | null;
+      prenom?: string | null;
+      matricule?: string | null;
+    } | null;
     demandeurNom?: string | null;
     demandeurPrenom?: string | null;
     demandeurMatricule?: string | null;
@@ -92,7 +97,6 @@ interface Maintenance {
   observationsMecanicien?: string | null;
   piecesNecessaires?: string | null;
 
-  // Compatibilité avec les deux variantes actuellement rencontrées.
   decisionDID?: string | null;
   decisiondid?: string | null;
 
@@ -111,6 +115,18 @@ interface Maintenance {
 
   dateCreation?: string | null;
   dateCloture?: string | null;
+
+  ficheControle?: string | null;
+}
+
+interface NotificationInspection {
+  id: number;
+  type?: string | null;
+  titre?: string | null;
+  message?: string | null;
+  reservationId?: number | null;
+  vehiculeId?: number | null;
+  lu?: boolean | null;
 }
 
 interface AvisEnCours {
@@ -122,31 +138,20 @@ interface AvisEnCours {
 
 type OngletMecanicien =
   | "AVIS"
-  | "ENTRETIENS";
-
-// =========================================================
-// API
-// =========================================================
+  | "ENTRETIENS"
+  | "INCIDENTS"
+  | "FICHE_CONTROLE";
 
 const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080/api";
-
-// =========================================================
-// PAGE
-// =========================================================
+  process.env.NEXT_PUBLIC_API_URL || "";
 
 export default function MecanicienDidPage() {
   return (
-    <RoleGuard role={ROLES.MECANICIEN_DID}>
+    <RoleGuard roles={[ROLES.MECANICIEN_DID, ROLES.CHEF_ATELIER]}>
       <MecanicienDidContent />
     </RoleGuard>
   );
 }
-
-// =========================================================
-// CONTENU
-// =========================================================
 
 function MecanicienDidContent() {
   const [onglet, setOnglet] =
@@ -163,9 +168,7 @@ function MecanicienDidContent() {
 
   const [chargement, setChargement] =
     useState(true);
-
-  const [actualisation, setActualisation] =
-    useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   const [avisEnCours, setAvisEnCours] =
     useState<Record<string, AvisEnCours>>({});
@@ -173,15 +176,12 @@ function MecanicienDidContent() {
   const [envoiEnCours, setEnvoiEnCours] =
     useState<string | null>(null);
 
-  // =========================================================
-  // CREATION ENTRETIEN
-  // =========================================================
-
   const [entVehiculeId, setEntVehiculeId] =
     useState("");
 
   const [entNature, setEntNature] =
     useState("");
+  const [formEntretienOuvert, setFormEntretienOuvert] = useState(false);
 
   const [envoiEntretien, setEnvoiEntretien] =
     useState(false);
@@ -189,9 +189,10 @@ function MecanicienDidContent() {
   const [comptesRendus, setComptesRendus] = useState<Record<string, string>>({});
   const [terminerEnCours, setTerminerEnCours] = useState<string | null>(null);
 
-  // =========================================================
-  // FILTRES / DETAIL
-  // =========================================================
+  const [ficheControleMaintenanceId, setFicheControleMaintenanceId] = useState<string | null>(null);
+  const [ficheControleData, setFicheControleData] = useState<FicheControleData | null>(null);
+  const [ficheControleEstArrivee, setFicheControleEstArrivee] = useState(false);
+  const [enregistrementFicheEnCours, setEnregistrementFicheEnCours] = useState(false);
 
   const [entRecherche, setEntRecherche] =
     useState("");
@@ -210,10 +211,42 @@ function MecanicienDidContent() {
 
   const [filtreTickets, setFiltreTickets] =
     useState<"A_TRAITER" | "TRANSMIS">("A_TRAITER");
+  const [inspectionPopup, setInspectionPopup] = useState<NotificationInspection | null>(null);
 
-  // =========================================================
-  // TOKEN
-  // =========================================================
+  const separerDateHeure = (valeur?: string | null): { date: string; heure: string } => {
+    const brut = String(valeur ?? "").trim();
+    if (!brut) return { date: "", heure: "" };
+    const avecHeure = brut.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+    if (avecHeure) return { date: avecHeure[1], heure: avecHeure[2] };
+    const dateSeule = brut.match(/^(\d{4}-\d{2}-\d{2})/);
+    return { date: dateSeule ? dateSeule[1] : "", heure: "" };
+  };
+
+  const preremplirFicheMission = (maintenance: Maintenance): FicheControleData => {
+    const mission = maintenance.reservation;
+    const chauffeur = mission?.chauffeur;
+    const depart = separerDateHeure(mission?.dateDebut);
+    const arrivee = separerDateHeure(mission?.dateFin);
+    return {
+      vehiculeId: maintenance.vehicule?.id != null ? String(maintenance.vehicule.id) : "",
+      chauffeurId: chauffeur?.id != null ? String(chauffeur.id) : "",
+      chauffeurNom: [chauffeur?.nom, chauffeur?.prenom].filter(Boolean).join(" "),
+      verificateur: "",
+      dateDepart: depart.date,
+      heureDepart: depart.heure,
+      dateArrivee: arrivee.date,
+      heureArrivee: arrivee.heure,
+      destination: mission?.destination || "",
+      autres: "",
+      exterieur: { items: {} },
+      equipementSecurite: { items: {} },
+      operationMoteur: { items: {} },
+      niveauFluides: { items: {} },
+      TrainAvantArriere: { items: {} },
+      eclairageElectrique: { items: {} },
+      circuitClimatisation: { items: {} },
+    };
+  };
 
   const getToken = () => {
     if (typeof window === "undefined") {
@@ -222,10 +255,6 @@ function MecanicienDidContent() {
 
     return localStorage.getItem("token");
   };
-
-  // =========================================================
-  // FETCH GENERIQUE
-  // =========================================================
 
   const fetchListe = useCallback(
     async <T,>(
@@ -254,20 +283,24 @@ function MecanicienDidContent() {
       const data: unknown =
         await res.json();
 
-      return Array.isArray(data)
-        ? (data as T[])
-        : [];
+      if (!Array.isArray(data)) throw new Error(`Format de réponse invalide : ${url}`);
+      return data as T[];
     },
     []
   );
 
-  // =========================================================
-  // CHARGEMENT COMPLET
-  // =========================================================
-
   const charger = useCallback(
     async (silencieux = false) => {
       const token = getToken();
+
+      if (!API) {
+        setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
+        setDossiers([]);
+        setDossiersEnAttente([]);
+        setVehicules([]);
+        setChargement(false);
+        return;
+      }
 
       if (!token) {
         toast.error(
@@ -276,11 +309,8 @@ function MecanicienDidContent() {
         return;
       }
 
-      if (!silencieux) {
-        setChargement(true);
-      } else {
-        setActualisation(true);
-      }
+      if (!silencieux) setChargement(true);
+      setErreurChargement(null);
 
       try {
         const [
@@ -320,6 +350,10 @@ function MecanicienDidContent() {
           "Erreur chargement entretiens DID :",
           error
         );
+        setDossiers([]);
+        setDossiersEnAttente([]);
+        setVehicules([]);
+        setErreurChargement(error instanceof Error ? error.message : "Dossiers d’entretien indisponibles.");
 
         if (!silencieux) {
           toast.error(
@@ -330,23 +364,14 @@ function MecanicienDidContent() {
         }
       } finally {
         setChargement(false);
-        setActualisation(false);
       }
     },
     [fetchListe]
   );
 
-  // =========================================================
-  // PREMIER CHARGEMENT
-  // =========================================================
-
   useEffect(() => {
     charger(false);
   }, [charger]);
-
-  // =========================================================
-  // ACTUALISATION AUTOMATIQUE
-  // =========================================================
 
   useEffect(() => {
     const interval =
@@ -361,9 +386,110 @@ function MecanicienDidContent() {
     };
   }, [charger]);
 
-  // =========================================================
-  // AVIS EN COURS
-  // =========================================================
+  useEffect(() => {
+    if (!API) return;
+    let actif = true;
+    let enCours = false;
+    const lireDemandesInspection = async () => {
+      if (enCours) return;
+      const token = getToken();
+      if (!token) return;
+      enCours = true;
+      try {
+        const response = await fetch(`${API}/notifications/me?nonLuesUniquement=true`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data: unknown = await response.json();
+        if (!actif || !Array.isArray(data)) return;
+        const demande = (data as NotificationInspection[]).find((notification) => {
+          if (String(notification.type || "").toUpperCase() !== "AVIS_DID" || notification.reservationId == null || notification.lu) return false;
+          return true;
+        });
+        if (demande) setInspectionPopup((ancienne) => ancienne || demande);
+      } catch {
+
+      } finally {
+        enCours = false;
+      }
+    };
+    void lireDemandesInspection();
+    const interval = window.setInterval(() => { void lireDemandesInspection(); }, 8000);
+    return () => { actif = false; window.clearInterval(interval); };
+  }, [API, dossiers]);
+
+  const ouvrirFicheControleDossier = (maintenance: Maintenance) => {
+    setFicheControleMaintenanceId(String(maintenance.id));
+    const estArrivee = String(maintenance.natureIntervention || "").toLowerCase().includes("après mission");
+    setFicheControleEstArrivee(estArrivee);
+    const prefill = preremplirFicheMission(maintenance);
+    let ficheJson = maintenance.ficheControle;
+    if (!ficheJson && estArrivee) {
+      const precedent = dossiers.find((m) =>
+        String(m.id) !== String(maintenance.id) &&
+        Number(m.reservationId ?? m.reservation?.id) === Number(maintenance.reservationId ?? maintenance.reservation?.id) &&
+        m.ficheControle
+      );
+      if (precedent?.ficheControle) {
+        ficheJson = precedent.ficheControle;
+      }
+    }
+    if (ficheJson) {
+      try {
+        setFicheControleData({ ...prefill, ...(JSON.parse(ficheJson) as FicheControleData) });
+      } catch {
+        setFicheControleData(prefill);
+      }
+    } else {
+      setFicheControleData(prefill);
+    }
+    setOnglet("FICHE_CONTROLE");
+  };
+
+  const ouvrirFicheDepuisInspection = async () => {
+    const notification = inspectionPopup;
+    if (!notification) return;
+    const token = getToken();
+    if (token && API) {
+      await fetch(`${API}/notifications/${notification.id}/lu`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      }).catch(() => undefined);
+    }
+    const estArrivee = String(notification.message || "").toLowerCase().includes("arrivée");
+    let listeDossiers = dossiers;
+    let correspondants = listeDossiers.filter((maintenance) =>
+      Number(maintenance.reservationId ?? maintenance.reservation?.id) === Number(notification.reservationId)
+      && (notification.vehiculeId == null || Number(maintenance.vehicule?.id) === Number(notification.vehiculeId))
+    );
+    let dossier = estArrivee
+      ? (correspondants.find((m) => String(m.natureIntervention || "").toLowerCase().includes("après mission")))
+      : (correspondants.find((m) => !String(m.natureIntervention || "").toLowerCase().includes("après mission")) || correspondants[0]);
+
+    if (!dossier) {
+      await charger(true);
+      if (token && API) {
+        listeDossiers = await fetchListe<Maintenance>(`${API}/maintenances`, token);
+        setDossiers(listeDossiers);
+        correspondants = listeDossiers.filter((maintenance) =>
+          Number(maintenance.reservationId ?? maintenance.reservation?.id) === Number(notification.reservationId)
+          && (notification.vehiculeId == null || Number(maintenance.vehicule?.id) === Number(notification.vehiculeId))
+        );
+        dossier = estArrivee
+          ? (correspondants.find((m) => String(m.natureIntervention || "").toLowerCase().includes("après mission")) || correspondants[0])
+          : (correspondants.find((m) => !String(m.natureIntervention || "").toLowerCase().includes("après mission")) || correspondants[0]);
+      }
+    }
+
+    if (!dossier) {
+      toast.error("Le dossier d'inspection n'est pas encore disponible.");
+      setInspectionPopup(null);
+      return;
+    }
+    ouvrirFicheControleDossier(dossier);
+    setInspectionPopup(null);
+  };
 
   const obtenirAvis = (
     id: string
@@ -402,10 +528,6 @@ function MecanicienDidContent() {
       })
     );
   };
-
-  // =========================================================
-  // SOUMISSION AVIS DID
-  // =========================================================
 
   const soumettreAvis = async (
     maintenance: Maintenance
@@ -565,10 +687,6 @@ function MecanicienDidContent() {
     }
   };
 
-  // =========================================================
-  // CREATION D'UN ENTRETIEN AUTONOME
-  // =========================================================
-
   const soumettreEntretien = async (
     e: React.FormEvent
   ) => {
@@ -644,6 +762,7 @@ function MecanicienDidContent() {
 
       setEntVehiculeId("");
       setEntNature("");
+      setFormEntretienOuvert(false);
 
       await charger(true);
     } catch (error) {
@@ -688,15 +807,147 @@ function MecanicienDidContent() {
     }
   };
 
+  const sauvegarderFicheControle = async () => {
+    if (!ficheControleMaintenanceId || !ficheControleData) {
+      toast.error("Aucune fiche de contrôle à enregistrer.");
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      toast.error("Session expirée. Veuillez vous reconnecter.");
+      return;
+    }
+
+    setEnregistrementFicheEnCours(true);
+
+    try {
+      const res = await fetch(
+        `${API}/maintenances/${ficheControleMaintenanceId}/fiche-controle`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            ficheControle: JSON.stringify(ficheControleData),
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const message = await res.text().catch(() => "");
+        throw new Error(message || `Erreur HTTP ${res.status}`);
+      }
+
+      toast.success("Fiche de contrôle enregistrée avec succès.");
+      await charger(true);
+    } catch (error) {
+      console.error("Erreur enregistrement fiche de contrôle :", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'enregistrer la fiche de contrôle."
+      );
+    } finally {
+      setEnregistrementFicheEnCours(false);
+    }
+  };
+
+  const transmettreAvisMission = async () => {
+    if (!ficheControleMaintenanceId || !ficheControleData) {
+      toast.error("Remplissez la fiche de contrôle avant de transmettre l'avis.");
+      return;
+    }
+    const token = getToken();
+    if (!token) {
+      toast.error("Session expirée. Veuillez vous reconnecter.");
+      return;
+    }
+    setEnregistrementFicheEnCours(true);
+    try {
+      const res = await fetch(`${API}/maintenances/${ficheControleMaintenanceId}/${ficheControleEstArrivee ? "controle-apres-mission" : "controle-avant-mission"}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: JSON.stringify({ ficheControle: JSON.stringify(ficheControleData) }),
+      });
+      if (!res.ok) throw new Error(await res.text() || `Erreur HTTP ${res.status}`);
+      toast.success(ficheControleEstArrivee
+        ? "Avis après mission transmis au Chef du Service Logistique."
+        : "Contrôle avant mission transmis au Chef du Service Logistique.");
+      await charger(true);
+      setOnglet("AVIS");
+      setFicheControleMaintenanceId(null);
+      setFicheControleData(null);
+      setFicheControleEstArrivee(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : (ficheControleEstArrivee ? "Impossible de transmettre l'avis après mission." : "Impossible de transmettre le contrôle avant mission."));
+    } finally {
+      setEnregistrementFicheEnCours(false);
+    }
+  };
+
+  const genererFicheControlePdf = async (
+    maintenance: Maintenance | undefined,
+    donnees: FicheControleData,
+    estArrivee: boolean,
+    reference: string
+  ) => {
+    const { jsPDF } = await import("jspdf");
+    const documentPdf = new jsPDF({ unit: "mm", format: "a4" });
+    const debutEntete = await ajouterEnteteSpatPdf(documentPdf, "FICHE DE CONTROLE VEHICULE EN MISSION");
+    const mission = maintenance?.reservation;
+    const depart = [donnees.dateDepart, donnees.heureDepart].filter(Boolean).join(" ");
+    const arrivee = [donnees.dateArrivee, donnees.heureArrivee].filter(Boolean).join(" ");
+    const lignes = [
+      "FICHE DE CONTROLE VEHICULE EN MISSION",
+      `Véhicule : ${maintenance?.vehicule?.immatriculation || donnees.vehiculeId || "—"}`,
+      `Chauffeur : ${donnees.chauffeurNom || "—"}`,
+      `Date et heure de départ : ${depart || mission?.dateDebut || "—"}`,
+      `Date et heure de retour : ${arrivee || mission?.dateFin || "—"}`,
+      `Destination : ${donnees.destination || mission?.destination || "—"}`,
+      `Motif : ${mission?.motif || "—"}`,
+      `Type de contrôle : ${estArrivee ? "Après mission — arrivée" : "Avant mission — départ"}`,
+      "",
+      "Observations :",
+      donnees.autres || "—",
+    ];
+    documentPdf.setFontSize(10);
+    let y = debutEntete;
+    for (const ligne of lignes.slice(1)) {
+      const morceaux = documentPdf.splitTextToSize(ligne, 175);
+      documentPdf.text(morceaux, 18, y);
+      y += 6 * morceaux.length + 2;
+      if (y > 275) { documentPdf.addPage(); y = 18; }
+    }
+    documentPdf.setFontSize(9);
+    documentPdf.text("Fiche générée depuis le portail GPA SPAT", 18, 285);
+    documentPdf.save(`fiche-controle-${maintenance?.vehicule?.immatriculation || reference}.pdf`);
+  };
+
+  const telechargerFicheControle = async () => {
+    if (!ficheControleMaintenanceId || !ficheControleData) {
+      toast.error("Ouvrez et préremplissez d'abord une fiche de contrôle.");
+      return;
+    }
+    const maintenance = dossiers.find((dossier) => String(dossier.id) === ficheControleMaintenanceId);
+    try {
+      await genererFicheControlePdf(maintenance, ficheControleData, ficheControleEstArrivee, ficheControleMaintenanceId);
+      toast.success("Fiche de contrôle téléchargée.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de télécharger la fiche de contrôle.");
+    }
+  };
+
   const demandesEntretien = dossiers
     .filter(m => m.origineDemande === "MECANICIEN_DID" ||
+      (m.natureIntervention?.startsWith("[PERIODIQUE_5000]") &&
+        ["ENTRETIEN_AUTORISE", "ENTRETIEN_TERMINE", "CLOTUREE"].includes(m.statut)) ||
       (m.origineDemande === "CHAUFFEUR" &&
        (m.statut === "ENTRETIEN_AUTORISE" || m.statut === "ENTRETIEN_TERMINE")))
     .sort((a,b) => String(b.dateCreation ?? "").localeCompare(String(a.dateCreation ?? "")));
-
-  // =========================================================
-  // FILTRES
-  // =========================================================
 
   const maintenancesFiltrees =
     useMemo(() => {
@@ -708,7 +959,7 @@ function MecanicienDidContent() {
       return dossiers
         .filter((m) => (m.reservationId ?? m.reservation?.id) == null)
         .filter((m) => {
-          if (m.origineDemande) return false; // affiché dans la rubrique dédiée ci-dessous
+          if (m.origineDemande) return false;
           const statut =
             String(
               m.statut || ""
@@ -811,12 +1062,10 @@ function MecanicienDidContent() {
       entFiltreVehicule,
     ]);
 
-  // Un ticket peut posséder plusieurs contrôles successifs, mais ne doit
-  // apparaître qu'une fois dans la liste. Le plus récent détermine son état.
   const ticketsDid = useMemo(() => {
     const groupes = new Map<number, Maintenance[]>();
     dossiers.forEach((m) => {
-      if (m.origineDemande) return; // Demandes d'entretien != contrôles DID avant ticket
+      if (m.origineDemande) return;
       const ticketId = m.reservationId ?? m.reservation?.id;
       if (ticketId == null) return;
       const anciens = groupes.get(ticketId) ?? [];
@@ -862,10 +1111,6 @@ function MecanicienDidContent() {
         entDossierOuvert,
       ]
     );
-
-  // =========================================================
-  // EXPORT CSV
-  // =========================================================
 
   const exporterEntretiens =
     () => {
@@ -1025,10 +1270,6 @@ function MecanicienDidContent() {
       );
     };
 
-  // =========================================================
-  // CHARGEMENT
-  // =========================================================
-
   if (chargement) {
     return (
       <div
@@ -1058,9 +1299,11 @@ function MecanicienDidContent() {
     );
   }
 
-  // =========================================================
-  // RENDU
-  // =========================================================
+  const inspectionVehicule = inspectionPopup?.vehiculeId == null
+    ? null
+    : dossiers.find((maintenance) => Number(maintenance.vehicule?.id) === Number(inspectionPopup.vehiculeId))?.vehicule
+      || vehicules.find((vehicule) => Number(vehicule.id) === Number(inspectionPopup.vehiculeId));
+  const inspectionVehiculeLibelle = inspectionVehicule?.immatriculation || (inspectionPopup?.vehiculeId ? `Véhicule n°${inspectionPopup.vehiculeId}` : "Une voiture");
 
   return (
     <div
@@ -1073,6 +1316,27 @@ function MecanicienDidContent() {
       }}
     >
       <EnTete/>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 24px 0" }}><IncidentSignalementButton role={ROLES.MECANICIEN_DID} /></div>
+      {erreurChargement && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Les données d’entretien ne sont pas synchronisées : {erreurChargement}.</div>}
+
+      {inspectionPopup && (
+        <div role="dialog" aria-modal="true" aria-labelledby="inspection-visuelle-title" style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 1200, width: "min(620px, calc(100vw - 32px))", padding: 20, borderRadius: 14, background: "#ffffff", border: "2px solid #f59e0b", boxShadow: "0 18px 45px rgba(15,23,42,.25)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
+            <div>
+              <h2 id="inspection-visuelle-title" style={{ margin: 0, color: "#92400e", fontSize: 18 }}>{String(inspectionPopup.message || "").toLowerCase().includes("arrivée") ? "Inspection visuelle d'arrivée demandée" : "Inspection visuelle demandée"}</h2>
+              <p style={{ margin: "10px 0 0", color: "#1f2937", lineHeight: 1.5 }}>
+                <strong>{inspectionVehiculeLibelle}</strong> demande une inspection visuelle {String(inspectionPopup.message || "").toLowerCase().includes("arrivée") ? "d'arrivée" : "avant mission"}.
+              </p>
+              <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>{inspectionPopup.message || "Consultez la fiche avant de transmettre l'avis DID."}</p>
+            </div>
+            <button type="button" onClick={() => setInspectionPopup(null)} aria-label="Fermer" style={{ border: 0, background: "transparent", color: "#64748b", cursor: "pointer" }}><X size={19} /></button>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+            <button type="button" onClick={() => setInspectionPopup(null)} className="btn-spat btn-neutre">Plus tard</button>
+            <button type="button" onClick={() => void ouvrirFicheDepuisInspection()} className="btn-spat btn-orange"><ClipboardCheck size={16} /> Fiche de contrôle</button>
+          </div>
+        </div>
+      )}
 
       <main
         style={{
@@ -1087,10 +1351,11 @@ function MecanicienDidContent() {
         >
           <h1 style={{margin: "0 0 16px", color: "#111827", fontSize: 22}}>
             {onglet === "ENTRETIENS" ? "Dossiers d'entretien"
+              : onglet === "INCIDENTS" ? "Réparations d'incidents"
+              : onglet === "FICHE_CONTROLE" ? "Fiche de contrôle véhicule"
               : filtreTickets === "TRANSMIS" ? "Avis DID transmis" : "Tickets à contrôler"}
           </h1>
 
-          {/* Indicateurs synthétiques dans le style blanc de l'espace Logistique. */}
           <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(205px, 1fr))",
             gap: 14, marginBottom: 22}}>
             {[
@@ -1110,7 +1375,6 @@ function MecanicienDidContent() {
             ))}
           </div>
 
-          {/* Trois vues distinctes et toujours accessibles. */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             flexWrap: "wrap", gap: 12, marginBottom: 22, padding: 12,
@@ -1133,13 +1397,13 @@ function MecanicienDidContent() {
                 icon={<Wrench size={16} />}>
                 Dossiers d'entretien
               </OngletButton>
+              <OngletButton couleur="BLEU" actif={onglet === "INCIDENTS"}
+                onClick={() => {setOnglet("INCIDENTS"); setTicketOuvertId(null);}}
+                icon={<Wrench size={16} />}>
+                Réparations d'incidents
+              </OngletButton>
             </nav>
 
-            <button type="button" onClick={() => charger(false)}
-              disabled={actualisation}
-              style={{...boutonSecondaire, height: 40, boxSizing: "border-box", whiteSpace: "nowrap"}}>
-              <RefreshCw size={15} /> Actualiser
-            </button>
           </div>
 
           {onglet === "AVIS" && (
@@ -1159,10 +1423,7 @@ function MecanicienDidContent() {
                       aTraiter={aTraiter}
                       ouvert={ticketOuvertId === ticketId}
                       onBasculer={() => setTicketOuvertId((id) => id === ticketId ? null : ticketId)}
-                      avis={obtenirAvis(actuel.id)}
-                      envoi={envoiEnCours === actuel.id}
-                      onModifier={(champ, valeur) => modifierAvis(actuel.id, champ, valeur)}
-                      onSoumettre={() => soumettreAvis(actuel)}
+                      onOuvrirFicheControle={() => ouvrirFicheControleDossier(actuel)}
                     />
                   ))}
                 </div>
@@ -1170,9 +1431,7 @@ function MecanicienDidContent() {
             </section>
           )}
 
-          {/* =============================================== */}
-          {/* ONGLET ENTRETIENS */}
-          {/* =============================================== */}
+          {onglet === "INCIDENTS" && <SignalementsIncidentsWorkflow mode="MECANICIEN" />}
 
           {onglet ===
             "ENTRETIENS" && (
@@ -1189,15 +1448,15 @@ function MecanicienDidContent() {
                           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap: 12}}>
                             <div style={{display:"grid", gap: 4, color:"#111827"}}>
                               <strong>{idTicket != null ? `TKT-${String(idTicket).padStart(5,"0")}` : `Entretien — ${m.vehicule?.immatriculation ?? "—"}`}</strong>
-                              
-                              <span>État : {m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN" ? "En attente du chef" : m.statut === "ENTRETIEN_AUTORISE" ? "Entretien autorisé" : m.statut === "ENTRETIEN_TERMINE" ? "Entretien terminé" : m.statut === "REFUSEE" ? "Demande refusée" : m.statut}</span>
+
+                              <span>Statut : {m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN" || m.statut === "ENTRETIEN_AUTORISE" ? "En cours" : ["ENTRETIEN_TERMINE", "CLOTUREE"].includes(m.statut) ? "Terminé" : ["REFUSEE", "ENTRETIEN_ANNULE"].includes(m.statut) ? "Annulé" : m.statut}</span>
                             </div>
-                            <button type="button" style={{...boutonSecondaire, backgroundColor:"#2563eb", color:"white", border:"none"}}
+                            <button type="button" className="btn-spat btn-jaune"
                               onClick={() => setEntretienOuvert(ouvert ? null : m.id)}>{ouvert ? "Fermer" : "Détails"}</button>
                           </div>
                           {ouvert && <div style={{marginTop: 12, display: "grid", gap: 10, color: "#111827"}}>
                             <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap: 8}}>
-                              {[["Provenance", m.origineDemande === "CHAUFFEUR" ? "Chauffeur" : "Mécanicien DID"], ["Demandeur",m.demandeurEntretien ?? "—"], ["Ticket",idTicket != null ? `TKT-${String(idTicket).padStart(5,"0")}` : "Sans ticket"], ["Véhicule", m.vehicule?.immatriculation ?? "—"]].map(([label,value]) => <div key={label} style={{border:"1px solid #e5e7eb", borderRadius: 7, padding: 9}}><div style={{fontSize: 11, color: "#475569"}}>{label}</div><strong>{value}</strong></div>)}
+                              {[["Provenance", m.origineDemande === "CHAUFFEUR" ? "Chauffeur" : "Mécanicien DID"], ["Demandeur",m.demandeurEntretien ?? "—"], ["Ticket",idTicket != null ? `TKT-${String(idTicket).padStart(5,"0")}` : "Sans ticket"], ["Véhicule", m.vehicule?.immatriculation ?? "—"], ["Date de la demande", m.dateCreation ? formaterDate(m.dateCreation) : "—"], ["Date de clôture", m.dateCloture ? formaterDate(m.dateCloture) : "—"]].map(([label,value]) => <div key={label} style={{border:"1px solid #e5e7eb", borderRadius: 7, padding: 9}}><div style={{fontSize: 11, color: "#475569"}}>{label}</div><strong>{value}</strong></div>)}
                             </div>
                             <div style={{whiteSpace:"pre-wrap", border:"1px solid #e5e7eb", padding: 10, borderRadius: 7}}><strong>Travaux demandés</strong><div>{travauxDemandesLisibles(m.natureIntervention)}</div></div>
                             {m.motifRefusEntretien && <div>Motif du refus : {m.motifRefusEntretien}</div>}
@@ -1218,10 +1477,6 @@ function MecanicienDidContent() {
               </Card>
               <div style={{height: 14}} />
 
-              {/* =========================================== */}
-              {/* NOUVEL ENTRETIEN */}
-              {/* =========================================== */}
-
               <div
                 style={{
                   width: "100%",
@@ -1238,12 +1493,16 @@ function MecanicienDidContent() {
                       />
                     }
                   >
-                    Nouvelle demande d’entretien
+                    Dossier d’entretien
                   </CardTitre>
 
-                 
+                  <button type="button" className={`btn-spat ${formEntretienOuvert ? "btn-neutre" : "btn-rouge"}`}
+                    aria-expanded={formEntretienOuvert}
+                    onClick={() => setFormEntretienOuvert((ouvert) => !ouvert)}>
+                    {formEntretienOuvert ? "Fermer le formulaire" : "Nouvelle demande d’entretien"}
+                  </button>
 
-                  <form
+                  {formEntretienOuvert && <form
                     onSubmit={
                       soumettreEntretien
                     }
@@ -1285,10 +1544,11 @@ function MecanicienDidContent() {
                               value={
                                 v.id
                               }
+                              disabled={vehiculeEstIndisponible(v)}
                             >
                               {libelleVehicule(
                                 v
-                              )}
+                              )}{vehiculeEstIndisponible(v) ? ` · ${v.statut || "Indisponible"}` : ""}
                             </option>
                           )
                         )}
@@ -1319,9 +1579,8 @@ function MecanicienDidContent() {
                       />
                     </Champ>
 
-                   
-
                     <ActionButton
+                      className="btn-spat btn-rouge"
                       disabled={
                         envoiEntretien
                       }
@@ -1334,13 +1593,9 @@ function MecanicienDidContent() {
                         ? "Création..."
                         : "Envoyer la demande au chef"}
                     </ActionButton>
-                  </form>
+                  </form>}
                 </Card>
               </div>
-
-              {/* =========================================== */}
-              {/* DOSSIERS */}
-              {/* =========================================== */}
 
               <Card>
                 <div
@@ -1374,9 +1629,7 @@ function MecanicienDidContent() {
                     onClick={
                       exporterEntretiens
                     }
-                    style={
-                      boutonSecondaire
-                    }
+                    className="btn-spat btn-orange"
                   >
                     <Download
                       size={15}
@@ -1503,7 +1756,6 @@ function MecanicienDidContent() {
                       )
                     )}
                   </select>
-
 
                 </div>
 
@@ -1810,16 +2062,104 @@ function MecanicienDidContent() {
             </section>
           )}
 
+          {onglet === "FICHE_CONTROLE" && (
+            <section>
+              <Card>
+                <CardTitre icon={<FileText size={18}/>}>Fiche de contrôle véhicule</CardTitre>
+                <div style={{display: "grid", gap: 12, marginBottom: 16}}>
+                  <Champ label="Sélectionner un dossier d'entretien / contrôle">
+                    <select
+                      value={ficheControleMaintenanceId || ""}
+                      onChange={(e) => {
+                        const id = e.target.value || null;
+                        setFicheControleMaintenanceId(id);
+                        if (id) {
+                          const maintenance = dossiers.find(m => String(m.id) === id);
+                          setFicheControleEstArrivee(String(maintenance?.natureIntervention || "").toLowerCase().includes("après mission"));
+                          if (maintenance?.ficheControle) {
+                            try {
+                              const parsed = JSON.parse(maintenance.ficheControle);
+                              setFicheControleData({ ...preremplirFicheMission(maintenance), ...parsed });
+                            } catch {
+                              setFicheControleData(preremplirFicheMission(maintenance));
+                            }
+                          } else {
+                            setFicheControleData(maintenance ? preremplirFicheMission(maintenance) : null);
+                          }
+                        } else {
+                          setFicheControleData(null);
+                          setFicheControleEstArrivee(false);
+                        }
+                      }}
+                      style={inputStyle}
+                    >
+                      <option value="">Sélectionner un dossier...</option>
+                      {dossiers.filter(m => m.reservationId || m.reservation?.id).map(m => (
+                        <option key={m.id} value={String(m.id)}>
+                          {m.vehicule?.immatriculation || "—"} - {formaterDate(m.dateCreation)}
+                        </option>
+                      ))}
+                    </select>
+                  </Champ>
+                </div>
+
+                {ficheControleMaintenanceId && (
+                  <div style={{display: "grid", gap: 16}}>
+                    {!ficheControleData ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const maintenance = dossiers.find(m => String(m.id) === ficheControleMaintenanceId);
+                          if (maintenance) {
+                            setFicheControleData(preremplirFicheMission(maintenance));
+                          }
+                        }}
+                        className="btn-spat btn-vert"
+                        style={{width: "fit-content"}}
+                      >
+                        <PlusCircle size={15} /> Créer une nouvelle fiche de contrôle
+                      </button>
+                    ) : (
+                      <>
+                        <FicheControleVehicule
+                          depart={!ficheControleEstArrivee}
+                          arrive={ficheControleEstArrivee}
+                          disabled={false}
+                          initialData={ficheControleData}
+                          onChange={setFicheControleData}
+                        />
+                        <div style={{display: "flex", gap: 12, justifyContent: "flex-end"}}>
+                          <button
+                            type="button"
+                            onClick={() => setFicheControleData(null)}
+                            className="btn-spat btn-neutre"
+                            style={{width: "fit-content"}}
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void transmettreAvisMission()}
+                            disabled={enregistrementFicheEnCours}
+                            className="btn-spat btn-orange"
+                            style={{ width: "fit-content", opacity: enregistrementFicheEnCours ? 0.65 : 1 }}
+                          >
+                            {enregistrementFicheEnCours ? "Transmission..." : ficheControleEstArrivee ? "Avis après mission" : "Avis avant mission"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </Card>
+            </section>
+          )}
 
         </div>
       </main>
     </div>
   );
 }
-
-// =========================================================
-// TICKET COMPACT / DETAILS / FORMULAIRE DID
-// =========================================================
 
 function travauxDemandesLisibles(valeur?: string | null): string {
   const nettoye = String(valeur ?? "")
@@ -1851,17 +2191,14 @@ function InfoTicket({titre, valeur}: {titre: string; valeur?: string | number | 
 }
 
 function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBasculer,
-  avis, envoi, onModifier, onSoumettre}: {
+  onOuvrirFicheControle}: {
   ticketId: number;
   actuel: Maintenance;
   controles: Maintenance[];
   aTraiter: boolean;
   ouvert: boolean;
   onBasculer: () => void;
-  avis: AvisEnCours;
-  envoi: boolean;
-  onModifier: (champ: keyof AvisEnCours, valeur: string) => void;
-  onSoumettre: () => void;
+  onOuvrirFicheControle: () => void;
 }) {
   const r = actuel.reservation ?? controles.find((m) => m.reservation)?.reservation;
   const decision = decisionControleDID(actuel);
@@ -1869,12 +2206,9 @@ function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBascul
     : decision === "FAVORABLE" ? "Avis DID favorable transmis"
     : decision === "DEFAVORABLE" || decision === "DÉFAVORABLE"
       ? "Avis DID défavorable transmis" : "Avis DID transmis";
-  const nomDemandeur = [r?.demandeurNom ?? r?.demandeur?.nom,
-    r?.demandeurPrenom ?? r?.demandeur?.prenom].filter(Boolean).join(" ");
-
   return <article style={{border: "1px solid #cbd5e1", borderRadius: 11,
     overflow: "hidden", backgroundColor: "white"}}>
-    {/* En-tête toujours blanc ; l'état reste indiqué par son badge. */}
+
     <div style={{padding: 18, backgroundColor: "#ffffff", color: "#111827"}}>
       <div style={{display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 12, flexWrap: "wrap"}}>
@@ -1898,7 +2232,7 @@ function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBascul
         </span>
         <button type="button" onClick={onBasculer} aria-expanded={ouvert}
           aria-controls={`ticket-did-${ticketId}`}
-          style={{...boutonSecondaire, backgroundColor: "#2563eb", borderColor: "#2563eb", color: "white"}}>
+                          className="btn-spat btn-jaune">
           <Eye size={14} /> {ouvert ? "Masquer les détails" : "Détails"}
         </button>
       </div>
@@ -1906,16 +2240,7 @@ function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBascul
 
     {ouvert && <div id={`ticket-did-${ticketId}`}
       style={{padding: 18, borderTop: "1px solid #e2e8f0", backgroundColor: "white", color: "#111827"}}>
-      <h3 style={{fontSize: 14, color: "#111827", margin: "0 0 12px"}}>Informations du demandeur</h3>
-      <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-        gap: 10, marginBottom: 18}}>
-        <InfoTicket titre="Nom" valeur={nomDemandeur} />
-        <InfoTicket titre="Matricule" valeur={r?.demandeurMatricule ??
-          r?.demandeur?.matricule ?? r?.demandeur?.numMatricule} />
-        <InfoTicket titre="Entité" valeur={r?.demandeurEntite} />
-        <InfoTicket titre="Téléphone" valeur={r?.demandeurTelephone ?? r?.demandeur?.telephone} />
-      </div>
-      <h3 style={{fontSize: 14, color: "#111827", margin: "0 0 12px"}}>Informations du ticket</h3>
+      <h3 style={{fontSize: 14, color: "#111827", margin: "0 0 12px"}}>Informations de la mission</h3>
       <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
         gap: 10, marginBottom: 18}}>
         <InfoTicket titre="Objet" valeur={r?.motif} />
@@ -1934,6 +2259,13 @@ function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBascul
         <InfoTicket titre="Affectation" valeur={actuel.vehicule?.affectation} />
         <InfoTicket titre="Nature du contrôle" valeur={travauxDemandesLisibles(actuel.natureIntervention)} />
         <InfoTicket titre="Date de demande DID" valeur={formaterDate(actuel.dateCreation)} />
+      </div>
+
+      <div style={{display: "flex", justifyContent: "flex-end", marginBottom: 18}}>
+        <button type="button" onClick={onOuvrirFicheControle} className="btn-spat btn-bleu"
+          style={{width: "fit-content"}}>
+          <ClipboardCheck size={15} /> Fiche de contrôle
+        </button>
       </div>
 
       {controles.length > 1 && (
@@ -2009,63 +2341,23 @@ function CarteTicketDID({ticketId, actuel, controles, aTraiter, ouvert, onBascul
         </section>
       )}
 
-      {aTraiter ? <section style={{borderTop: "1px solid #e2e8f0", paddingTop: 18}}>
-        <h3 style={{fontSize: 15, color: "#111827", margin: "0 0 13px"}}>Avis technique DID</h3>
-        <div style={{display: "grid", gap: 12}}>
-          <Champ label="Diagnostic visuel *"><textarea rows={3} value={avis.diagnosticVisuel}
-            onChange={(e) => onModifier("diagnosticVisuel", e.target.value)}
-            style={{...inputStyle, resize: "vertical"}} /></Champ>
-          <Champ label="Observations du mécanicien *"><textarea rows={3}
-            value={avis.observationsMecanicien}
-            onChange={(e) => onModifier("observationsMecanicien", e.target.value)}
-            style={{...inputStyle, resize: "vertical"}} /></Champ>
-          <Champ label="Pièces ou actions nécessaires *"><textarea rows={3}
-            value={avis.piecesNecessaires}
-            onChange={(e) => onModifier("piecesNecessaires", e.target.value)}
-            style={{...inputStyle, resize: "vertical"}} /></Champ>
-          <div><div style={labelStyle}>Décision DID *</div>
-            <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
-              <button type="button" onClick={() => onModifier("decision", "FAVORABLE")}
-                aria-pressed={avis.decision === "FAVORABLE"}
-                style={{...boutonSecondaire, backgroundColor: "#16a34a",
-                  borderColor: "#16a34a", color: "#ffffff",
-                  boxShadow: avis.decision === "FAVORABLE" ? "0 0 0 2px #ffffff inset" : "none"}}>
-                <CheckCircle2 size={15}/> Favorable
-              </button>
-              <button type="button" onClick={() => onModifier("decision", "DEFAVORABLE")}
-                aria-pressed={avis.decision === "DEFAVORABLE"}
-                style={{...boutonSecondaire, backgroundColor: "#dc2626",
-                  borderColor: "#dc2626", color: "#ffffff",
-                  boxShadow: avis.decision === "DEFAVORABLE" ? "0 0 0 2px #ffffff inset" : "none"}}>
-                <XCircle size={15}/> Défavorable
-              </button>
-            </div>
+      {!aTraiter && (
+        <section style={{borderTop: "1px solid #e2e8f0", paddingTop: 15}}>
+          <h3 style={{fontSize: 14, margin: "0 0 10px"}}>Avis DID enregistré</h3>
+          <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10}}>
+            <InfoTicket titre="Décision" valeur={decision === "FAVORABLE" ? "Favorable"
+              : ["DEFAVORABLE", "DÉFAVORABLE"].includes(decision) ? "Défavorable" : "Avis transmis"} />
+            <InfoTicket titre="Date de l'avis" valeur={formaterDate(actuel.dateAvisDID ?? actuel.dateAvisdid ?? actuel.avisDate)} />
+            <InfoTicket titre="Diagnostic visuel" valeur={actuel.diagnosticVisuel} />
+            <InfoTicket titre="Observations" valeur={actuel.observationsMecanicien} />
+            <InfoTicket titre="Pièces / actions nécessaires" valeur={actuel.piecesNecessaires} />
+            <InfoTicket titre="Mécanicien" valeur={actuel.mecanicienEmail ?? actuel.avisAuteurEmail} />
           </div>
-          <div><button type="button" onClick={onSoumettre} disabled={envoi}
-            style={{...boutonSecondaire, backgroundColor: "#dc2626", borderColor: "#dc2626",
-              color: "white", opacity: envoi ? 0.65 : 1}}>
-            <Send size={15} /> {envoi ? "Transmission..." : "Transmettre l'avis DID"}
-          </button></div>
-        </div>
-      </section> : <section style={{borderTop: "1px solid #e2e8f0", paddingTop: 15}}>
-        <h3 style={{fontSize: 14, margin: "0 0 10px"}}>Avis DID enregistré</h3>
-        <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10}}>
-          <InfoTicket titre="Décision" valeur={decision === "FAVORABLE" ? "Favorable"
-            : ["DEFAVORABLE", "DÉFAVORABLE"].includes(decision) ? "Défavorable" : "Avis transmis"} />
-          <InfoTicket titre="Date de l'avis" valeur={formaterDate(actuel.dateAvisDID ?? actuel.dateAvisdid ?? actuel.avisDate)} />
-          <InfoTicket titre="Diagnostic visuel" valeur={actuel.diagnosticVisuel} />
-          <InfoTicket titre="Observations" valeur={actuel.observationsMecanicien} />
-          <InfoTicket titre="Pièces / actions nécessaires" valeur={actuel.piecesNecessaires} />
-          <InfoTicket titre="Mécanicien" valeur={actuel.mecanicienEmail ?? actuel.avisAuteurEmail} />
-        </div>
-      </section>}
+        </section>
+      )}
     </div>}
   </article>;
 }
-
-// =========================================================
-// DETAIL DOSSIER ENTRETIEN
-// =========================================================
 
 function DossierEntretienDetail({
   maintenance,
@@ -2430,10 +2722,6 @@ function DossierEntretienDetail({
   );
 }
 
-// =========================================================
-// COMPOSANTS UI
-// =========================================================
-
 function OngletButton({
   actif,
   couleur = "BLEU",
@@ -2572,14 +2860,17 @@ function Champ({
 
 function ActionButton({
   disabled,
+  className,
   children,
 }: {
   disabled: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   return (
     <button
       type="submit"
+      className={className || "btn-spat btn-vert"}
       disabled={
         disabled
       }
@@ -2594,14 +2885,6 @@ function ActionButton({
           7,
         padding:
           "10px 14px",
-        border:
-          "none",
-        borderRadius:
-          8,
-        backgroundColor:
-          "#16a34a",
-        color:
-          "white",
         fontSize:
           13,
         fontWeight:
@@ -2905,10 +3188,6 @@ function ChronologieEntretien({
   );
 }
 
-// =========================================================
-// BADGE STATUT
-// =========================================================
-
 function StatutMaintenance({
   statut,
   avisRecu = false,
@@ -3015,10 +3294,6 @@ function StatutMaintenance({
     </span>
   );
 }
-
-// =========================================================
-// HELPERS ENTRETIEN
-// =========================================================
 
 function statutEntretienAffiche(
   maintenance: Maintenance
@@ -3181,6 +3456,10 @@ function libelleVehicule(
     : vehicule.immatriculation;
 }
 
+function vehiculeEstIndisponible(vehicule: Vehicule) {
+  return ["MAINTENANCE", "EN_MAINTENANCE", "EN_PANNE", "HORS_SERVICE", "INDISPONIBLE", "INDISPONIBLE_TECHNIQUE", "REQUISITIONNE", "EN_MISSION", "REFORME", "TRANSFERE"].includes(String(vehicule.statut || "").trim().toUpperCase());
+}
+
 function formaterDate(
   valeur?: string | null
 ) {
@@ -3217,10 +3496,6 @@ function formaterDate(
     }
   );
 }
-
-// =========================================================
-// STYLES
-// =========================================================
 
 const labelStyle:
   CSSProperties = {
@@ -3272,14 +3547,15 @@ const boutonSecondaire: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 7,
-  padding: "9px 13px",
-  backgroundColor: "#2563eb",
+  padding: "10px 16px",
+  backgroundColor: "#1d4ed8",
   color: "#ffffff",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 10,
   cursor: "pointer",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 700,
+  transition: "all 150ms ease",
 };
 
 const regleCompacteStyle:

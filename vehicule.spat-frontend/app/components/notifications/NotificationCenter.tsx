@@ -54,6 +54,7 @@ export default function NotificationCenter({
   const [filtre, setFiltre] = useState<FiltreNotification>("TOUTES");
   const [notifications, setNotifications] = useState<NotificationSpat[]>([]);
   const [chargement, setChargement] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   const getToken = () => {
     if (typeof window === "undefined") return null;
@@ -79,14 +80,16 @@ export default function NotificationCenter({
       });
 
       if (!res.ok) {
-        console.warn("Impossible de charger les notifications :", res.status);
-        return;
+        throw new Error(`HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      setNotifications(Array.isArray(data) ? data : []);
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse notifications invalide.");
+      setNotifications(data as NotificationSpat[]);
+      setErreurChargement(null);
     } catch (error) {
       console.warn("Erreur chargement notifications :", error);
+      setErreurChargement(error instanceof Error ? error.message : "Notifications indisponibles.");
     } finally {
       setChargement(false);
     }
@@ -217,10 +220,7 @@ export default function NotificationCenter({
           50% { transform: scale(1.15); }
         }
 
-        /*
-         * Sonnerie réaliste de cloche (balancement pendulaire)
-         * lorsqu'il existe au moins une notification non lue.
-         */
+        
         @keyframes spatNotifBellRing {
           0%, 100% { transform: rotate(0deg); }
           12% { transform: rotate(26deg); }
@@ -414,8 +414,15 @@ export default function NotificationCenter({
             </div>
 
             <div style={listeStyle}>
+              {erreurChargement && (
+                <div role="alert" style={{ ...videStyle, color: "#991b1b", background: "#fef2f2" }}>
+                  Synchronisation des notifications impossible ({erreurChargement}). Les éléments affichés, s’il y en a, peuvent être anciens.
+                </div>
+              )}
               {chargement && notifications.length === 0 ? (
                 <div style={videStyle}>Chargement...</div>
+              ) : erreurChargement && notificationsAffichees.length === 0 ? (
+                <div style={videStyle}>Aucune donnée fiable à afficher avant une synchronisation réussie.</div>
               ) : notificationsAffichees.length === 0 ? (
                 <div style={videStyle}>
                   <Bell size={28} style={{ marginBottom: 8, opacity: 0.45 }} />
@@ -505,13 +512,6 @@ export default function NotificationCenter({
 
             <div style={footerStyle}>
               <span>Centre de notifications SPAT</span>
-              <button
-                type="button"
-                onClick={chargerNotifications}
-                style={actualiserStyle}
-              >
-                Actualiser
-              </button>
             </div>
           </div>
         )}
@@ -893,11 +893,3 @@ const footerStyle: CSSProperties = {
   fontWeight: 600,
 };
 
-const actualiserStyle: CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: "#dc2626",
-  cursor: "pointer",
-  fontSize: 12,
-  fontWeight: 700,
-};

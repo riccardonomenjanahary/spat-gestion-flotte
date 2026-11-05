@@ -9,6 +9,7 @@ public class CreateUtilisateurRequest {
     private String motDePasse;
     private Long serviceId;
     private Long departementId;
+    private Long directionId;
     private Boolean actif;
 
     public String getNomComplet() {
@@ -65,6 +66,14 @@ public class CreateUtilisateurRequest {
 
     public void setDepartementId(Long departementId) {
         this.departementId = departementId;
+    }
+
+    public Long getDirectionId() {
+        return directionId;
+    }
+
+    public void setDirectionId(Long directionId) {
+        this.directionId = directionId;
     }
 
     public Boolean getActif() {

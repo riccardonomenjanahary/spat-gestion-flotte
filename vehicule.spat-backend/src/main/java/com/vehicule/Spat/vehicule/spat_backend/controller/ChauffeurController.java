@@ -62,6 +62,7 @@ public class ChauffeurController {
                     chauffeur.setTelephone(donnees.getTelephone());
                     chauffeur.setEmail(donnees.getEmail());
                     chauffeur.setNumeroPermis(donnees.getNumeroPermis());
+                    chauffeur.setDateExpirationPermis(donnees.getDateExpirationPermis());
                     chauffeur.setAffectationService(donnees.getAffectationService());
 
                     if (donnees.getStatut() != null
@@ -95,9 +96,11 @@ public class ChauffeurController {
 
                 Vehicule vehicule = affectation.getVehicule();
 
-                vehicule.setStatut("DISPONIBLE");
-
-                vehiculeRepository.save(vehicule);
+                if (!"MAINTENANCE".equalsIgnoreCase(vehicule.getStatut())
+                        && !"EN_MAINTENANCE".equalsIgnoreCase(vehicule.getStatut())) {
+                    vehicule.setStatut("DISPONIBLE");
+                    vehiculeRepository.save(vehicule);
+                }
             }
         }
 

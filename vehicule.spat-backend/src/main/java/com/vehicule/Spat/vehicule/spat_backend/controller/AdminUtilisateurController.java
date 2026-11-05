@@ -1,10 +1,13 @@
 package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.dto.CreateUtilisateurRequest;
+import com.vehicule.Spat.vehicule.spat_backend.model.Direction;
 import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
+import com.vehicule.Spat.vehicule.spat_backend.repository.DirectionRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.service.EmailService;
+import com.vehicule.Spat.vehicule.spat_backend.service.NotificationService;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,16 +26,29 @@ public class AdminUtilisateurController {
     private final ReservationRepository reservationRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final DirectionRepository directionRepository;
+
+    private static final Set<String> ROLES_INTERIM = Set.of(
+            "AGENT_PAR_INTERIM_ASSISTANT",
+            "AGENT_PAR_INTERIM_CHEF"
+    );
 
     private static final Set<String> ROLES_AUTORISES = Set.of(
+            "CO_ADMIN",
             "DIRECTEUR_DFP",
             "CHEF_DIRECTION",
             "ASSISTANT_DIRECTION",
+            "AGENT_PAR_INTERIM_ASSISTANT",
+            "AGENT_PAR_INTERIM_CHEF",
             "CHEF_SERVICE_LOGISTIQUE",
             "CHEF_DGAL",
             "MECANICIEN_DID",
+            "CHEF_ATELIER",
+            "DIRECTION_GENERALE",
+            "CONTROLE_GESTION",
             "AGENT_FLOTTE",
-            "CHAUFFEUR"
+            "AGENT_SURETE"
     );
 
     // ============================================================
@@ -57,13 +73,17 @@ public class AdminUtilisateurController {
             UtilisateurRepository utilisateurRepository,
             ReservationRepository reservationRepository,
             PasswordEncoder passwordEncoder,
-            EmailService emailService
+            EmailService emailService,
+            NotificationService notificationService,
+            DirectionRepository directionRepository
     ) {
 
         this.utilisateurRepository = utilisateurRepository;
         this.reservationRepository = reservationRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.notificationService = notificationService;
+        this.directionRepository = directionRepository;
     }
 
     // ============================================================
@@ -119,6 +139,15 @@ public class AdminUtilisateurController {
                             "Rôle invalide. Les rôles autorisés sont : "
                                     + ROLES_AUTORISES
                     );
+        }
+
+        if (("ASSISTANT_DIRECTION".equals(request.getRole())
+                || "CHEF_DIRECTION".equals(request.getRole())
+                || "AGENT_PAR_INTERIM_ASSISTANT".equals(request.getRole())
+                || "AGENT_PAR_INTERIM_CHEF".equals(request.getRole()))
+                && request.getDirectionId() == null) {
+            return ResponseEntity.badRequest()
+                    .body("Une direction de rattachement est obligatoire pour ce rôle.");
         }
 
         if (request.getMotDePasse() == null
@@ -183,6 +212,7 @@ public class AdminUtilisateurController {
                 request.getNomComplet().trim()
         );
 
+
         utilisateur.setMatricule(matricule);
 
         utilisateur.setEmail(email);
@@ -190,6 +220,7 @@ public class AdminUtilisateurController {
         utilisateur.setRole(
                 request.getRole()
         );
+
 
         utilisateur.setMotDePasse(
                 passwordEncoder.encode(
@@ -205,6 +236,10 @@ public class AdminUtilisateurController {
                 request.getDepartementId()
         );
 
+        utilisateur.setDirectionId(
+                request.getDirectionId()
+        );
+
         utilisateur.setActif(
                 request.getActif() == null
                         || request.getActif()
@@ -218,6 +253,11 @@ public class AdminUtilisateurController {
         utilisateur.setDoitChangerMotDePasse(true);
 
         utilisateurRepository.save(utilisateur);
+
+        if (ROLES_INTERIM.contains(utilisateur.getRole())) {
+            notifierAgentInterim(utilisateur, request.getMotDePasse());
+            return ResponseEntity.ok(utilisateur);
+        }
 
         try {
 
@@ -247,6 +287,51 @@ public class AdminUtilisateurController {
         }
 
         return ResponseEntity.ok(utilisateur);
+    }
+
+    private void notifierAgentInterim(Utilisateur agent, String motDePasse) {
+        boolean interimChef = "AGENT_PAR_INTERIM_CHEF".equals(agent.getRole());
+        String fonction = interimChef
+                ? "Agent par intérim du Chef de Direction"
+                : "Agent par intérim de l'Assistante de Direction";
+        String direction = agent.getDirectionId() == null
+                ? "—"
+                : directionRepository.findById(agent.getDirectionId())
+                        .map(Direction::getNom)
+                        .orElse("Direction n°" + agent.getDirectionId());
+
+        try {
+            emailService.envoyerCreationCompteInterim(
+                    agent.getEmail(),
+                    agent.getNomComplet(),
+                    agent.getMatricule(),
+                    motDePasse,
+                    fonction,
+                    direction
+            );
+        } catch (Exception e) {
+            System.err.println("Compte intérim créé mais email non envoyé : " + e.getMessage());
+        }
+
+        try {
+            // Pas d'email ici : les identifiants sont envoyés par l'email dédié ci-dessus.
+            notificationService.creerPourUtilisateur(
+                    agent,
+                    "COMPTE_INTERIM_CREE",
+                    "IMPORTANT",
+                    "Votre compte par intérim est actif",
+                    "Vous êtes " + fonction + " (" + direction + "). "
+                            + "Votre matricule et votre mot de passe temporaire vous ont été envoyés par email. "
+                            + "Pensez à modifier votre mot de passe.",
+                    interimChef ? "/chef-direction" : "/assistant-direction",
+                    null,
+                    null,
+                    null,
+                    false
+            );
+        } catch (Exception e) {
+            System.err.println("Compte intérim créé mais notification non créée : " + e.getMessage());
+        }
     }
 
     // ============================================================
@@ -285,6 +370,15 @@ public class AdminUtilisateurController {
 
             return ResponseEntity.badRequest()
                     .body("Rôle invalide.");
+        }
+
+        if (("ASSISTANT_DIRECTION".equals(request.getRole())
+                || "CHEF_DIRECTION".equals(request.getRole())
+                || "AGENT_PAR_INTERIM_ASSISTANT".equals(request.getRole())
+                || "AGENT_PAR_INTERIM_CHEF".equals(request.getRole()))
+                && request.getDirectionId() == null) {
+            return ResponseEntity.badRequest()
+                    .body("Une direction de rattachement est obligatoire pour ce rôle.");
         }
 
         if ("CHEF_SERVICE".equals(request.getRole())
@@ -342,6 +436,7 @@ public class AdminUtilisateurController {
                             request.getNomComplet().trim()
                     );
 
+
                     utilisateur.setMatricule(
                             matricule
                     );
@@ -354,12 +449,17 @@ public class AdminUtilisateurController {
                             request.getRole()
                     );
 
+
                     utilisateur.setServiceId(
                             request.getServiceId()
                     );
 
                     utilisateur.setDepartementId(
                             request.getDepartementId()
+                    );
+
+                    utilisateur.setDirectionId(
+                            request.getDirectionId()
                     );
 
                     if (request.getActif() != null) {

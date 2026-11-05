@@ -39,10 +39,6 @@ function SuperAdminContent() {
 
   const [statsChargement, setStatsChargement] = useState(true);
 
-  // =====================================================
-  // CHARGEMENT DES STATISTIQUES UTILISATEURS
-  // =====================================================
-
   useEffect(() => {
     const chargerStats = async () => {
       const token = localStorage.getItem("token");
@@ -61,12 +57,6 @@ function SuperAdminContent() {
           );
         }
 
-        /*
-         * On réutilise pour l'instant l'endpoint utilisateurs
-         * déjà fonctionnel côté ADMIN.
-         *
-         * L'ADMIN n'est pas encore modifié.
-         */
         const response = await fetch(
           `${apiUrl}/admin/utilisateurs`,
           {
@@ -83,11 +73,13 @@ function SuperAdminContent() {
           );
         }
 
-        const utilisateurs: Utilisateur[] =
-          await response.json();
+        const utilisateurs: unknown = await response.json();
+        if (!Array.isArray(utilisateurs)) {
+          throw new Error("Format de réponse utilisateurs invalide.");
+        }
 
         setStats({
-          total: String(utilisateurs.length),
+          total: String((utilisateurs as Utilisateur[]).length),
         });
       } catch (error) {
         console.error(
@@ -106,10 +98,6 @@ function SuperAdminContent() {
     chargerStats();
   }, [router]);
 
-  // =====================================================
-  // REDIRECTION VERS LA GESTION DES UTILISATEURS
-  // =====================================================
-
   const ouvrirGestionUtilisateurs = () => {
     router.push("/super-admin/utilisateurs");
   };
@@ -123,13 +111,8 @@ function SuperAdminContent() {
         backgroundColor: "#f3f4f6",
       }}
     >
-      {/* EN-TÊTE GLOBAL AVEC NOTIFICATIONS */}
 
       <EnTete />
-
-      {/* ================================================= */}
-      {/* CONTENU PRINCIPAL */}
-      {/* ================================================= */}
 
       <main
         style={{
@@ -141,9 +124,6 @@ function SuperAdminContent() {
           boxSizing: "border-box",
         }}
       >
-        {/* ================================================= */}
-        {/* TITRE */}
-        {/* ================================================= */}
 
         <div
           style={{
@@ -176,22 +156,7 @@ function SuperAdminContent() {
             </h1>
           </div>
 
-          <p
-            style={{
-              color: "#6b7280",
-              margin: 0,
-              fontSize: 14,
-            }}
-          >
-            Gestion des comptes utilisateurs et des
-            habilitations du portail de gestion de la flotte
-            SPAT.
-          </p>
         </div>
-
-        {/* ================================================= */}
-        {/* STATISTIQUE UTILISATEURS */}
-        {/* ================================================= */}
 
         <div
           style={{
@@ -214,10 +179,6 @@ function SuperAdminContent() {
             }
           />
         </div>
-
-        {/* ================================================= */}
-        {/* GESTION DES UTILISATEURS CENTRÉE */}
-        {/* ================================================= */}
 
         <div
           style={{
@@ -274,23 +235,6 @@ function SuperAdminContent() {
               Gestion des utilisateurs
             </h2>
 
-            <p
-              style={{
-                color: "#6b7280",
-                fontSize: 14,
-                lineHeight: 1.6,
-                margin: "0 auto",
-                maxWidth: 430,
-                textAlign: "center",
-              }}
-            >
-              Créer les comptes utilisateurs, attribuer les
-              rôles, gérer les rattachements organisationnels
-              et activer ou désactiver les accès au système.
-            </p>
-
-            {/* BOUTON PRINCIPAL */}
-
             <div
               style={{
                 display: "flex",
@@ -330,24 +274,9 @@ function SuperAdminContent() {
               </button>
             </div>
 
-            <div
-              style={{
-                textAlign: "center",
-                color: "#9ca3af",
-                fontSize: 12,
-                marginTop: 14,
-              }}
-            >
-              Création, modification, activation et
-              désactivation des comptes
-            </div>
           </div>
         </div>
       </main>
-
-      {/* ================================================= */}
-      {/* FOOTER */}
-      {/* ================================================= */}
 
       <footer
         style={{
@@ -364,10 +293,6 @@ function SuperAdminContent() {
     </div>
   );
 }
-
-// =========================================================
-// CARTE STATISTIQUE
-// =========================================================
 
 function StatCard({
   titre,

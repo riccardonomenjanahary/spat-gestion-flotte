@@ -1,8 +1,13 @@
 "use client";
+import { releveAssistante } from "@/app/lib/circuits";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import JustificatifsSection from "@/components/JustificatifsSection";
+import FichesSureteListe from "@/components/FichesSureteListe";
+import CarnetBordDgal from "@/components/CarnetBordDgal";
 import BoutonsRapportSpat from "@/app/components/BoutonsRapportSpat";
 import type { RapportSpat } from "@/app/lib/spatRapports";
 import { ROLES } from "@/app/lib/roles";
@@ -12,9 +17,9 @@ import {
   CheckCircle2,
   ClipboardList,
   Download,
+  Trash2,
   Fuel,
   Gauge,
-  RefreshCw,
   ShieldAlert,
   Truck,
   Wrench,
@@ -64,6 +69,7 @@ interface Reservation {
   dateDebut: string;
   dateFin: string;
   motif: string;
+  zoneMission?: string | null;
 
   demandeUrgente: boolean;
   motifUrgence?: string | null;
@@ -71,14 +77,12 @@ interface Reservation {
   statut: string;
   dateCreation: string;
 
-  // Bénéficiaire réel de la demande
   demandeurNom?: string | null;
   demandeurPrenom?: string | null;
   demandeurMatricule?: string | null;
   demandeurEntite?: string | null;
   demandeurTelephone?: string | null;
 
-  // Mission
   destination?: string | null;
   pointDepart?: string | null;
   nombrePassagers?: number | null;
@@ -87,16 +91,13 @@ interface Reservation {
   besoinChauffeur?: boolean | null;
   observations?: string | null;
 
-  // Refus niveau 1
   motifRefus?: string | null;
   refusePar?: Demandeur | null;
   dateRefus?: string | null;
 
-  // Validation niveau 1
   validationN1Par?: Demandeur | null;
   dateValidationN1?: string | null;
 
-  // Validation niveau 2
   validationN2Par?: Demandeur | null;
   dateValidationN2?: string | null;
 }
@@ -159,6 +160,7 @@ export default function ChefDgalPage() {
 }
 
 function ChefDgalContent() {
+  const router = useRouter();
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
@@ -167,8 +169,13 @@ function ChefDgalContent() {
   const [transactions, setTransactions] = useState<TransactionCarburant[]>([]);
   const [assurances, setAssurances] = useState<Assurance[]>([]);
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
+  const [erreursModulesOptionnels, setErreursModulesOptionnels] = useState<string[]>([]);
+  const [erreurChargementPrincipal, setErreurChargementPrincipal] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
   const [validationN2EnCours, setValidationN2EnCours] = useState<Record<number, boolean>>({});
+  const [suppressionOrdreEnCours, setSuppressionOrdreEnCours] = useState<number | null>(null);
+  const [filtreStatutTicket, setFiltreStatutTicket] = useState<"TOUS" | "A_VALIDER" | "VALIDES">("TOUS");
+  const [rubriqueActive, setRubriqueActive] = useState("dgal-validations");
 
   const [moisSelection, setMoisSelection] = useState(() => new Date().toISOString().slice(0, 7));
 
@@ -190,14 +197,19 @@ function ChefDgalContent() {
       throw new Error(`${res.status} ${message}`.trim());
     }
 
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) throw new Error(`Format de réponse invalide pour ${url}.`);
+    return data as T[];
   };
 
   const fetchListeOptionnelle = async <T,>(url: string, token: string): Promise<T[]> => {
     try {
       return await fetchListe<T>(url, token);
     } catch (error) {
+      setErreursModulesOptionnels((precedentes) => [
+        ...precedentes,
+        `${url.replace(API || "", "")}: ${error instanceof Error ? error.message : "échec de chargement"}`,
+      ]);
       console.warn(`Module optionnel indisponible : ${url}`, error);
       return [];
     }
@@ -207,6 +219,7 @@ function ChefDgalContent() {
     const token = getToken();
 
     if (!API) {
+      setErreurChargementPrincipal("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
       setChargement(false);
       return;
@@ -219,6 +232,8 @@ function ChefDgalContent() {
     }
 
     setChargement(true);
+    setErreurChargementPrincipal(null);
+    setErreursModulesOptionnels([]);
 
     try {
       const [v, r, m, c] = await Promise.all([
@@ -242,6 +257,12 @@ function ChefDgalContent() {
       setSinistres(s);
     } catch (error) {
       console.error("Erreur chargement Chef DGAL :", error);
+      setVehicules([]);
+      setReservations([]);
+      setMaintenances([]);
+      setTransactions([]);
+      setErreurChargementPrincipal(error instanceof Error
+        ? error.message : "Données principales indisponibles.");
       toast.error("Impossible de charger la vue consolidée de la flotte");
     } finally {
       setChargement(false);
@@ -261,7 +282,7 @@ function ChefDgalContent() {
       return;
     }
 
-    if (reservation.statut !== "VALIDEE_N1") {
+    if (String(reservation.statut || "").trim().toUpperCase() !== "VALIDEE_N1") {
       toast.error("Cette demande n'est pas disponible pour une validation niveau 2.");
       return;
     }
@@ -305,13 +326,32 @@ function ChefDgalContent() {
     }
   };
 
+  const supprimerOrdreMission = async (reservation: Reservation) => {
+    if (!window.confirm(`Supprimer l'ordre de mission TKT-${String(reservation.id).padStart(5, "0")} ?`)) return;
+    const token = getToken();
+    if (!API || !token) return;
+    setSuppressionOrdreEnCours(reservation.id);
+    try {
+      const res = await fetch(`${API}/reservations/${reservation.id}/chef-dgal`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(await res.text().catch(() => "Suppression impossible."));
+      toast.success("Ordre de mission supprimé de l'historique.");
+      await charger();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Suppression impossible.");
+    } finally {
+      setSuppressionOrdreEnCours(null);
+    }
+  };
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Le centre de notifications est géré par EnTete. La liste des tickets à
-  // valider est rafraîchie séparément, sans recharger toute la page.
   useEffect(() => {
     let actif = true;
     let enCours = false;
@@ -325,7 +365,7 @@ function ChefDgalContent() {
         const tickets = await fetchListe<Reservation>(`${API}/reservations`, token);
         if (actif) setReservations(tickets);
       } catch (error) {
-        // Ne pas masquer les informations déjà chargées si le réseau est coupé.
+
         console.warn("Actualisation des tickets en attente de validation N2 impossible", error);
       } finally {
         enCours = false;
@@ -345,13 +385,24 @@ function ChefDgalContent() {
 
   const disponibles = vehicules.filter((v) => v.statut === "DISPONIBLE").length;
   const tauxDisponibilite = vehicules.length > 0 ? Math.round((disponibles / vehicules.length) * 100) : 0;
+  const missionsMoisUtilisees = reservations.filter((r) => r.vehicule && String(r.dateDebut || "").slice(0, 7) === moisSelection && ["VALIDEE", "PLANIFIEE", "VALIDEE_N1", "CLOTUREE"].includes(String(r.statut || "").toUpperCase()));
+  const vehiculesUtilises = new Set(missionsMoisUtilisees.map((r) => r.vehicule?.id).filter((id): id is number => id != null));
+  const tauxUtilisation = vehicules.length > 0 ? Math.round((vehiculesUtilises.size / vehicules.length) * 100) : 0;
 
   const reservationsAValiderN2 = reservations.filter(
-    (r) => r.statut === "VALIDEE_N1"
+    (r) => !releveAssistante(r) && String(r.statut || "").trim().toUpperCase() === "VALIDEE_N1"
   );
 
+  const reservationsConsultation = reservations
+    .filter((reservation) => filtreStatutTicket === "TOUS"
+      || (filtreStatutTicket === "A_VALIDER" && String(reservation.statut || "").trim().toUpperCase() === "VALIDEE_N1")
+      || (filtreStatutTicket === "VALIDES" && ["VALIDEE", "PLANIFIEE"].includes(String(reservation.statut || "").trim().toUpperCase())))
+    .slice()
+    .sort((a, b) => String(b.dateCreation).localeCompare(String(a.dateCreation)))
+    .slice(0, 20);
+
   const reservationsEnCours = reservations.filter((r) =>
-    ["EN_ATTENTE", "VALIDEE_N1", "VALIDEE"].includes(r.statut)
+    ["EN_ATTENTE", "VALIDEE_N1", "VALIDEE", "PLANIFIEE", "EN_COURS"].includes(String(r.statut || "").trim().toUpperCase())
   );
 
   const demandesUrgentes = reservations.filter((r) => r.demandeUrgente).length;
@@ -438,6 +489,7 @@ function ChefDgalContent() {
       ["Parc total", String(vehicules.length)],
       ["Véhicules disponibles", String(disponibles)],
       ["Taux de disponibilité", `${tauxDisponibilite}%`],
+      ["Taux d'utilisation du mois", `${tauxUtilisation}%`],
       ["Demandes créées sur 7 jours", String(demandes7j.length)],
       ["Demandes urgentes", String(demandesUrgentes)],
       ["Entretiens créés sur 7 jours", String(entretiens7j.length)],
@@ -463,6 +515,7 @@ function ChefDgalContent() {
       { libelle: "Parc total", valeur: vehicules.length },
       { libelle: "Véhicules disponibles", valeur: disponibles },
       { libelle: "Taux de disponibilité", valeur: `${tauxDisponibilite}%` },
+      { libelle: "Taux d'utilisation du mois", valeur: `${tauxUtilisation}%` },
       { libelle: "Consommation du mois", valeur: `${formatNombre(totalConsommationMois)} L` },
       { libelle: "Demandes à valider (N°2)", valeur: reservationsAValiderN2.length },
       { libelle: "Entretiens actifs", valeur: maintenancesActives.length },
@@ -512,60 +565,66 @@ function ChefDgalContent() {
               <h2 style={{ margin: 0, fontSize: 22, color: "#1e293b" }}>
                 Chef DGAL — Supervision de la flotte
               </h2>
-              
+
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <BoutonsRapportSpat preparerRapport={preparerRapportDgal} />
-              <button onClick={exporterSynthese} style={boutonSecondaire}>
+              <button type="button" className="btn-spat btn-rouge" onClick={() => router.push("/chef-dgal/requisitions")}>Réquisitions DGAL</button>
+              <button type="button" className="btn-spat btn-orange" onClick={exporterSynthese}>
                 <Download size={15} />
                 Synthèse CSV
-              </button>
-              <button onClick={charger} style={boutonSecondaire}>
-                <RefreshCw size={15} />
-                Actualiser
               </button>
             </div>
           </div>
 
-         
+          {erreursModulesOptionnels.length > 0 && (
+            <div role="alert" style={{ marginBottom: 18, padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b", fontSize: 13 }}>
+              Certaines données n’ont pas été synchronisées depuis l’API : {erreursModulesOptionnels.join(" · ")}
+            </div>
+          )}
+
+          {erreurChargementPrincipal && (
+            <div role="alert" style={{ marginBottom: 18, padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b", fontSize: 13 }}>
+              Données principales indisponibles : {erreurChargementPrincipal}. Les indicateurs et listes ne sont pas à jour.
+            </div>
+          )}
 
           <div style={kpiGridStyle}>
             <CarteKpi
               icone={<Truck size={18} />}
               label="Taux de disponibilité"
-              valeur={`${tauxDisponibilite}%`}
-              sousTexte={`${disponibles} / ${vehicules.length} véhicules disponibles`}
+              valeur={erreurChargementPrincipal ? "—" : `${tauxDisponibilite}%`}
+            />
+            <CarteKpi
+              icone={<Gauge size={18} />}
+              label="Taux d'utilisation du mois"
+              valeur={erreurChargementPrincipal ? "—" : `${tauxUtilisation}%`}
             />
             <CarteKpi
               icone={<Fuel size={18} />}
               label="Consommation du mois"
-              valeur={`${formatNombre(totalConsommationMois)} L`}
-              sousTexte={libelleMois(moisSelection)}
+              valeur={erreurChargementPrincipal ? "—" : `${formatNombre(totalConsommationMois)} L`}
             />
             <CarteKpi
               icone={<Gauge size={18} />}
               label="Délai moyen entretien"
               valeur={delaiMoyenEntretien === null ? "—" : `${formatNombre(delaiMoyenEntretien)} j`}
-              sousTexte="Entretiens clôturés du mois"
             />
             <CarteKpi
               icone={<Wrench size={18} />}
               label="Entretiens actifs"
-              valeur={String(maintenancesActives.length)}
-              sousTexte={`${entretiensEnCours} en cours · ${entretiensEnAttenteAvis} en attente DID`}
+              valeur={erreurChargementPrincipal ? "—" : String(maintenancesActives.length)}
             />
             <CarteKpi
               icone={<ClipboardList size={18} />}
               label="À valider niveau 2"
-              valeur={String(reservationsAValiderN2.length)}
-              sousTexte={`${reservationsEnCours.length} demande(s) en suivi · ${demandesUrgentes} urgente(s)`}
+              valeur={erreurChargementPrincipal ? "—" : String(reservationsAValiderN2.length)}
             />
             <CarteKpi
               icone={<AlertTriangle size={18} />}
               label="Alertes assurance / sinistre"
-              valeur={String(assurancesJ15 + sinistresOuverts)}
-              sousTexte={`${assurancesJ15} échéance(s) J-15 · ${sinistresOuverts} sinistre(s) ouvert(s)`}
+              valeur={erreurChargementPrincipal || erreursModulesOptionnels.length > 0 ? "—" : String(assurancesJ15 + sinistresOuverts)}
             />
           </div>
 
@@ -573,22 +632,30 @@ function ChefDgalContent() {
             gap: 10, padding: 12, border: "1px solid #e2e8f0", borderRadius: 12,
             background: "#ffffff", marginBottom: 22}}>
             {[
-              {id: "dgal-validations", texte: `Tickets à valider (${reservationsAValiderN2.length})`, couleur: "#2563eb"},
-              {id: "dgal-consultation", texte: "Liste des tickets", couleur: "#2563eb"},
-              {id: "dgal-entretiens", texte: "Entretiens", couleur: "#16a34a"},
-              {id: "dgal-assurances", texte: "Assurances et sinistres", couleur: "#dc2626"},
-              {id: "dgal-synthese", texte: "Synthèse", couleur: "#2563eb"},
+              {id: "dgal-validations", texte: `Tickets à valider (${reservationsAValiderN2.length})`, classe: "btn-bleu"},
+              {id: "dgal-pilotage", texte: "Pilotage mensuel", classe: "btn-bleu"},
+              {id: "dgal-ordres", texte: "Historique des OM", classe: "btn-bleu"},
+              {id: "dgal-carnet", texte: "Carnet de bord", classe: "btn-bleu"},
+              {id: "dgal-entretiens", texte: "Entretiens", classe: "btn-vert"},
+              {id: "dgal-assurances", texte: "Assurances et sinistres", classe: "btn-orange"},
+              {id: "dgal-fiches-surete", texte: "Fiches sûreté (PDF)", classe: "btn-vert"},
+              {id: "dgal-synthese", texte: "Synthèse", classe: "btn-rouge"},
             ].map(rubrique => (
               <button key={rubrique.id} type="button"
-                onClick={() => document.getElementById(rubrique.id)?.scrollIntoView({behavior: "smooth", block: "start"})}
-                style={{...boutonSecondaire, borderColor: rubrique.couleur, color: "#ffffff",
-                  background: rubrique.couleur, minHeight: 43,
+                onClick={() => setRubriqueActive(rubrique.id)}
+                aria-pressed={rubriqueActive === rubrique.id}
+                className={`btn-spat ${rubrique.classe}`}
+                style={{minHeight: 43,
+                  opacity: rubriqueActive === rubrique.id ? 1 : 0.6,
+                  outline: rubriqueActive === rubrique.id ? "3px solid rgba(30,41,59,.35)" : "none",
+                  outlineOffset: 2,
                   boxShadow: "0 3px 9px rgba(15,23,42,.10)"}}>
                 {rubrique.texte}
               </button>
             ))}
           </nav>
 
+          {rubriqueActive === "dgal-pilotage" && (<>
           <div style={sectionHeaderStyle}>
             <SectionTitre titre="Pilotage mensuel" />
             <input
@@ -629,7 +696,9 @@ function ChefDgalContent() {
               </div>
             </div>
           </div>
+          </>)}
 
+          {rubriqueActive === "dgal-validations" && (<>
           <div id="dgal-validations" style={{scrollMarginTop: 85}}>
             <SectionTitre titre="Demandes de véhicule — 2eme validation" />
           </div>
@@ -678,7 +747,7 @@ function ChefDgalContent() {
                             <strong style={{ color: "#111827" }}>
                               {`Ticket TKT-${String(r.id).padStart(5, "0")}`}
                             </strong>
-                            <BadgeStatut statut={r.statut} />
+                            <BadgeStatut statut={r.statut} zoneMission={r.zoneMission} />
                             {r.demandeUrgente && (
                               <span style={urgentBadgeStyle}>Urgente</span>
                             )}
@@ -745,16 +814,18 @@ function ChefDgalContent() {
 
                       {r.demandeUrgente && (
                         <div style={urgenceDetailStyle}>
-                          <strong>Motif d&apos;urgence :</strong>{" "}
+                          <span>Motif d&apos;urgence :</span>{" "}
                           {r.motifUrgence?.trim() || "—"}
                         </div>
                       )}
 
                       {r.observations?.trim() && (
                         <div style={observationStyle}>
-                          <strong>Observations :</strong> {r.observations}
+                          <span>Observations :</span> {r.observations}
                         </div>
                       )}
+
+                      <DepotOrdreMissionDgal reservationId={r.id} />
 
                       <div
                         style={{
@@ -787,8 +858,50 @@ function ChefDgalContent() {
             </div>
           )}
 
+          </>)}
+
+          {rubriqueActive === "dgal-ordres" && (<>
+          <div id="dgal-ordres" style={{ scrollMarginTop: 85 }}>
+            <SectionTitre titre="Historique des ordres de mission" />
+          </div>
+          {reservations.filter((r) => ["VALIDEE", "PLANIFIEE", "CLOTUREE"].includes(String(r.statut || "").toUpperCase())).length === 0 ? (
+            <BlocVide texte="Aucun ordre de mission disponible dans l'historique." />
+          ) : (
+            <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+              {reservations
+                .filter((r) => ["VALIDEE", "PLANIFIEE", "CLOTUREE"].includes(String(r.statut || "").toUpperCase()))
+                .sort((a, b) => String(b.dateValidationN2 || b.dateCreation).localeCompare(String(a.dateValidationN2 || a.dateCreation)))
+                .map((r) => (
+                  <div key={`om-historique-${r.id}`} style={{ ...cardStyle, display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                      <strong>TKT-{String(r.id).padStart(5, "0")} · {nomBeneficiaire(r)}</strong>
+                      <BadgeStatut statut={r.statut} zoneMission={r.zoneMission} />
+                    </div>
+                    <div style={{ color: "#64748b", fontSize: 13 }}>{r.motif || "—"} · {formaterDate(r.dateValidationN2 || r.dateCreation)}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <button type="button" onClick={() => void supprimerOrdreMission(r)} disabled={suppressionOrdreEnCours === r.id} aria-label={`Supprimer TKT-${String(r.id).padStart(5, "0")}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px", background: "#fff1f2", color: "#be123c", cursor: suppressionOrdreEnCours === r.id ? "wait" : "pointer" }}>
+                        <Trash2 size={15} /> {suppressionOrdreEnCours === r.id ? "Suppression…" : "Supprimer"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          </>)}
+
+          {rubriqueActive === "dgal-consultation" && (<>
           <div id="dgal-consultation" style={{scrollMarginTop: 85}}>
-            <SectionTitre titre="Demandes de véhicule — consultation et traçabilité" />
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <SectionTitre titre="Demandes de véhicule — consultation et traçabilité" />
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#475569", fontSize: 13, fontWeight: 700 }}>
+                Statut des tickets
+                <select value={filtreStatutTicket} onChange={(event) => setFiltreStatutTicket(event.target.value as typeof filtreStatutTicket)} style={{ ...inputStyle, width: "auto" }}>
+                  <option value="TOUS">Tous les statuts</option>
+                  <option value="A_VALIDER">À valider</option>
+                  <option value="VALIDES">Validé</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           {reservations.length === 0 ? (
@@ -810,13 +923,7 @@ function ChefDgalContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reservations
-                    .slice()
-                    .sort((a, b) =>
-                      String(b.dateCreation).localeCompare(String(a.dateCreation))
-                    )
-                    .slice(0, 20)
-                    .map((r) => (
+                  {reservationsConsultation.map((r) => (
                       <tr key={r.id} style={trStyle}>
                         <td style={tdStyle}>{formaterDate(r.dateCreation)}</td>
 
@@ -880,7 +987,7 @@ function ChefDgalContent() {
                         </td>
 
                         <td style={tdStyle}>
-                          <BadgeStatut statut={r.statut} />
+                          <BadgeStatut statut={r.statut} zoneMission={r.zoneMission} />
                         </td>
                       </tr>
                     ))}
@@ -888,7 +995,9 @@ function ChefDgalContent() {
               </table>
             </div>
           )}
+          </>)}
 
+          {rubriqueActive === "dgal-entretiens" && (<>
           <div id="dgal-entretiens" style={{scrollMarginTop: 85}}>
             <SectionTitre titre="Entretiens — consultation du circuit DID" />
           </div>
@@ -926,8 +1035,9 @@ function ChefDgalContent() {
               </table>
             </div>
           )}
+          </>)}
 
-          {(assurances.length > 0 || sinistres.length > 0) && (
+          {rubriqueActive === "dgal-assurances" && (
             <>
               <div id="dgal-assurances" style={{scrollMarginTop: 85}}>
                 <SectionTitre titre="Assurances et sinistres — consultation" />
@@ -935,7 +1045,9 @@ function ChefDgalContent() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 18, marginBottom: 30 }}>
                 <div style={cardStyle}>
                   <h4 style={cardTitleStyle}>Assurances</h4>
-                  {assurances.length === 0 ? (
+                  {erreursModulesOptionnels.some((erreur) => erreur.startsWith("/assurances:")) ? (
+                    <TexteVide texte="Données assurance indisponibles : vérifier la connexion API." />
+                  ) : assurances.length === 0 ? (
                     <TexteVide texte="Aucune assurance disponible." />
                   ) : (
                     <div style={{ display: "grid", gap: 8 }}>
@@ -957,7 +1069,9 @@ function ChefDgalContent() {
 
                 <div style={cardStyle}>
                   <h4 style={cardTitleStyle}>Sinistres</h4>
-                  {sinistres.length === 0 ? (
+                  {erreursModulesOptionnels.some((erreur) => erreur.startsWith("/sinistres:")) ? (
+                    <TexteVide texte="Données sinistres indisponibles : vérifier la connexion API." />
+                  ) : sinistres.length === 0 ? (
                     <TexteVide texte="Aucun sinistre disponible." />
                   ) : (
                     <div style={{ display: "grid", gap: 8 }}>
@@ -977,6 +1091,20 @@ function ChefDgalContent() {
             </>
           )}
 
+          {rubriqueActive === "dgal-carnet" && (<>
+          <div id="dgal-carnet" style={{ scrollMarginTop: 85 }}><CarnetBordDgal /></div>
+          </>)}
+
+          {rubriqueActive === "dgal-fiches-surete" && (<>
+          <div id="dgal-fiches-surete" style={{scrollMarginTop: 85}}>
+            <SectionTitre titre="Fiches de bord sûreté — interventions clôturées" />
+          </div>
+          <div style={{marginBottom: 30}}>
+            <FichesSureteListe />
+          </div>
+          </>)}
+
+          {rubriqueActive === "dgal-synthese" && (<>
           <div id="dgal-synthese" style={{scrollMarginTop: 85}}>
             <SectionTitre titre="Synthèse hebdomadaire pour le Chef du Département" />
           </div>
@@ -995,6 +1123,7 @@ function ChefDgalContent() {
               <Info label="Sinistres sur 7 jours" value={String(sinistres7j.length)} />
             </div>
           </div>
+          </>)}
         </div>
       </main>
     </div>
@@ -1010,7 +1139,7 @@ function CarteKpi({
   icone: ReactNode;
   label: string;
   valeur: string;
-  sousTexte?: string;
+  sousTexte?: ReactNode;
 }) {
   return (
     <div style={cardStyle}>
@@ -1026,6 +1155,25 @@ function CarteKpi({
 
 function SectionTitre({ titre }: { titre: string }) {
   return <h3 style={{ margin: "28px 0 12px", fontSize: 16, color: "#334155" }}>{titre}</h3>;
+}
+
+function DepotOrdreMissionDgal({ reservationId }: { reservationId: number }) {
+  const cible = useMemo(
+    () => ({ kind: "reservation" as const, id: reservationId }),
+    [reservationId]
+  );
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <JustificatifsSection
+        cible={cible}
+        typesAutorises={["ORDRE_MISSION"]}
+        typeParDefaut="ORDRE_MISSION"
+        peutValider
+        titre="Ordre de mission signé — dépôt avant validation N°2"
+      />
+    </div>
+  );
 }
 
 function BlocVide({ texte }: { texte: string }) {
@@ -1045,15 +1193,15 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BadgeStatut({ statut }: { statut: string }) {
+function BadgeStatut({ statut, zoneMission }: { statut: string; zoneMission?: string | null }) {
   const map: Record<string, { bg: string; color: string; label: string }> = {
     DISPONIBLE: { bg: "#dcfce7", color: "#166534", label: "Disponible" },
     EN_MISSION: { bg: "#dbeafe", color: "#1d4ed8", label: "En mission" },
     EN_MAINTENANCE: { bg: "#fef3c7", color: "#92400e", label: "En maintenance" },
     INDISPONIBLE: { bg: "#fee2e2", color: "#991b1b", label: "Indisponible" },
-    EN_ATTENTE: { bg: "#f1f5f9", color: "#475569", label: "En attente" },
-    VALIDEE_N1: { bg: "#dbeafe", color: "#1e40af", label: "Validée N1" },
-    VALIDEE: { bg: "#dcfce7", color: "#166534", label: "Validée N2" },
+    EN_ATTENTE: { bg: "#f1f5f9", color: "#475569", label: "Prévue" },
+    VALIDEE_N1: { bg: "#fef3c7", color: "#92400e", label: "Planifiée — validation N°2" },
+    VALIDEE: { bg: "#dcfce7", color: "#166534", label: "Planifiée" },
     REFUSEE: { bg: "#fee2e2", color: "#b91c1c", label: "Refusée" },
     EN_ATTENTE_AVIS_DID: { bg: "#fef3c7", color: "#92400e", label: "En attente d'avis DID" },
     PLANIFIEE: { bg: "#dbeafe", color: "#1e40af", label: "Planifiée" },
@@ -1061,10 +1209,14 @@ function BadgeStatut({ statut }: { statut: string }) {
     CLOTUREE: { bg: "#dcfce7", color: "#166534", label: "Clôturée" },
   };
 
-  const item = map[statut] || {
+  const cle = String(statut || "").trim().toUpperCase();
+  const libelleInconnu = statutMaintenanceLabel[cle] || cle.replace(/_/g, " ").toLocaleLowerCase("fr-FR");
+  const item = cle === "VALIDEE" && zoneMission === "HORS_TOAMASINA"
+    ? { bg: "#dbeafe", color: "#1e40af", label: "Planifiée" }
+    : map[cle] || {
     bg: "#f1f5f9",
     color: "#475569",
-    label: statutMaintenanceLabel[statut] || statut || "—",
+    label: libelleInconnu ? libelleInconnu.charAt(0).toLocaleUpperCase("fr-FR") + libelleInconnu.slice(1) : "—",
   };
 
   return (
@@ -1312,14 +1464,15 @@ const boutonValider: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 7,
-  padding: "9px 13px",
-  borderRadius: 8,
-  border: "1px solid #16a34a",
-  background: "#16a34a",
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: "none",
+  background: "#15803d",
   color: "#ffffff",
   fontSize: 13,
   fontWeight: 700,
   cursor: "pointer",
+  transition: "all 150ms ease",
 };
 
 const boutonSecondaire: CSSProperties = {
@@ -1327,14 +1480,15 @@ const boutonSecondaire: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 7,
-  padding: "9px 13px",
-  borderRadius: 8,
-  border: "1px solid #2563eb",
-  background: "#2563eb",
+  padding: "10px 16px",
+  borderRadius: 10,
+  border: "none",
+  background: "#1d4ed8",
   color: "#ffffff",
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 700,
   cursor: "pointer",
+  transition: "all 150ms ease",
 };
 
 const urgentBadgeStyle: CSSProperties = {

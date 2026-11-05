@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { estLectureSeule } from "@/app/lib/roles";
 import EnTete from "@/components/EnTete";
+import PersonnelAutocomplete from "@/components/PersonnelAutocomplete";
 
 interface Chauffeur {
   id: number;
@@ -11,6 +13,8 @@ interface Chauffeur {
   nom: string;
   prenom?: string;
   affectationService?: string;
+  numeroPermis?: string;
+  dateExpirationPermis?: string;
   statut: string;
 }
 
@@ -60,6 +64,7 @@ export default function ChauffeursPage() {
 
   const [chauffeurs, setChauffeurs] = useState<Chauffeur[]>([]);
   const [chargement, setChargement] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   const [formOuvert, setFormOuvert] = useState(false);
   const [recherche, setRecherche] = useState("");
@@ -73,10 +78,8 @@ export default function ChauffeursPage() {
   const [affectationService, setAffectationService] =
     useState("");
   const [statut, setStatut] = useState("DISPONIBLE");
-
-  // =========================================================
-  // ROLE / LECTURE SEULE (DIRECTEUR_DFP)
-  // =========================================================
+  const [numeroPermis, setNumeroPermis] = useState("");
+  const [dateExpirationPermis, setDateExpirationPermis] = useState("");
 
   const [role, setRole] = useState<string | null>(null);
 
@@ -84,14 +87,17 @@ export default function ChauffeursPage() {
     setRole(localStorage.getItem("role"));
   }, []);
 
-  const lectureSeule = role === "DIRECTEUR_DFP";
-
-  // =========================================================
-  // CHARGER LES CHAUFFEURS
-  // =========================================================
+  const lectureSeule = estLectureSeule(role);
 
   const charger = async () => {
+    if (!API || !token) {
+      setErreurChargement(!API ? "NEXT_PUBLIC_API_URL n'est pas configurée." : "Session indisponible.");
+      setChargement(false);
+      if (!token) router.replace("/login");
+      return;
+    }
     setChargement(true);
+    setErreurChargement(null);
 
     try {
       const res = await fetch(`${API}/chauffeurs`, {
@@ -104,16 +110,15 @@ export default function ChauffeursPage() {
         throw new Error();
       }
 
-      const data = await res.json();
-
-      setChauffeurs(
-        Array.isArray(data)
-          ? data
-          : data.content || []
-      );
-    } catch {
+      const data: unknown = await res.json();
+      const liste = Array.isArray(data) ? data : data && typeof data === "object" && "content" in data && Array.isArray(data.content) ? data.content : null;
+      if (!liste) throw new Error("Format de réponse chauffeurs invalide.");
+      setChauffeurs(liste as Chauffeur[]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Impossible de charger les chauffeurs.";
+      setErreurChargement(message);
       toast.error(
-        "Impossible de charger les chauffeurs"
+        message
       );
 
       setChauffeurs([]);
@@ -126,12 +131,10 @@ export default function ChauffeursPage() {
     charger();
   }, []);
 
-  // =========================================================
-  // REINITIALISER LE FORMULAIRE
-  // =========================================================
-
   const resetForm = () => {
     setMatricule("");
+    setNumeroPermis("");
+    setDateExpirationPermis("");
     setNom("");
     setPrenom("");
     setAffectationService("");
@@ -139,19 +142,11 @@ export default function ChauffeursPage() {
     setEnEdition(null);
   };
 
-  // =========================================================
-  // OUVRIR CREATION
-  // =========================================================
-
   const ouvrirCreation = () => {
     if (lectureSeule) return;
     resetForm();
     setFormOuvert(true);
   };
-
-  // =========================================================
-  // OUVRIR MODIFICATION
-  // =========================================================
 
   const ouvrirEdition = (c: Chauffeur) => {
     if (lectureSeule) return;
@@ -159,6 +154,8 @@ export default function ChauffeursPage() {
     setEnEdition(c);
 
     setMatricule(c.matricule || "");
+    setNumeroPermis(c.numeroPermis || "");
+    setDateExpirationPermis(c.dateExpirationPermis || "");
     setNom(c.nom || "");
     setPrenom(c.prenom || "");
     setAffectationService(
@@ -171,10 +168,6 @@ export default function ChauffeursPage() {
     setFormOuvert(true);
   };
 
-  // =========================================================
-  // CREER / MODIFIER
-  // =========================================================
-
   const handleSoumettre = async (
     e: React.FormEvent
   ) => {
@@ -183,6 +176,8 @@ export default function ChauffeursPage() {
     if (lectureSeule) return;
 
     const body = {
+      numeroPermis,
+      dateExpirationPermis: dateExpirationPermis || null,
       matricule,
       nom,
       prenom,
@@ -235,10 +230,6 @@ export default function ChauffeursPage() {
       );
     }
   };
-
-  // =========================================================
-  // SUPPRIMER
-  // =========================================================
 
   const handleSupprimer = (
     id: number
@@ -314,10 +305,6 @@ export default function ChauffeursPage() {
     );
   };
 
-  // =========================================================
-  // RECHERCHE
-  // =========================================================
-
   const filtres =
     chauffeurs.filter((c) => {
       const t =
@@ -337,10 +324,6 @@ export default function ChauffeursPage() {
             .includes(t)
         );
     });
-
-  // =========================================================
-  // BADGE STATUT
-  // =========================================================
 
   const badgeStatut = (
     s: string
@@ -415,6 +398,7 @@ export default function ChauffeursPage() {
   return (
     <>
       <EnTete afficherNotifications={false} afficherProfil={false} />
+      {erreurChargement && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Liste des chauffeurs non synchronisée : {erreurChargement}.</div>}
 
       <div
         style={{
@@ -424,9 +408,8 @@ export default function ChauffeursPage() {
           boxSizing: "border-box",
         }}
       >
-        {/* Contenu centré et limité en largeur, sans changer les fonctions. */}
+
         <div style={{ width: "100%", maxWidth: 1050, margin: "0 auto" }}>
-      {/* ================= HEADER ================= */}
 
       <div
         style={{
@@ -467,24 +450,23 @@ export default function ChauffeursPage() {
 
         {!lectureSeule && (
           <button
+            type="button"
+            className="btn-spat btn-rouge"
             onClick={ouvrirCreation}
             style={{
               padding: "10px 20px",
-              backgroundColor: "#dc2626",
-              color: "white",
               border: "none",
-              borderRadius: 6,
+              borderRadius: 10,
               fontSize: 14,
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
+              transition: "all 150ms ease",
             }}
           >
             + Ajouter un chauffeur
           </button>
         )}
       </div>
-
-      {/* ================= FORMULAIRE ================= */}
 
       {formOuvert && !lectureSeule && (
         <div
@@ -534,8 +516,15 @@ export default function ChauffeursPage() {
                 gap: 14,
               }}
             >
-
-              {/* MATRICULE */}
+              <PersonnelAutocomplete
+                label="Chauffeur"
+                style={{ gridColumn: "1 / -1" }}
+                onSelect={(personnel) => {
+                  setMatricule(personnel.matricule);
+                  setNom(personnel.nom);
+                  setPrenom(personnel.prenom);
+                }}
+              />
 
               <div>
                 <label
@@ -556,8 +545,6 @@ export default function ChauffeursPage() {
                 />
               </div>
 
-              {/* NOM */}
-
               <div>
                 <label
                   style={labelStyle}
@@ -577,8 +564,6 @@ export default function ChauffeursPage() {
                 />
               </div>
 
-              {/* PRENOM */}
-
               <div>
                 <label
                   style={labelStyle}
@@ -597,12 +582,16 @@ export default function ChauffeursPage() {
                 />
               </div>
 
-              {/* AFFECTATION */}
-
               <div>
                 <label
                   style={labelStyle}
                 >
+                  N° de permis
+                </label>
+                <input aria-label="Numéro de permis" style={inputStyle} value={numeroPermis} onChange={(e) => setNumeroPermis(e.target.value)} required />
+                <label style={labelStyle}>Expiration du permis</label>
+                <input aria-label="Expiration du permis" style={inputStyle} type="date" value={dateExpirationPermis} onChange={(e) => setDateExpirationPermis(e.target.value)} required />
+                <label style={labelStyle}>
                   Affectation
                 </label>
 
@@ -620,8 +609,6 @@ export default function ChauffeursPage() {
                   style={inputStyle}
                 />
               </div>
-
-              {/* STATUT */}
 
               <div>
                 <label
@@ -665,8 +652,6 @@ export default function ChauffeursPage() {
                 </select>
               </div>
 
-              {/* BOUTONS */}
-
               <div
                 style={{
                   gridColumn:
@@ -680,6 +665,7 @@ export default function ChauffeursPage() {
               >
                 <button
                   type="button"
+                  className="btn-spat btn-neutre"
                   onClick={() => {
                     setFormOuvert(
                       false
@@ -689,15 +675,12 @@ export default function ChauffeursPage() {
                   }}
                   style={{
                     padding:
-                      "10px 16px",
-                    backgroundColor:
-                      "#2563eb",
-                    color:
-                      "#ffffff",
-                    border: "1px solid #2563eb",
-                    borderRadius: 8,
+                      "11px 18px",
+                    border: "none",
+                    borderRadius: 10,
                     cursor: "pointer",
-                    fontWeight: 600,
+                    fontWeight: 700,
+                    transition: "all 150ms ease",
                   }}
                 >
                   Annuler
@@ -705,16 +688,15 @@ export default function ChauffeursPage() {
 
                 <button
                   type="submit"
+                  className="btn-spat btn-rouge"
                   style={{
                     padding:
-                      "10px 16px",
-                    backgroundColor:
-                      "#dc2626",
-                    color: "white",
+                      "11px 18px",
                     border: "none",
-                    borderRadius: 8,
+                    borderRadius: 10,
                     cursor: "pointer",
-                    fontWeight: 600,
+                    fontWeight: 700,
+                    transition: "all 150ms ease",
                   }}
                 >
                   {enEdition
@@ -726,8 +708,6 @@ export default function ChauffeursPage() {
           </div>
         </div>
       )}
-
-      {/* ================= RECHERCHE ================= */}
 
       <div
         style={{
@@ -755,8 +735,6 @@ export default function ChauffeursPage() {
           }}
         />
       </div>
-
-      {/* ================= TABLE ================= */}
 
       <div
         style={{
@@ -888,6 +866,7 @@ export default function ChauffeursPage() {
                         }}
                       >
                         <button
+                          type="button"
                           onClick={() =>
                             ouvrirEdition(c)
                           }
@@ -897,11 +876,13 @@ export default function ChauffeursPage() {
                             "#bfdbfe"
                           )}
                           title="Modifier"
+                          aria-label={`Modifier le chauffeur ${c.prenom || ""} ${c.nom}`.trim()}
                         >
                           <IconEdit />
                         </button>
 
                         <button
+                          type="button"
                           onClick={() =>
                             handleSupprimer(
                               c.id
@@ -913,6 +894,7 @@ export default function ChauffeursPage() {
                             "#fecaca"
                           )}
                           title="Supprimer"
+                          aria-label={`Supprimer le chauffeur ${c.prenom || ""} ${c.nom}`.trim()}
                         >
                           <IconTrash />
                         </button>
@@ -930,10 +912,6 @@ export default function ChauffeursPage() {
     </>
   );
 }
-
-// =========================================================
-// STYLES
-// =========================================================
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -980,4 +958,5 @@ const btnIcon = (
   border: `1px solid ${border}`,
   borderRadius: 8,
   cursor: "pointer",
+  transition: "all 150ms ease",
 });

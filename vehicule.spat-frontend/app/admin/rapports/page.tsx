@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import EnTete from "@/components/EnTete";
+import ExportButtons from "@/components/ExportButtons";
 
 interface Vehicule {
   id: number;
@@ -14,6 +15,9 @@ interface Vehicule {
   modeleType?: string | null;
   categorie?: string | null;
   statut: string;
+  dateExpirationVisiteTechnique?: string | null;
+  dateProchainEntretien?: string | null;
+  directions?: { id: number; nom?: string | null; code?: string | null }[] | null;
 }
 
 interface Reservation {
@@ -23,6 +27,7 @@ interface Reservation {
   dateFin: string;
   statut: string;
   dateCreation: string;
+  demandeurEntite?: string | null;
 }
 
 interface TransactionCarburant {
@@ -61,6 +66,27 @@ interface Sinistre {
   statut?: string | null;
 }
 
+interface Incident {
+  id: number;
+  type_incident: string;
+  gravite: string;
+  statut: string;
+  date_signalement: string;
+  description: string;
+  vehicule_immatriculation?: string | null;
+  vehicule_categorie?: string | null;
+}
+
+interface Echeance {
+  vehicule_immatriculation?: string | null;
+  type: string;
+  date_echeance: string;
+  jours_avant: number;
+  niveau_alerte: string;
+  statut_vehicule?: string | null;
+  numero_police?: string | null;
+}
+
 type Periode = "7J" | "30J" | "MOIS" | "TOUT";
 
 export default function RapportsPage() {
@@ -73,10 +99,15 @@ export default function RapportsPage() {
   const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
   const [assurances, setAssurances] = useState<Assurance[]>([]);
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [echeances, setEcheances] = useState<Echeance[]>([]);
 
   const [chargement, setChargement] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [erreursModulesOptionnels, setErreursModulesOptionnels] = useState<string[]>([]);
   const [periode, setPeriode] = useState<Periode>("30J");
   const [recherche, setRecherche] = useState("");
+  const [rapportSelectionne, setRapportSelectionne] = useState<"vehicules" | "directions">("vehicules");
 
   const getToken = () => {
     if (typeof window === "undefined") return null;
@@ -110,7 +141,6 @@ export default function RapportsPage() {
       });
 
       if (!res.ok) {
-        if (optionnel) return [];
         throw new Error(await lireErreur(res));
       }
 
@@ -119,10 +149,14 @@ export default function RapportsPage() {
       if (Array.isArray(data)) return data;
       if (Array.isArray(data?.content)) return data.content;
 
-      return [];
+      throw new Error(`Format de réponse invalide : ${url}`);
     } catch (error) {
       if (optionnel) {
         console.warn("Module optionnel indisponible :", url, error);
+        setErreursModulesOptionnels((precedentes) => [
+          ...precedentes,
+          `${url.replace(API || "", "")}: ${error instanceof Error ? error.message : "échec de chargement"}`,
+        ]);
         return [];
       }
 
@@ -145,15 +179,19 @@ export default function RapportsPage() {
     }
 
     setChargement(true);
+    setErreurChargement(null);
+    setErreursModulesOptionnels([]);
 
     try {
-      const [v, r, c, m, a, s] = await Promise.all([
+      const [v, r, c, m, a, s, i, e] = await Promise.all([
         fetchListe<Vehicule>(`${API}/vehicules`, token),
         fetchListe<Reservation>(`${API}/reservations`, token),
         fetchListe<TransactionCarburant>(`${API}/carburant`, token),
         fetchListe<Maintenance>(`${API}/maintenances`, token),
         fetchListe<Assurance>(`${API}/assurances`, token, true),
         fetchListe<Sinistre>(`${API}/sinistres`, token, true),
+        fetchListe<Incident>(`${API}/dashboard/incidents`, token, true),
+        fetchListe<Echeance>(`${API}/dashboard/echeances`, token, true),
       ]);
 
       setVehicules(v);
@@ -162,8 +200,15 @@ export default function RapportsPage() {
       setMaintenances(m);
       setAssurances(a);
       setSinistres(s);
+      setIncidents(i);
+      setEcheances(e);
     } catch (error) {
       console.error("Erreur chargement rapports :", error);
+      setVehicules([]);
+      setReservations([]);
+      setTransactions([]);
+      setMaintenances([]);
+      setErreurChargement(error instanceof Error ? error.message : "Données de reporting indisponibles.");
 
       toast.error(
         error instanceof Error
@@ -310,6 +355,19 @@ export default function RapportsPage() {
           "CLOTUREE"
       ).length;
 
+    const incidentsEnCours = incidents.filter((incident) =>
+      !["CLOTURE", "CLOTUREE", "RESOLU", "RESOLUE"].includes(
+        String(incident.statut || "").toUpperCase()
+      )
+    ).length;
+
+    const echeancesCritiques = echeances.filter((echeance) =>
+      Number(echeance.jours_avant) <= 7
+      || ["CRITIQUE", "URGENT", "EXPIREE"].includes(
+        String(echeance.niveau_alerte || "").toUpperCase()
+      )
+    ).length;
+
     const cloturees = maintenances.filter(
       (m) =>
         String(m.statut || "").toUpperCase() ===
@@ -363,6 +421,8 @@ export default function RapportsPage() {
       entretiensActifs,
       sinistres:
         sinistresPeriode.length,
+      incidentsEnCours,
+      echeancesCritiques,
       delaiMoyen,
     };
   }, [
@@ -371,6 +431,8 @@ export default function RapportsPage() {
     carburantPeriode,
     maintenances,
     sinistresPeriode,
+    incidents,
+    echeances,
   ]);
 
   const rapportParVehicule = useMemo(() => {
@@ -386,6 +448,9 @@ export default function RapportsPage() {
               r.vehicule?.id ===
               vehicule.id
           ).length;
+        const heuresMission = reservationsPeriode
+          .filter((r) => r.vehicule?.id === vehicule.id)
+          .reduce((total, r) => total + heuresMissionDansPeriode(r.dateDebut, r.dateFin, debutPeriode), 0);
 
         const consommation =
           carburantPeriode
@@ -490,6 +555,9 @@ export default function RapportsPage() {
           entretiensActifs,
           nombreSinistres,
           assurance,
+          visiteTechnique: vehicule.dateExpirationVisiteTechnique || null,
+          prochainEntretien: vehicule.dateProchainEntretien || null,
+          tauxUtilisation: tauxOccupation(heuresMission, debutPeriode),
         };
       })
       .filter((ligne) => {
@@ -519,11 +587,37 @@ export default function RapportsPage() {
     sinistresPeriode,
     assurances,
     recherche,
+    debutPeriode,
   ]);
 
-  const imprimer = () => {
-    window.print();
-  };
+  const rapportParDirection = useMemo(() => {
+    const lignes = new Map<string, { direction: string; missions: number; vehicules: Set<number>; heures: number }>();
+    reservationsPeriode.forEach((reservation) => {
+      const direction = reservation.demandeurEntite?.trim() || "Direction non renseignée";
+      const ligne = lignes.get(direction) || { direction, missions: 0, vehicules: new Set<number>(), heures: 0 };
+      ligne.missions += 1;
+      if (reservation.vehicule?.id != null) ligne.vehicules.add(reservation.vehicule.id);
+      ligne.heures += heuresMissionDansPeriode(reservation.dateDebut, reservation.dateFin, debutPeriode);
+      lignes.set(direction, ligne);
+    });
+    return Array.from(lignes.values())
+      .map((ligne) => ({ direction: ligne.direction, missions: ligne.missions, vehicules: ligne.vehicules.size, tauxUtilisation: tauxOccupation(ligne.heures, debutPeriode, Math.max(1, ligne.vehicules.size)) }))
+      .sort((a, b) => b.missions - a.missions || a.direction.localeCompare(b.direction));
+  }, [reservationsPeriode]);
+
+  const exportVehicules = rapportParVehicule.map((ligne) => ({
+    vehicule: ligne.vehicule.immatriculation,
+    categorie: ligne.vehicule.categorie || "—",
+    statut: formatStatutVehicule(ligne.vehicule.statut),
+    missions: ligne.missions,
+    tauxUtilisation: `${ligne.tauxUtilisation}%`,
+    consommation: `${formatNombre(ligne.consommation)} L`,
+    entretiens: ligne.entretiensActifs,
+    sinistres: ligne.nombreSinistres,
+    visiteTechnique: formaterDateSimple(ligne.visiteTechnique),
+    prochainEntretien: formaterDateSimple(ligne.prochainEntretien),
+    assurance: ligne.assurance ? formaterDateSimple(dateAssurance(ligne.assurance)) : "—",
+  }));
 
   return (
     <>
@@ -571,6 +665,17 @@ export default function RapportsPage() {
 
       <EnTete afficherNotifications={false} afficherProfil={false} />
 
+      {erreurChargement && (
+        <div role="alert" style={{ margin: "12px 24px", padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b" }}>
+          Données de reporting indisponibles : {erreurChargement}. Les indicateurs ne sont pas à jour.
+        </div>
+      )}
+      {erreursModulesOptionnels.length > 0 && (
+        <div role="alert" style={{ margin: "12px 24px", padding: 12, border: "1px solid #fed7aa", borderRadius: 8, background: "#fff7ed", color: "#9a3412" }}>
+          Certains modules facultatifs n’ont pas pu être lus depuis l’API : {erreursModulesOptionnels.join(" · ")}. Les rapports concernés peuvent être incomplets.
+        </div>
+      )}
+
       <main style={pageStyle}>
         <div style={containerStyle}>
           <header
@@ -592,34 +697,42 @@ export default function RapportsPage() {
                 Rapports & décisions
               </h2>
 
-              
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: 9,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="button"
-                onClick={charger}
-                disabled={chargement}
-                style={
-                  secondaryButton
-                }
-              >
-                Actualiser
+            <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" onClick={charger} disabled={chargement} style={{ padding: "9px 14px", border: "1px solid #2563eb", borderRadius: 8, background: "#2563eb", color: "#fff", cursor: chargement ? "wait" : "pointer", fontWeight: 700 }}>
+                {chargement ? "Actualisation…" : "Actualiser"}
               </button>
-
-              <button
-                type="button"
-                onClick={imprimer}
-                style={primaryButton}
+              <select
+                value={rapportSelectionne}
+                onChange={(e) => setRapportSelectionne(e.target.value as "vehicules" | "directions")}
+                style={{ padding: "9px 14px", border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff", cursor: "pointer", fontWeight: 600 }}
               >
-                Imprimer / PDF
-              </button>
+                <option value="vehicules">Synthèse par véhicule</option>
+                <option value="directions">Utilisation par direction</option>
+              </select>
+              {rapportSelectionne === "vehicules" && (
+                <ExportButtons titre="Synthèse par véhicule" nomFichier="rapport_vehicules" donnees={exportVehicules} colonnes={[
+                { header: "Véhicule", key: "vehicule" },
+                { header: "Catégorie", key: "categorie" },
+                { header: "Statut", key: "statut" },
+                { header: "Missions", key: "missions" },
+                { header: "Taux d’utilisation", key: "tauxUtilisation" },
+                { header: "Consommation", key: "consommation" },
+                { header: "Entretiens actifs", key: "entretiens" },
+                { header: "Sinistres", key: "sinistres" },
+                { header: "Visite technique", key: "visiteTechnique" },
+                { header: "Prochain entretien", key: "prochainEntretien" },
+                { header: "Assurance", key: "assurance" },
+              ]} />
+              )}
+              {rapportSelectionne === "directions" && (
+                <ExportButtons titre="Utilisation par direction" nomFichier="rapport_directions" donnees={rapportParDirection} colonnes={[
+                { header: "Direction", key: "direction" },
+                { header: "Missions", key: "missions" },
+                { header: "Véhicules utilisés", key: "vehicules" },
+                { header: "Taux d’utilisation", key: "tauxUtilisation" },
+              ]} />
+              )}
             </div>
           </header>
 
@@ -674,19 +787,19 @@ export default function RapportsPage() {
           >
             <StatCard
               titre="Véhicules disponibles"
-              valeur={`${kpis.disponibles} / ${vehicules.length}`}
+              valeur={erreurChargement ? "—" : `${kpis.disponibles} / ${vehicules.length}`}
             />
 
             <StatCard
               titre="Demandes / missions en cours"
-              valeur={String(
+              valeur={erreurChargement ? "—" : String(
                 kpis.demandesEnCours
               )}
             />
 
             <StatCard
               titre="Consommation carburant"
-              valeur={`${formatNombre(
+              valeur={erreurChargement ? "—" : `${formatNombre(
                 kpis.consommation
               )} L`}
             />
@@ -753,18 +866,6 @@ export default function RapportsPage() {
                 Synthèse par véhicule
               </h3>
 
-              <p
-                style={{
-                  margin:
-                    "4px 0 0",
-                  color: "#64748b",
-                  fontSize: 11,
-                }}
-              >
-                Missions, consommation,
-                entretiens, sinistres et
-                échéance assurance.
-              </p>
             </div>
 
             <div
@@ -792,6 +893,7 @@ export default function RapportsPage() {
                     >
                       Missions
                     </th>
+                    <th style={thStyle}>Taux d’utilisation</th>
                     <th
                       style={thStyle}
                     >
@@ -817,6 +919,8 @@ export default function RapportsPage() {
                     >
                       Assurance
                     </th>
+                    <th style={thStyle}>Visite technique</th>
+                    <th style={thStyle}>Prochain entretien</th>
                   </tr>
                 </thead>
 
@@ -824,7 +928,7 @@ export default function RapportsPage() {
                   {chargement ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={11}
                         style={
                           emptyStyle
                         }
@@ -836,7 +940,7 @@ export default function RapportsPage() {
                     0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={11}
                         style={
                           emptyStyle
                         }
@@ -878,7 +982,6 @@ export default function RapportsPage() {
                               )}
                             </div>
                           </td>
-
                           <td
                             style={
                               tdStyle
@@ -900,6 +1003,8 @@ export default function RapportsPage() {
                               ligne.missions
                             }
                           </td>
+
+                          <td style={tdStyle}>{ligne.tauxUtilisation}%</td>
 
                           <td
                             style={
@@ -973,10 +1078,36 @@ export default function RapportsPage() {
                               "—"
                             )}
                           </td>
+                          <td style={tdStyle}>{formaterDateSimple(ligne.visiteTechnique)}</td>
+                          <td style={tdStyle}>{formaterDateSimple(ligne.prochainEntretien)}</td>
                         </tr>
                       )
                     )
                   )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section style={{ ...tableCardStyle, marginTop: 18 }}>
+            <div style={{ padding: "15px 16px", borderBottom: "1px solid #e2e8f0" }}>
+              <h3 style={{ margin: 0, color: "#1e293b", fontSize: 16 }}>Utilisation par direction</h3>
+
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={tableStyle}>
+                <thead><tr><th style={thStyle}>Direction</th><th style={thStyle}>Missions</th><th style={thStyle}>Véhicules utilisés</th><th style={thStyle}>Taux d’utilisation</th></tr></thead>
+                <tbody>
+                  {rapportParDirection.length === 0 ? (
+                    <tr><td colSpan={4} style={emptyStyle}>Aucune mission sur cette période.</td></tr>
+                  ) : rapportParDirection.map((ligne) => (
+                    <tr key={ligne.direction} className="rapport-row">
+                      <td style={tdStyle}>{ligne.direction}</td>
+                      <td style={tdStyle}>{ligne.missions}</td>
+                      <td style={tdStyle}>{ligne.vehicules}</td>
+                      <td style={tdStyle}>{ligne.tauxUtilisation}%</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -996,6 +1127,23 @@ function dateAssurance(
     assurance.dateFin ||
     null
   );
+}
+
+function heuresMissionDansPeriode(dateDebut: string, dateFin: string, debutPeriode: Date | null): number {
+  const debut = new Date(dateDebut).getTime();
+  const fin = new Date(dateFin).getTime();
+  if (!Number.isFinite(debut) || !Number.isFinite(fin) || fin <= debut) return 0;
+  const maintenant = Date.now();
+  const debutCapacite = debutPeriode?.getTime() ?? (maintenant - 30 * 86_400_000);
+  const debutEffectif = Math.max(debut, debutCapacite);
+  const finEffectif = Math.min(fin, maintenant);
+  return finEffectif > debutEffectif ? (finEffectif - debutEffectif) / 3_600_000 : 0;
+}
+
+function tauxOccupation(heuresMission: number, debutPeriode: Date | null, capaciteVehicules = 1): number {
+  const debut = debutPeriode?.getTime() ?? (Date.now() - 30 * 86_400_000);
+  const heuresDisponibles = Math.max(1, ((Date.now() - debut) / 3_600_000) * 10 * Math.max(1, capaciteVehicules));
+  return Math.min(100, Math.round((heuresMission / heuresDisponibles) * 100));
 }
 
 function nomModeleVehicule(
@@ -1174,13 +1322,6 @@ const titreStyle:
   fontSize: 26,
 };
 
-const sousTitreStyle:
-  CSSProperties = {
-  margin: "5px 0 0",
-  color: "#64748b",
-  fontSize: 13,
-};
-
 const filtersStyle:
   CSSProperties = {
   display: "flex",
@@ -1280,29 +1421,5 @@ const emptyStyle:
   textAlign: "center",
   color: "#64748b",
   fontSize: 13,
-};
-
-const primaryButton:
-  CSSProperties = {
-  padding: "10px 16px",
-  border: "none",
-  borderRadius: 8,
-  backgroundColor:
-    "#dc2626",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaryButton:
-  CSSProperties = {
-  padding: "10px 14px",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
-  backgroundColor:
-    "#2563eb",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
 };
 

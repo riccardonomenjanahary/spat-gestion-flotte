@@ -7,13 +7,16 @@ import java.time.LocalDateTime;
  *
  * Règle métier :
  * - le demandeur décrit le besoin ;
- * - il ne choisit ni le véhicule ni le chauffeur ;
- * - le Chef du Service Logistique affecte les ressources ensuite.
+ * - il ne choisit pas de véhicule ni de chauffeur dans le circuit général ;
+ * - les écrans de direction peuvent sélectionner les ressources d'une mission hors ville.
  *
  * Certains champs sont conservés pour compatibilité avec
  * les autres écrans et traitements existants.
  */
 public class CreateReservationRequest {
+    private Long conducteurMotoId;
+    public Long getConducteurMotoId() { return conducteurMotoId; }
+    public void setConducteurMotoId(Long id) { conducteurMotoId = id; }
 
     /**
      * Conservé pour compatibilité.
@@ -21,6 +24,9 @@ public class CreateReservationRequest {
      * le backend n'utilise pas ce champ pour affecter un véhicule.
      */
     private Long vehiculeId;
+
+    /** Chauffeur choisi pour une mission hors ville en voiture depuis les écrans de direction. */
+    private Long chauffeurId;
 
     /**
      * VILLE_TOAMASINA
@@ -30,6 +36,9 @@ public class CreateReservationRequest {
 
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
+
+    /** Durée de la mission hors ville, exprimée en minutes (jours côté formulaire). */
+    private Integer dureeEstimeeMinutes;
 
     private String motif;
 
@@ -76,6 +85,14 @@ public class CreateReservationRequest {
         this.vehiculeId = vehiculeId;
     }
 
+    public Long getChauffeurId() {
+        return chauffeurId;
+    }
+
+    public void setChauffeurId(Long chauffeurId) {
+        this.chauffeurId = chauffeurId;
+    }
+
     public String getZoneMission() {
         return zoneMission;
     }
@@ -98,6 +115,14 @@ public class CreateReservationRequest {
 
     public void setDateFin(LocalDateTime dateFin) {
         this.dateFin = dateFin;
+    }
+
+    public Integer getDureeEstimeeMinutes() {
+        return dureeEstimeeMinutes;
+    }
+
+    public void setDureeEstimeeMinutes(Integer dureeEstimeeMinutes) {
+        this.dureeEstimeeMinutes = dureeEstimeeMinutes;
     }
 
     public String getMotif() {

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.LocalDate;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 // =========================================================
 // ENTITE SINISTRE
@@ -95,6 +96,21 @@ public class Sinistre {
             length = 3000
     )
     private String observation;
+
+    @Column(name = "source_assurance", length = 40)
+    private String sourceAssurance;
+
+    @Column(name = "reference_police", length = 120)
+    private String referencePolice;
+
+    @Column(name = "statut_indemnisation", length = 40)
+    private String statutIndemnisation = "NON_DEMANDEE";
+
+    @Column(name = "montant_indemnisation", precision = 15, scale = 2)
+    private BigDecimal montantIndemnisation;
+
+    @Column(name = "date_indemnisation")
+    private LocalDate dateIndemnisation;
 
     @Column(
             name = "statut",
@@ -229,6 +245,17 @@ public class Sinistre {
     public void setObservation(String observation) {
         this.observation = observation;
     }
+
+    public String getSourceAssurance() { return sourceAssurance; }
+    public void setSourceAssurance(String sourceAssurance) { this.sourceAssurance = sourceAssurance; }
+    public String getReferencePolice() { return referencePolice; }
+    public void setReferencePolice(String referencePolice) { this.referencePolice = referencePolice; }
+    public String getStatutIndemnisation() { return statutIndemnisation; }
+    public void setStatutIndemnisation(String statutIndemnisation) { this.statutIndemnisation = statutIndemnisation; }
+    public BigDecimal getMontantIndemnisation() { return montantIndemnisation; }
+    public void setMontantIndemnisation(BigDecimal montantIndemnisation) { this.montantIndemnisation = montantIndemnisation; }
+    public LocalDate getDateIndemnisation() { return dateIndemnisation; }
+    public void setDateIndemnisation(LocalDate dateIndemnisation) { this.dateIndemnisation = dateIndemnisation; }
 
     public String getStatut() {
         return statut;

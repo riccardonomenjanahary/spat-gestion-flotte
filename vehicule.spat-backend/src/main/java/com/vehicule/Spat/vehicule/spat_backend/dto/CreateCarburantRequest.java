@@ -14,7 +14,7 @@ public class CreateCarburantRequest {
     // OPERATION
     // =========================================================
 
-    // "DOTATION" ou "CONSOMMATION"
+    // "DOTATION", "CONSOMMATION" ou "RECHARGE"
     private String type;
 
     private Double quantiteLitres;

@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, User } from "lucide-react";
-import NotificationCenter from "@/app/components/notifications/NotificationCenter";
+import { LogOut, User } from "lucide-react";
+import NotificationPopup from "@/components/NotificationPopup";
+import IncidentSignalementButton from "@/components/IncidentSignalementButton";
 
 type InfosUtilisateur = {
   role?: string;
@@ -36,13 +37,14 @@ function libelleRole(role?: string): string {
   const roles: Record<string, string> = {
     SUPER_ADMIN: "Super administrateur",
     ADMIN: "Administrateur",
+    CO_ADMIN: "Co-administrateur (lecture seule)",
     DIRECTEUR_DFP: "Directeur DFP",
     CHEF_DIRECTION: "Chef de Direction",
     CHEF_SERVICE_LOGISTIQUE: "Chef Service Logistique",
     CHEF_DGAL: "Chef DGAL",
-    MECANICIEN_DID: "Mécanicien diagnostiqueur DID",
+    MECANICIEN_DID: "Chef d’Atelier / Mécanicien DID",
     AGENT_FLOTTE: "Agent Flotte",
-    CHAUFFEUR: "Chauffeur",
+    AGENT_SURETE: "Agent de sûreté",
   };
 
   return (
@@ -56,35 +58,18 @@ function libelleRole(role?: string): string {
   );
 }
 
-function libelleProfil(role?: string): string {
-  const roles: Record<string, string> = {
-    SUPER_ADMIN: "SPAT-Super Admin",
-    ADMIN: "SPAT-Administrateur",
-    DIRECTEUR_DFP: "SPAT-Directeur DFP",
-    CHEF_DIRECTION: "SPAT-Chef de Direction",
-    CHEF_SERVICE_LOGISTIQUE: "SPAT-Chef Logistique",
-    CHEF_DGAL: "SPAT-Chef DGAL",
-    MECANICIEN_DID: "SPAT-Mécanicien DID",
-    AGENT_FLOTTE: "SPAT-Agent Flotte",
-    CHAUFFEUR: "SPAT-Chauffeur",
-  };
-
-  return role
-    ? roles[role] || `SPAT-${libelleRole(role)}`
-    : "SPAT";
-}
-
 function sousTitreEspace(role?: string): string {
   const titres: Record<string, string> = {
     SUPER_ADMIN: "Administration des utilisateurs",
     ADMIN: "Administration du parc automobile",
+    CO_ADMIN: "Consultation du parc automobile",
     DIRECTEUR_DFP: "Pilotage du parc automobile",
     CHEF_DIRECTION: "Demandes de véhicules",
     CHEF_SERVICE_LOGISTIQUE: "Gestion logistique du parc",
     CHEF_DGAL: "Validation des demandes",
-    MECANICIEN_DID: "Diagnostic et entretien du parc",
+    MECANICIEN_DID: "Plan d’entretien, réparations et historique du parc",
     AGENT_FLOTTE: "Gestion de la flotte",
-    CHAUFFEUR: "Espace chauffeur",
+    AGENT_SURETE: "Demandes de sûreté et de patrouille",
   };
 
   return (
@@ -96,34 +81,24 @@ function sousTitreEspace(role?: string): string {
 type EnTeteProps = {
   afficherNotifications?: boolean;
   afficherProfil?: boolean;
+  afficherSignalement?: boolean;
 };
 
 export default function EnTete({
   afficherNotifications = true,
   afficherProfil = true,
+  afficherSignalement = false,
 }: EnTeteProps) {
   const router = useRouter();
 
-  const [menuOuvert, setMenuOuvert] =
-    useState(false);
+  const [menuOuvert, setMenuOuvert] = useState(false);
+  const [profilOuvert, setProfilOuvert] = useState(false);
+  const [infos, setInfos] = useState<InfosUtilisateur>({});
 
-  const [profilOuvert, setProfilOuvert] =
-    useState(false);
-
-  const [infos, setInfos] =
-    useState<InfosUtilisateur>({});
-
-  // Animation visuelle uniquement : aucune lecture audio.
-  const [nouvelleNotification, setNouvelleNotification] = useState(false);
-  const idsVusRef = useRef<Set<number> | null>(null);
-  const finAnimationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const menuRef =
-    useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const token =
-      localStorage.getItem("token");
+    const token = localStorage.getItem("token");
 
     const roleStocke =
       localStorage.getItem("role") ||
@@ -135,8 +110,7 @@ export default function EnTete({
       undefined;
 
     if (token) {
-      const decoded =
-        decoderToken(token);
+      const decoded = decoderToken(token);
 
       setInfos({
         role:
@@ -156,106 +130,26 @@ export default function EnTete({
   }, []);
 
   useEffect(() => {
-    function gererClicExterieur(
-      e: MouseEvent
-    ) {
+    function gererClicExterieur(e: MouseEvent) {
       if (
         menuRef.current &&
-        !menuRef.current.contains(
-          e.target as Node
-        )
+        !menuRef.current.contains(e.target as Node)
       ) {
         setMenuOuvert(false);
       }
     }
 
-    document.addEventListener(
-      "mousedown",
-      gererClicExterieur
-    );
+    document.addEventListener("mousedown", gererClicExterieur);
 
     return () =>
-      document.removeEventListener(
-        "mousedown",
-        gererClicExterieur
-      );
+      document.removeEventListener("mousedown", gererClicExterieur);
   }, []);
-
-  // Une notification deja presente lors de l'ouverture de la page
-  // ne declenche pas l'animation. Seuls les nouveaux IDs la declenchent.
-  // Les notifications continuent d'etre affichees/traitees par NotificationCenter.
-  useEffect(() => {
-    if (!afficherNotifications) return;
-    const api = process.env.NEXT_PUBLIC_API_URL;
-    if (!api) return;
-
-    let actif = true;
-    let enCours = false;
-    const lireNouvellesNotifications = async () => {
-      if (enCours) return;
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      enCours = true;
-      try {
-        const reponse = await fetch(
-          `${api}/notifications/me?nonLuesUniquement=true`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-            cache: "no-store",
-          }
-        );
-        if (!reponse.ok) return;
-        const donnees: unknown = await reponse.json();
-        if (!actif || !Array.isArray(donnees)) return;
-        const ids = new Set<number>(
-          donnees
-            .filter((n): n is { id: number } =>
-              typeof n === "object" && n !== null &&
-              typeof (n as { id?: unknown }).id === "number"
-            )
-            .map((n) => n.id)
-        );
-        if (idsVusRef.current !== null &&
-            [...ids].some((id) => !idsVusRef.current!.has(id))) {
-          // Une nouvelle notification a ete detectee depuis le dernier appel.
-          setNouvelleNotification(true);
-          if (finAnimationRef.current) clearTimeout(finAnimationRef.current);
-          finAnimationRef.current = setTimeout(() => {
-            if (actif) setNouvelleNotification(false);
-          }, 3000);
-        }
-        idsVusRef.current = ids;
-      } catch {
-        // Aucune incidence sur la navigation ni sur la cloche existante.
-      } finally {
-        enCours = false;
-      }
-    };
-
-    void lireNouvellesNotifications();
-    const intervalle = window.setInterval(() => {
-      void lireNouvellesNotifications();
-    }, 10000);
-    return () => {
-      actif = false;
-      window.clearInterval(intervalle);
-      if (finAnimationRef.current) clearTimeout(finAnimationRef.current);
-    };
-  }, [afficherNotifications]);
 
   const deconnexion = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
-    localStorage.removeItem(
-      "numMatricule"
-    );
-    localStorage.removeItem(
-      "matricule"
-    );
+    localStorage.removeItem("numMatricule");
+    localStorage.removeItem("matricule");
     localStorage.removeItem("email");
 
     router.replace("/login");
@@ -265,33 +159,23 @@ export default function EnTete({
   return (
     <>
       <style>{`
-        @keyframes spat-cloche-sonne {
-          0%, 100% { transform: rotate(0deg); }
-          15% { transform: rotate(24deg); }
-          30% { transform: rotate(-22deg); }
-          45% { transform: rotate(18deg); }
-          60% { transform: rotate(-14deg); }
-          75% { transform: rotate(8deg); }
-          90% { transform: rotate(-4deg); }
+        .spat-profile-button {
+          transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         }
-        @keyframes spat-cloche-halo {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
-          35%, 65% { box-shadow: 0 0 0 7px rgba(220,38,38,0.18); }
+        .spat-profile-button:hover,
+        .spat-profile-button:focus-visible {
+          transform: scale(1.05);
+          border-color: #3b82f6 !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1) !important;
         }
-        .spat-notification-arrival {
-          display: inline-flex;
-          border-radius: 999px;
-          animation: spat-cloche-halo 0.8s ease-in-out infinite;
+        .spat-menu-item {
+          transition: background-color 0.15s ease, color 0.15s ease;
         }
-        .spat-notification-arrival svg.lucide-bell {
-          transform-origin: 50% 0%;
-          animation: spat-cloche-sonne 1.1s ease-in-out infinite;
+        .spat-menu-item:hover {
+          background-color: #f1f5f9 !important;
         }
-        @media (prefers-reduced-motion: reduce) {
-          .spat-notification-arrival,
-          .spat-notification-arrival svg.lucide-bell {
-            animation: none !important;
-          }
+        .spat-menu-item-danger:hover {
+          background-color: #fef2f2 !important;
         }
         @media (max-width: 700px) {
           .spat-global-header {
@@ -300,14 +184,6 @@ export default function EnTete({
 
           .spat-header-subtitle {
             display: none !important;
-          }
-
-          .spat-profile-text {
-            display: none !important;
-          }
-
-          .spat-profile-button {
-            padding: 4px 7px !important;
           }
 
           .spat-brand-title {
@@ -321,9 +197,6 @@ export default function EnTete({
           className="spat-global-header"
           style={headerInterieurStyle}
         >
-          {/* =========================================
-              GAUCHE — IDENTITÉ SPAT
-          ========================================= */}
 
           <div style={marqueStyle}>
             <div style={logoBoiteStyle}>
@@ -349,184 +222,108 @@ export default function EnTete({
                 className="spat-header-subtitle"
                 style={sousTitreMarqueStyle}
               >
-                {sousTitreEspace(
-                  infos.role
-                )}
+                {sousTitreEspace(infos.role)}
               </div>
             </div>
           </div>
-
-          {/* =========================================
-              DROITE — NOTIFICATION + PROFIL
-          ========================================= */}
 
           <div
             ref={menuRef}
             style={zoneProfilStyle}
           >
-            {afficherNotifications && (
-              <div className={nouvelleNotification
-                ? "spat-notification-arrival"
-                : undefined}>
-                <NotificationCenter />
-              </div>
-            )}
-
             {afficherProfil && (
               <>
-                          <button
-                            type="button"
-                            className="spat-profile-button"
-                            onClick={() =>
-                              setMenuOuvert(
-                                (ouvert) => !ouvert
-                              )
-                            }
-                            aria-label="Ouvrir le menu profil"
-                            aria-expanded={menuOuvert}
-                            style={boutonProfilStyle}
-                          >
-                            <Image
-                              src="/icon.png"
-                              alt="Profil"
-                              width={38}
-                              height={38}
-                              style={iconeProfilStyle}
-                            />
+                <button
+                  type="button"
+                  className="spat-profile-button"
+                  onClick={() => setMenuOuvert((ouvert) => !ouvert)}
+                  aria-label="Ouvrir le menu profil"
+                  aria-expanded={menuOuvert}
+                  style={boutonProfilStyle}
+                >
+                  <Image
+                    src="/icon.png"
+                    alt="Profil"
+                    width={40}
+                    height={40}
+                    style={iconeProfilStyle}
+                  />
+                </button>
 
-                            <div
-                              className="spat-profile-text"
-                              style={identiteStyle}
-                            >
-                              <div
-                                style={
-                                  nomProfilStyle
-                                }
-                              >
-                                {libelleProfil(
-                                  infos.role
-                                )}
-                              </div>
+                {menuOuvert && (
+                  <div style={menuStyle}>
+                    <button
+                      type="button"
+                      className="spat-menu-item"
+                      onClick={() => {
+                        setProfilOuvert(true);
+                        setMenuOuvert(false);
+                      }}
+                      style={itemStyle}
+                    >
+                      <User size={16} />
+                      Infos profil
+                    </button>
 
-                              <div
-                                style={roleStyle}
-                              >
-                                {libelleRole(
-                                  infos.role
-                                )}
-                              </div>
-                            </div>
-
-                            <ChevronDown
-                              size={15}
-                              strokeWidth={1.8}
-                              style={{
-                                flexShrink: 0,
-                              }}
-                            />
-                          </button>
-
-                          {menuOuvert && (
-                            <div style={menuStyle}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setProfilOuvert(
-                                    true
-                                  );
-
-                                  setMenuOuvert(
-                                    false
-                                  );
-                                }}
-                                style={itemStyle}
-                              >
-                                <User size={16} />
-                                Infos profil
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={deconnexion}
-                                style={{
-                                  ...itemStyle,
-                                  color: "#dc2626",
-                                }}
-                              >
-                                <LogOut size={16} />
-                                Déconnexion
-                              </button>
-                            </div>
-                          )}
+                    <button
+                      type="button"
+                      className="spat-menu-item spat-menu-item-danger"
+                      onClick={deconnexion}
+                      style={{
+                        ...itemStyle,
+                        color: "#dc2626",
+                      }}
+                    >
+                      <LogOut size={16} />
+                      Déconnexion
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
       </header>
-
-      {/* =========================================
-          MODALE PROFIL
-      ========================================= */}
+      <NotificationPopup />
+      {afficherSignalement && <IncidentSignalementButton role={infos.role} />}
 
       {profilOuvert && (
         <div
           style={overlayStyle}
           onMouseDown={(e) => {
-            if (
-              e.target ===
-              e.currentTarget
-            ) {
+            if (e.target === e.currentTarget) {
               setProfilOuvert(false);
             }
           }}
         >
           <div style={modalStyle}>
-            <h3
-              style={modalTitreStyle}
-            >
+            <h3 style={modalTitreStyle}>
               Mon profil
             </h3>
 
-            <div
-              style={profilLigneStyle}
-            >
-              <span
-                style={profilLabelStyle}
-              >
+            <div style={profilLigneStyle}>
+              <span style={profilLabelStyle}>
                 Matricule
               </span>
 
-              <strong
-                style={profilValeurStyle}
-              >
-                {infos.matricule ||
-                  "—"}
+              <strong style={profilValeurStyle}>
+                {infos.matricule || "—"}
               </strong>
             </div>
 
-            <div
-              style={profilLigneStyle}
-            >
-              <span
-                style={profilLabelStyle}
-              >
+            <div style={profilLigneStyle}>
+              <span style={profilLabelStyle}>
                 Rôle
               </span>
 
-              <strong
-                style={profilValeurStyle}
-              >
-                {libelleRole(
-                  infos.role
-                )}
+              <strong style={profilValeurStyle}>
+                {libelleRole(infos.role)}
               </strong>
             </div>
 
             <button
               type="button"
-              onClick={() =>
-                setProfilOuvert(false)
-              }
+              onClick={() => setProfilOuvert(false)}
               style={fermerButtonStyle}
             >
               Fermer
@@ -538,10 +335,6 @@ export default function EnTete({
   );
 }
 
-// =========================================================
-// STYLES
-// =========================================================
-
 const headerStyle: CSSProperties = {
   width: "100%",
   backgroundColor: "#ffffff",
@@ -551,358 +344,189 @@ const headerStyle: CSSProperties = {
   zIndex: 100,
 };
 
-const headerInterieurStyle:
-  CSSProperties = {
+const headerInterieurStyle: CSSProperties = {
   width: "100%",
   minHeight: 78,
   padding: "10px 28px",
   boxSizing: "border-box",
-
   display: "flex",
   alignItems: "center",
-  justifyContent:
-    "space-between",
-
+  justifyContent: "space-between",
   gap: 18,
 };
 
-const marqueStyle:
-  CSSProperties = {
+const marqueStyle: CSSProperties = {
   minWidth: 0,
-
   display: "flex",
   alignItems: "center",
   gap: 13,
 };
 
-const logoBoiteStyle:
-  CSSProperties = {
+const logoBoiteStyle: CSSProperties = {
   width: 54,
   height: 54,
-
   padding: 4,
-
-  backgroundColor:
-    "#ffffff",
-
-  border:
-    "1.5px solid #e2e8f0",
-
+  backgroundColor: "#ffffff",
+  border: "1.5px solid #e2e8f0",
   borderRadius: 10,
-
-  display:
-    "inline-flex",
-
-  alignItems:
-    "center",
-
-  justifyContent:
-    "center",
-
-  boxSizing:
-    "border-box",
-
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxSizing: "border-box",
   flexShrink: 0,
   boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
 };
 
-const logoStyle:
-  CSSProperties = {
+const logoStyle: CSSProperties = {
   width: 44,
   height: 44,
-
-  objectFit:
-    "contain",
-
-  display:
-    "block",
+  objectFit: "contain",
+  display: "block",
 };
 
-const marqueTexteStyle:
-  CSSProperties = {
+const marqueTexteStyle: CSSProperties = {
   minWidth: 0,
 };
 
-const titreMarqueStyle:
-  CSSProperties = {
+const titreMarqueStyle: CSSProperties = {
   color: "#0f172a",
   fontSize: 16,
   fontWeight: 800,
   lineHeight: 1.15,
-  letterSpacing:
-    "0.02em",
+  letterSpacing: "0.02em",
 };
 
-const sousTitreMarqueStyle:
-  CSSProperties = {
+const sousTitreMarqueStyle: CSSProperties = {
   marginTop: 4,
-
-  color:
-    "#64748b",
-
+  color: "#64748b",
   fontSize: 11,
   lineHeight: 1.2,
-
-  whiteSpace:
-    "nowrap",
+  whiteSpace: "nowrap",
   fontWeight: 500,
 };
 
-const zoneProfilStyle:
-  CSSProperties = {
+const zoneProfilStyle: CSSProperties = {
   position: "relative",
-
   display: "flex",
   alignItems: "center",
-  justifyContent:
-    "flex-end",
-
+  justifyContent: "flex-end",
   gap: 12,
-
   minWidth: 0,
 };
 
-const boutonProfilStyle:
-  CSSProperties = {
-  minHeight: 46,
-
-  padding:
-    "4px 12px 4px 6px",
-
-  border:
-    "1.5px solid #cbd5e1",
-
-  borderRadius: 999,
-
-  backgroundColor:
-    "#f8fafc",
-
-  color: "#0f172a",
-
-  cursor: "pointer",
-
-  display:
-    "inline-flex",
-
-  alignItems:
-    "center",
-
-  justifyContent:
-    "center",
-
-  gap: 9,
-
-  boxShadow:
-    "0 1px 2px rgba(0,0,0,0.04)",
-};
-
-const iconeProfilStyle:
-  CSSProperties = {
-  width: 36,
-  height: 36,
-
+const boutonProfilStyle: CSSProperties = {
+  width: 42,
+  height: 42,
+  padding: 0,
+  border: "2px solid #cbd5e1",
   borderRadius: "50%",
-
-  objectFit:
-    "cover",
-
-  display:
-    "block",
-
-  flexShrink: 0,
-
-  backgroundColor:
-    "#ffffff",
-  border: "1px solid #e2e8f0",
-};
-
-const identiteStyle:
-  CSSProperties = {
-  minWidth: 0,
-  textAlign: "left",
-  lineHeight: 1.15,
-};
-
-const nomProfilStyle:
-  CSSProperties = {
+  backgroundColor: "#f8fafc",
   color: "#0f172a",
-
-  fontSize: 12,
-  fontWeight: 700,
-
-  whiteSpace:
-    "nowrap",
-};
-
-const roleStyle:
-  CSSProperties = {
-  marginTop: 2,
-
-  color:
-    "#64748b",
-
-  fontSize: 10,
-
-  whiteSpace:
-    "nowrap",
-  fontWeight: 500,
-};
-
-const menuStyle:
-  CSSProperties = {
-  position: "absolute",
-
-  top: 58,
-  right: 0,
-
-  zIndex: 1000,
-
-  width: 190,
-
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
   overflow: "hidden",
-
-  backgroundColor:
-    "#ffffff",
-
-  border:
-    "1px solid #e5e7eb",
-
-  borderRadius: 9,
-
-  boxShadow:
-    "0 12px 32px rgba(15,23,42,0.20)",
+  outline: "none",
 };
 
-const itemStyle:
-  CSSProperties = {
+const iconeProfilStyle: CSSProperties = {
   width: "100%",
+  height: "100%",
+  borderRadius: "50%",
+  objectFit: "cover",
+  display: "block",
+  flexShrink: 0,
+};
 
-  padding:
-    "10px 13px",
+const menuStyle: CSSProperties = {
+  position: "absolute",
+  top: 52,
+  right: 0,
+  zIndex: 1000,
+  width: 180,
+  overflow: "hidden",
+  backgroundColor: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 10,
+  boxShadow: "0 10px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1)",
+  padding: "4px 0",
+};
 
+const itemStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
   border: "none",
-
-  backgroundColor:
-    "#ffffff",
-
-  color:
-    "#374151",
-
+  backgroundColor: "#ffffff",
+  color: "#374151",
   display: "flex",
   alignItems: "center",
-
-  gap: 8,
-
+  gap: 10,
   textAlign: "left",
-
-  fontSize: 12,
-
+  fontSize: 13,
+  fontWeight: 500,
   cursor: "pointer",
 };
 
-const overlayStyle:
-  CSSProperties = {
+const overlayStyle: CSSProperties = {
   position: "fixed",
   inset: 0,
-
   zIndex: 2000,
-
   padding: 20,
-
-  backgroundColor:
-    "rgba(15,23,42,0.65)",
-
+  backgroundColor: "rgba(15,23,42,0.65)",
   display: "flex",
   alignItems: "center",
-  justifyContent:
-    "center",
+  justifyContent: "center",
 };
 
-const modalStyle:
-  CSSProperties = {
+const modalStyle: CSSProperties = {
   width: "100%",
   maxWidth: 350,
-
   padding: 24,
-
-  backgroundColor:
-    "#ffffff",
-
+  backgroundColor: "#ffffff",
   borderRadius: 12,
-
-  boxShadow:
-    "0 20px 60px rgba(0,0,0,0.25)",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
 };
 
-const modalTitreStyle:
-  CSSProperties = {
+const modalTitreStyle: CSSProperties = {
   margin: "0 0 18px",
-
-  color:
-    "#111827",
-
+  color: "#111827",
   fontSize: 18,
-};
-
-const profilLigneStyle:
-  CSSProperties = {
-  display: "flex",
-
-  alignItems:
-    "center",
-
-  justifyContent:
-    "space-between",
-
-  gap: 14,
-
-  padding:
-    "10px 0",
-
-  borderBottom:
-    "1px solid #f1f5f9",
-};
-
-const profilLabelStyle:
-  CSSProperties = {
-  color:
-    "#64748b",
-
-  fontSize: 12,
-};
-
-const profilValeurStyle:
-  CSSProperties = {
-  color:
-    "#111827",
-
-  fontSize: 12,
-
-  textAlign:
-    "right",
-};
-
-const fermerButtonStyle:
-  CSSProperties = {
-  width: "100%",
-
-  marginTop: 20,
-
-  padding:
-    "10px 16px",
-
-  border: "none",
-
-  borderRadius: 8,
-
-  backgroundColor:
-    "#dc2626",
-
-  color:
-    "#ffffff",
-
   fontWeight: 700,
+};
 
-  cursor:
-    "pointer",
+const profilLigneStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 14,
+  padding: "10px 0",
+  borderBottom: "1px solid #f1f5f9",
+};
+
+const profilLabelStyle: CSSProperties = {
+  color: "#64748b",
+  fontSize: 12,
+  fontWeight: 500,
+};
+
+const profilValeurStyle: CSSProperties = {
+  color: "#111827",
+  fontSize: 12,
+  textAlign: "right",
+};
+
+const fermerButtonStyle: CSSProperties = {
+  width: "100%",
+  marginTop: 20,
+  padding: "11px 16px",
+  border: "none",
+  borderRadius: 10,
+  backgroundColor: "#bc1019",
+  color: "#ffffff",
+  fontWeight: 700,
+  fontSize: 14,
+  cursor: "pointer",
+  transition: "all 150ms ease",
 };

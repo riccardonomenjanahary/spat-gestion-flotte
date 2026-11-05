@@ -45,6 +45,10 @@ public class Maintenance {
     private String compteRenduEntretien;
     @Column(name = "mecanicien_entretien", length = 180)
     private String mecanicienEntretien;
+    @Column(name = "statut_vehicule_avant_entretien", length = 50)
+    private String statutVehiculeAvantEntretien;
+    @Column(name = "fiche_controle", columnDefinition = "TEXT")
+    private String ficheControle;
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -96,4 +100,8 @@ public class Maintenance {
     public void setCompteRenduEntretien(String compteRenduEntretien) { this.compteRenduEntretien = compteRenduEntretien; }
     public String getMecanicienEntretien() { return mecanicienEntretien; }
     public void setMecanicienEntretien(String mecanicienEntretien) { this.mecanicienEntretien = mecanicienEntretien; }
+    public String getStatutVehiculeAvantEntretien() { return statutVehiculeAvantEntretien; }
+    public void setStatutVehiculeAvantEntretien(String statutVehiculeAvantEntretien) { this.statutVehiculeAvantEntretien = statutVehiculeAvantEntretien; }
+    public String getFicheControle() { return ficheControle; }
+    public void setFicheControle(String ficheControle) { this.ficheControle = ficheControle; }
 }

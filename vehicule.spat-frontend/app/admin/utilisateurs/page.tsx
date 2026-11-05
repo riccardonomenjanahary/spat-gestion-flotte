@@ -21,6 +21,11 @@ interface Utilisateur {
   actif: boolean;
 }
 const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
+  CO_ADMIN: {
+    bg: "#e0f2fe",
+    text: "#075985",
+    label: "Co-administrateur (lecture seule)",
+  },
   DIRECTEUR_DFP: {
     bg: "#e0e7ff",
     text: "#3730a3",
@@ -49,40 +54,35 @@ const roleStyle: Record<string, { bg: string; text: string; label: string }> = {
   MECANICIEN_DID: {
     bg: "#fef3c7",
     text: "#92400e",
-    label: "Mécanicien diagnostiqueur DID",
+    label: "Chef d’Atelier / Mécanicien DID",
+  },
+  CHEF_ATELIER: {
+    bg: "#fef3c7",
+    text: "#92400e",
+    label: "Chef d’Atelier",
+  },
+  DIRECTION_GENERALE: {
+    bg: "#f1f5f9",
+    text: "#334155",
+    label: "Direction Générale (lecture seule)",
+  },
+  CONTROLE_GESTION: {
+    bg: "#f1f5f9",
+    text: "#334155",
+    label: "Contrôle de gestion (lecture seule)",
   },
   AGENT_FLOTTE: {
     bg: "#dcfce7",
     text: "#166534",
     label: "Agent Flotte",
   },
-  CHAUFFEUR: {
-    bg: "#fce7f3",
-    text: "#9d174d",
-    label: "Chauffeur",
-  },
 };
-const avatarPalette = [
-  "#dc2626",
-  "#2563eb",
-  "#16a34a",
-  "#d97706",
-  "#7c3aed",
-  "#0891b2",
-];
-function couleurAvatar(id: number) {
-  return avatarPalette[id % avatarPalette.length];
-}
-function initiales(nomComplet: string) {
-  if (!nomComplet) return "?";
-  const morceaux = nomComplet.trim().split(/\s+/);
-  return ((morceaux[0]?.[0] || "") + (morceaux[1]?.[0] || "")).toUpperCase();
-}
 export default function UtilisateursPage() {
   const router = useRouter();
   const API = process.env.NEXT_PUBLIC_API_URL;
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [chargement, setChargement] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const getToken = () => {
     if (typeof window === "undefined") return null;
@@ -91,6 +91,7 @@ export default function UtilisateursPage() {
   const chargerUtilisateurs = async () => {
     const token = getToken();
     if (!API) {
+      setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
       setChargement(false);
       return;
@@ -100,6 +101,7 @@ export default function UtilisateursPage() {
       return;
     }
     setChargement(true);
+    setErreurChargement(null);
     try {
       const res = await fetch(`${API}/admin/utilisateurs`, {
         headers: {
@@ -115,17 +117,21 @@ export default function UtilisateursPage() {
       if (!res.ok) {
         throw new Error();
       }
-      const data: Utilisateur[] = await res.json();
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse utilisateurs invalide.");
       setUtilisateurs(
-        data.filter(
+        (data as Utilisateur[]).filter(
           (u) =>
             u.role !== "ADMIN" &&
             u.role !== "SUPER_ADMIN" &&
             u.role !== "EMPLOYE"
         )
       );
-    } catch {
-      toast.error("Impossible de charger les utilisateurs");
+    } catch (error) {
+      setUtilisateurs([]);
+      const message = error instanceof Error ? error.message : "Impossible de charger les utilisateurs";
+      setErreurChargement(message);
+      toast.error(message);
     } finally {
       setChargement(false);
     }
@@ -171,6 +177,7 @@ export default function UtilisateursPage() {
       `}</style>
 
       <EnTete afficherNotifications={false} afficherProfil={false} />
+      {erreurChargement && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Liste des utilisateurs non synchronisée : {erreurChargement}.</div>}
       <div
         style={{
           minHeight: "100vh",
@@ -355,37 +362,8 @@ export default function UtilisateursPage() {
                         }}
                       >
                         <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "50%",
-                                backgroundColor: couleurAvatar(u.id),
-                                color: "white",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 700,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {initiales(u.nomComplet)}
-                            </div>
-                            <div
-                              style={{
-                                fontWeight: 600,
-                                color: "#111827",
-                              }}
-                            >
-                              {u.nomComplet}
-                            </div>
+                          <div style={{ fontWeight: 600, color: "#111827" }}>
+                            {u.nomComplet}
                           </div>
                         </td>
                         <td style={tdStyle}>

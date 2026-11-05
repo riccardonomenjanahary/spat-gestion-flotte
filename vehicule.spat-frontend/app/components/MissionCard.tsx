@@ -82,7 +82,7 @@ export default function MissionCard({
         overflow: "hidden",
       }}
     >
-      {/* Infos à gauche */}
+
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -114,8 +114,8 @@ export default function MissionCard({
         </div>
 
         <div style={{ fontSize: 12, color: "#475569", marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-          <div><strong style={{ color: "#1e293b" }}>Début :</strong> {formatDate(mission.dateDebut)}</div>
-          <div><strong style={{ color: "#1e293b" }}>Date fin :</strong> {mission.dateFin ? formatDate(mission.dateFin) : <span style={{ color: "#2563eb", fontWeight: 600 }}>En cours d&apos;exécution</span>}</div>
+          <div><span style={{ color: "#1e293b" }}>Début :</span> {formatDate(mission.dateDebut)}</div>
+          <div><span style={{ color: "#1e293b" }}>Date fin :</span> {mission.dateFin ? formatDate(mission.dateFin) : <span style={{ color: "#2563eb", fontWeight: 600 }}>En cours d&apos;exécution</span>}</div>
         </div>
 
         <span
@@ -132,28 +132,8 @@ export default function MissionCard({
           {enCours ? "En cours" : "Terminée"}
         </span>
 
-        {enCours && onTerminer && (
-          <button
-            type="button"
-            onClick={() => onTerminer(mission)}
-            style={{
-              marginTop: "auto",
-              padding: "8px 12px",
-              backgroundColor: "#dc2626",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Clôturer la mission
-          </button>
-        )}
       </div>
 
-      {/* Position GPS à droite */}
       <div style={{ height: 220 }}>
         {aPosition && v ? (
           <MapContainer

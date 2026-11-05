@@ -1,4 +1,4 @@
-// src/app/lib/exportUtils.ts
+
 
 export type ExportAlign = "left" | "center" | "right";
 
@@ -100,6 +100,29 @@ export function exportCsv<T>({ titre, nomFichier, colonnes, donnees }: ExportCon
   URL.revokeObjectURL(url);
 }
 
+export function exportExcel<T>({ titre, nomFichier, colonnes, donnees }: ExportConfig<T>): void {
+  if (typeof window === "undefined") return;
+
+  const entetes = colonnes.map((c) => `<th>${echapperHtml(c.header)}</th>`).join("");
+  const lignes = donnees.map((ligne) => {
+    const cellules = colonnes
+      .map((c) => `<td>${echapperHtml(valeurColonne(ligne, c))}</td>`)
+      .join("");
+    return `<tr>${cellules}</tr>`;
+  }).join("");
+
+  const contenu = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:6px;vertical-align:top}th{background:#e2e8f0;font-weight:700}</style></head><body><h2>${echapperHtml(titre)}</h2><table><thead><tr>${entetes}</tr></thead><tbody>${lignes}</tbody></table></body></html>`;
+  const blob = new Blob(["\uFEFF", contenu], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = `${nettoyerNomFichier(nomFichier || titre)}_${datePourNomFichier()}.xls`;
+  document.body.appendChild(lien);
+  lien.click();
+  document.body.removeChild(lien);
+  URL.revokeObjectURL(url);
+}
+
 export async function exportPdf<T>({
   titre,
   nomFichier,
@@ -180,51 +203,6 @@ export async function exportPdf<T>({
   } else {
     throw new Error("jspdf-autotable n'est pas disponible.");
   }
-
-  // --- Cadre officiel de signatures pour impression papier SPAT ---
-  const finalY = (doc as any).lastAutoTable?.finalY || y + 30;
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const boxHeight = 26;
-  const spaceNeeded = boxHeight + 14;
-
-  let currentY = finalY + 6;
-  if (currentY + spaceNeeded > pageHeight - 12) {
-    doc.addPage();
-    currentY = 16;
-  }
-
-  const numBoxes = 4;
-  const gap = 3;
-  const boxWidth = (pageWidth - 2 * margin - (numBoxes - 1) * gap) / numBoxes;
-  const titles = [
-    "1. Le Demandeur / Agent",
-    "2. Le Chauffeur",
-    "3. Chef Service Logistique",
-    "4. Visa Direction (DFP / DG)"
-  ];
-
-  titles.forEach((titreBox, i) => {
-    const x = margin + i * (boxWidth + gap);
-    // Fond et cadre
-    doc.setDrawColor(148, 163, 184);
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(x, currentY, boxWidth, boxHeight, 1.5, 1.5, "FD");
-
-    // En-tête de la boîte
-    doc.setFillColor(226, 232, 240);
-    doc.rect(x, currentY, boxWidth, 5, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(30, 41, 59);
-    doc.text(titreBox, x + 1.5, currentY + 3.8);
-
-    // Lignes pour signature manuelle
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Date : ____/____/202__", x + 1.5, currentY + 9);
-    doc.text("Signature & Cachet :", x + 1.5, currentY + 14);
-  });
 
   doc.save(`${nettoyerNomFichier(nomFichier || titre)}_${datePourNomFichier()}.pdf`);
 }

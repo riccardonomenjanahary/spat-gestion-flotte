@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { estLectureSeule } from "@/app/lib/roles";
 import EnTete from "@/components/EnTete";
+import JustificatifsSection from "@/components/JustificatifsSection";
+import { Download, FileText } from "lucide-react";
+import { exportCsv, formatDateHeureExport } from "@/app/lib/exportUtils";
 
 interface Vehicule {
   id: number;
@@ -14,8 +18,10 @@ interface Vehicule {
   affectation?: string | null;
   etatGeneralObservations?: string | null;
   statut: string;
+  modeDetention?: string | null;
+  dateExpirationVisiteTechnique?: string | null;
+  dateProchainEntretien?: string | null;
 
-  // GPS
   gpsEquipe?: boolean;
   gpsDeviceId?: number | null;
 }
@@ -40,7 +46,6 @@ interface MissionHisto {
   destination?: string | null;
 }
 
-
 interface ChauffeurAffiche {
   id: number;
   matricule?: string | null;
@@ -59,6 +64,10 @@ function formaterDateFr(dateStr?: string | null): string {
 }
 
 const CATEGORIES_SPAT = [
+  "Véhicule de patrouille et d'urgence",
+  "Véhicule de mission",
+  "Voiture de service mutualisée",
+  "Moto électrique",
   "Voiture de service",
   "Voiture de fonction",
   "Camion",
@@ -71,9 +80,9 @@ const CATEGORIES_SPAT = [
 ] as const;
 
 const STATUTS_VEHICULE = [
-  { value: "DISPONIBLE", label: "Disponible" },
+  { value: "DISPONIBLE", label: "Apte au service" },
   { value: "EN_MISSION", label: "En mission" },
-  { value: "MAINTENANCE", label: "Maintenance" },
+  { value: "MAINTENANCE", label: "En panne / maintenance" },
   { value: "HORS_SERVICE", label: "Hors service" },
   { value: "TRANSFERE", label: "Transféré" },
   { value: "REFORME", label: "Réformé" },
@@ -135,14 +144,11 @@ export default function VehiculesPage() {
 
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [chargement, setChargement] = useState(true);
+  const [erreurChargementPrincipal, setErreurChargementPrincipal] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
   const [recherche, setRecherche] = useState("");
   const [pageActuelle, setPageActuelle] = useState(1);
   const VEHICULES_PAR_PAGE = 10;
-
-  // =========================================================
-  // ROLE / LECTURE SEULE (DIRECTEUR_DFP)
-  // =========================================================
 
   const [role, setRole] = useState<string | null>(null);
 
@@ -150,17 +156,16 @@ export default function VehiculesPage() {
     setRole(localStorage.getItem("role"));
   }, []);
 
-  const lectureSeule = role === "DIRECTEUR_DFP";
-
-  // =========================================================
-  // FORMULAIRE VEHICULE - INVENTAIRE SPAT
-  // =========================================================
+  const lectureSeule = estLectureSeule(role);
 
   const [categorie, setCategorie] = useState<string>("Voiture de service");
   const [categorieAutre, setCategorieAutre] = useState("");
   const [immatriculation, setImmatriculation] = useState("");
   const [modeleType, setModeleType] = useState("");
   const [annee, setAnnee] = useState("");
+  const [modeDetention, setModeDetention] = useState("PROPRIETE");
+  const [dateExpirationVisiteTechnique, setDateExpirationVisiteTechnique] = useState("");
+  const [dateProchainEntretien, setDateProchainEntretien] = useState("");
   const [affectation, setAffectation] = useState("");
   const [etatGeneralObservations, setEtatGeneralObservations] = useState("");
   const [statut, setStatut] = useState("DISPONIBLE");
@@ -175,15 +180,15 @@ export default function VehiculesPage() {
   const [vehiculeEnEdition, setVehiculeEnEdition] =
     useState<Vehicule | null>(null);
 
-  // =========================================================
-  // HISTORIQUE
-  // =========================================================
-
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [vehiculeHistorique, setVehiculeHistorique] =
     useState<Vehicule | null>(null);
   const [missionsHisto, setMissionsHisto] = useState<MissionHisto[]>([]);
   const [chargementHisto, setChargementHisto] = useState(false);
+
+  const [documentsOuvert, setDocumentsOuvert] = useState(false);
+  const [vehiculeDocuments, setVehiculeDocuments] =
+    useState<Vehicule | null>(null);
 
   const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -207,12 +212,9 @@ export default function VehiculesPage() {
     }
   };
 
-  // =========================================================
-  // CHARGEMENT REEL DES VEHICULES DEPUIS LE BACKEND
-  // =========================================================
-
   const chargerVehicules = async () => {
     if (!API) {
+      setErreurChargementPrincipal("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
       setChargement(false);
       return;
@@ -226,6 +228,7 @@ export default function VehiculesPage() {
     }
 
     setChargement(true);
+    setErreurChargementPrincipal(null);
 
     try {
       const headers = {
@@ -248,15 +251,13 @@ export default function VehiculesPage() {
         throw new Error(await lireErreur(resVehicules));
       }
 
-      const data = await resVehicules.json();
-
-      setVehicules(
-        Array.isArray(data)
-          ? data
-          : Array.isArray(data?.content)
-            ? data.content
-            : []
-      );
+      const data: unknown = await resVehicules.json();
+      const listeVehicules = Array.isArray(data)
+        ? data
+        : data && typeof data === "object" && "content" in data && Array.isArray(data.content)
+          ? data.content : null;
+      if (!listeVehicules) throw new Error("Format de réponse véhicules invalide.");
+      setVehicules(listeVehicules as Vehicule[]);
 
       if (resAssurances && resAssurances.ok) {
         try {
@@ -270,27 +271,17 @@ export default function VehiculesPage() {
             });
           }
           setAssurances(mapAssurances);
-        } catch {}
+        } catch {
+          toast.error("Les assurances n'ont pas pu être lues depuis l'API.");
+        }
+      } else {
+        toast.error(`Les assurances ne sont pas disponibles depuis l'API${resAssurances ? ` (HTTP ${resAssurances.status})` : " (erreur réseau)"}.`);
       }
 
-      /*
-       * CHAUFFEURS COMPATIBLES
-       *
-       * Les deux référentiels SPAT indiquent une affectation
-       * de service, pas toujours un couple véhicule/chauffeur
-       * permanent.
-       *
-       * La liste affiche donc les chauffeurs compatibles avec
-       * l'affectation du véhicule.
-       */
-      const listeVehicules: Vehicule[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.content)
-          ? data.content
-          : [];
+      const listeVehiculesTyped = listeVehicules as Vehicule[];
 
       const resultatsChauffeurs = await Promise.all(
-        listeVehicules.map(async (vehicule) => {
+        listeVehiculesTyped.map(async (vehicule) => {
           try {
             const res = await fetch(
               `${API}/vehicules/${vehicule.id}/chauffeurs-compatibles`,
@@ -304,19 +295,24 @@ export default function VehiculesPage() {
               return {
                 vehiculeId: vehicule.id,
                 chauffeurs: [] as ChauffeurAffiche[],
+                erreur: true,
               };
             }
 
-            const chauffeurs = (await res.json()) as ChauffeurAffiche[];
+            const chauffeursData: unknown = await res.json();
+            if (!Array.isArray(chauffeursData)) throw new Error("Format de réponse chauffeurs incompatibles invalide.");
+            const chauffeurs = chauffeursData as ChauffeurAffiche[];
 
             return {
               vehiculeId: vehicule.id,
               chauffeurs: Array.isArray(chauffeurs) ? chauffeurs : [],
+              erreur: false,
             };
           } catch {
             return {
               vehiculeId: vehicule.id,
               chauffeurs: [] as ChauffeurAffiche[],
+              erreur: true,
             };
           }
         })
@@ -328,9 +324,17 @@ export default function VehiculesPage() {
         mapChauffeurs[item.vehiculeId] = item.chauffeurs;
       });
 
+      if (resultatsChauffeurs.some((item) => item.erreur)) {
+        toast.error("Certaines listes de chauffeurs compatibles n'ont pas pu être synchronisées depuis l'API.");
+      }
+
       setChauffeursCompatibles(mapChauffeurs);
     } catch (error) {
       console.error(error);
+      setVehicules([]);
+      setAssurances({});
+      setChauffeursCompatibles({});
+      setErreurChargementPrincipal(error instanceof Error ? error.message : "Données véhicules indisponibles.");
       toast.error(
         error instanceof Error
           ? error.message
@@ -341,14 +345,49 @@ export default function VehiculesPage() {
     }
   };
 
+  const actualiserStatutsVehicules = async () => {
+    const token = getToken();
+    if (!API || !token) return;
+
+    try {
+      const response = await fetch(`${API}/vehicules`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+
+      const body = await response.json();
+      const source: unknown = body;
+      const listeData: unknown[] | null = Array.isArray(source)
+        ? source
+        : source && typeof source === "object" && "content" in source && Array.isArray(source.content)
+          ? source.content : null;
+      if (!listeData) throw new Error("Format de réponse véhicules invalide.");
+      const liste = listeData as Vehicule[];
+      const parId = new Map(liste.map((vehicule) => [vehicule.id, vehicule]));
+      setVehicules((anciens) =>
+        anciens.map((vehicule) => {
+          const actualise = parId.get(vehicule.id);
+          return actualise ? { ...vehicule, statut: actualise.statut } : vehicule;
+        })
+      );
+    } catch (error) {
+      console.warn("Actualisation des statuts véhicules indisponible :", error);
+    }
+  };
+
   useEffect(() => {
     chargerVehicules();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") actualiserStatutsVehicules();
+    }, 15000);
+    window.addEventListener("focus", actualiserStatutsVehicules);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", actualiserStatutsVehicules);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // =========================================================
-  // FORMULAIRE
-  // =========================================================
 
   const resetFormulaire = () => {
     setCategorie("Voiture de service");
@@ -356,6 +395,9 @@ export default function VehiculesPage() {
     setImmatriculation("");
     setModeleType("");
     setAnnee("");
+    setModeDetention("PROPRIETE");
+    setDateExpirationVisiteTechnique("");
+    setDateProchainEntretien("");
     setAffectation("");
     setEtatGeneralObservations("");
     setStatut("DISPONIBLE");
@@ -395,6 +437,9 @@ export default function VehiculesPage() {
     );
     setAffectation(vehicule.affectation || "");
     setEtatGeneralObservations(vehicule.etatGeneralObservations || "");
+    setModeDetention(vehicule.modeDetention || "PROPRIETE");
+    setDateExpirationVisiteTechnique(vehicule.dateExpirationVisiteTechnique || "");
+    setDateProchainEntretien(vehicule.dateProchainEntretien || "");
     setStatut(vehicule.statut || "DISPONIBLE");
     setDateEcheanceAssurance(assurances[vehicule.id]?.dateExpiration || "");
     setFormOuvert(true);
@@ -440,11 +485,6 @@ export default function VehiculesPage() {
       return;
     }
 
-    if (!affectation.trim()) {
-      toast.error("L'affectation est obligatoire");
-      return;
-    }
-
     if (!etatGeneralObservations.trim()) {
       toast.error("L'état général / observations est obligatoire");
       return;
@@ -483,6 +523,9 @@ export default function VehiculesPage() {
           immatriculation: immatriculation.trim(),
           modeleType: modeleType.trim(),
           annee: annee.trim() ? Number(annee) : null,
+          modeDetention,
+          dateExpirationVisiteTechnique: dateExpirationVisiteTechnique || null,
+          dateProchainEntretien: dateProchainEntretien || null,
           affectation: affectation.trim(),
           etatGeneralObservations: etatGeneralObservations.trim(),
           statut,
@@ -553,10 +596,6 @@ export default function VehiculesPage() {
     }
   };
 
-  // =========================================================
-  // RECHERCHE
-  // =========================================================
-
   const vehiculesFiltres = vehicules.filter((vehicule) => {
     const terme = recherche.trim().toLowerCase();
 
@@ -598,10 +637,6 @@ export default function VehiculesPage() {
     }
   }, [pageActuelle, nombrePages]);
 
-  // =========================================================
-  // STATISTIQUES REELLES PAR CATEGORIE
-  // =========================================================
-
   const totalVehicules = vehicules.length;
 
   const statistiquesCategories = (() => {
@@ -642,10 +677,6 @@ export default function VehiculesPage() {
       (vehicule) => vehicule.statut === statutOption.value
     ).length,
   })).filter((stat) => stat.nombre > 0);
-
-  // =========================================================
-  // SUPPRESSION
-  // =========================================================
 
   const handleSupprimer = (id: number) => {
     if (lectureSeule) return;
@@ -704,9 +735,25 @@ export default function VehiculesPage() {
     });
   };
 
-  // =========================================================
-  // HISTORIQUE
-  // =========================================================
+  const exporterHistoriqueVehicule = () => {
+    if (!vehiculeHistorique) return;
+    exportCsv({
+      titre: `Historique du véhicule ${vehiculeHistorique.immatriculation}`,
+      nomFichier: `historique_${vehiculeHistorique.immatriculation}`,
+      sousTitre: `${vehiculeHistorique.categorie} · ${vehiculeHistorique.modeleType}`,
+      donnees: missionsHisto,
+      colonnes: [
+        { header: "Référence", value: (mission) => `TKT-${String(mission.id).padStart(5, "0")}` },
+        { header: "Motif", value: (mission) => mission.motif || "—" },
+        { header: "Chauffeur", value: (mission) => [mission.chauffeur?.prenom, mission.chauffeur?.nom].filter(Boolean).join(" ") || "—" },
+        { header: "Départ", value: (mission) => formatDateHeureExport(mission.dateDebut) },
+        { header: "Fin", value: (mission) => formatDateHeureExport(mission.dateFin) },
+        { header: "Destination", value: (mission) => mission.destination || "—" },
+        { header: "Statut", value: (mission) => mission.statut || "—" },
+      ],
+    });
+    toast.success("Historique du véhicule exporté au format CSV.");
+  };
 
   const ouvrirHistorique = async (v: Vehicule) => {
     if (!API) {
@@ -779,10 +826,6 @@ export default function VehiculesPage() {
     }
   };
 
-  // =========================================================
-  // AFFICHAGE
-  // =========================================================
-
   const badgeStatut = (s: string) => {
     const styles: Record <
       string,
@@ -791,7 +834,7 @@ export default function VehiculesPage() {
       DISPONIBLE: {
         bg: "#dcfce7",
         color: "#166534",
-        label: "Disponible",
+        label: "Apte au service",
       },
       EN_MISSION: {
         bg: "#dbeafe",
@@ -801,7 +844,7 @@ export default function VehiculesPage() {
       MAINTENANCE: {
         bg: "#fee2e2",
         color: "#991b1b",
-        label: "Maintenance",
+        label: "En panne / maintenance",
       },
       HORS_SERVICE: {
         bg: "#ffedd5",
@@ -908,6 +951,7 @@ export default function VehiculesPage() {
       `}</style>
 
       <EnTete afficherNotifications={false} afficherProfil={false} />
+      {erreurChargementPrincipal && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Parc non synchronisé : {erreurChargementPrincipal}. Les statuts et listes ci-dessous ne sont pas à jour.</div>}
 
       <div
         style={{
@@ -922,9 +966,6 @@ export default function VehiculesPage() {
             margin: "0 auto",
           }}
         >
-          {/* =================================================
-              EN-TETE
-          ================================================= */}
 
           <div
             style={{
@@ -966,26 +1007,22 @@ export default function VehiculesPage() {
             {!lectureSeule && (
               <button
                 type="button"
+                className="btn-spat btn-rouge"
                 onClick={ouvrirCreation}
                 style={{
-                  padding: "8px 14px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
+                  padding: "10px 18px",
                   border: "none",
-                  borderRadius: 6,
+                  borderRadius: 10,
                   fontSize: 14,
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
+                  transition: "all 150ms ease",
                 }}
               >
                 + Ajouter un véhicule
               </button>
             )}
           </div>
-
-          {/* =================================================
-              STATISTIQUES PAR CATEGORIE
-          ================================================= */}
 
           <div
             style={{
@@ -1086,10 +1123,6 @@ export default function VehiculesPage() {
             </div>
           </div>
 
-          {/* =================================================
-              MODAL CREATION / EDITION
-          ================================================= */}
-
           {formOuvert && !lectureSeule && (
             <div style={overlayStyle}>
               <div
@@ -1112,15 +1145,6 @@ export default function VehiculesPage() {
                         : "Ajouter un véhicule / matériel"}
                     </h3>
 
-                    <p
-                      style={{
-                        margin: "6px 0 0",
-                        color: "#6b7280",
-                        fontSize: 13,
-                      }}
-                    >
-                      Informations conformes à l&apos;inventaire SPAT.
-                    </p>
                   </div>
 
                   <button
@@ -1142,7 +1166,6 @@ export default function VehiculesPage() {
                     gap: 16,
                   }}
                 >
-                  {/* CATEGORIE */}
 
                   <div>
                     <label style={labelStyle}>Catégorie *</label>
@@ -1183,14 +1206,12 @@ export default function VehiculesPage() {
                         onChange={(e) =>
                           setCategorieAutre(e.target.value)
                         }
-                        placeholder="Ex. Véhicule spécialisé"
+                        placeholder="Nouvelle catégorie"
                         required
                         style={inputStyle}
                       />
                     </div>
                   )}
-
-                  {/* IMMATRICULATION */}
 
                   <div>
                     <label style={labelStyle}>
@@ -1203,13 +1224,11 @@ export default function VehiculesPage() {
                       onChange={(e) =>
                         setImmatriculation(e.target.value)
                       }
-                      placeholder="Ex. 1205TCA ou TRAX 966G"
+                      placeholder="Immatriculation ou identifiant"
                       required
                       style={inputStyle}
                     />
                   </div>
-
-                  {/* MODELE / TYPE */}
 
                   <div>
                     <label style={labelStyle}>
@@ -1222,15 +1241,24 @@ export default function VehiculesPage() {
                       onChange={(e) =>
                         setModeleType(e.target.value)
                       }
-                      placeholder="Ex. TOYOTA REVO, Pelle chargeuse..."
+                      placeholder="Modèle ou type"
                       required
                       style={inputStyle}
                     />
                   </div>
 
-                  {/* ANNEE */}
-
                   <div>
+                    <label style={labelStyle}>Mode de détention</label>
+                    <select aria-label="Mode de détention" value={modeDetention} onChange={(e) => setModeDetention(e.target.value)} style={inputStyle}>
+                      <option value="PROPRIETE">Propriété SPAT</option>
+                      <option value="LEASING">Leasing</option>
+                    </select>
+                    <label style={labelStyle}>Expiration de la visite technique</label>
+                    <input aria-label="Expiration de la visite technique" type="date" value={dateExpirationVisiteTechnique}
+                      onChange={(e) => setDateExpirationVisiteTechnique(e.target.value)} style={inputStyle} />
+                    <label style={labelStyle}>Prochain entretien</label>
+                    <input aria-label="Prochain entretien" type="date" value={dateProchainEntretien}
+                      onChange={(e) => setDateProchainEntretien(e.target.value)} style={inputStyle} />
                     <label style={labelStyle}>Année</label>
 
                     <input
@@ -1239,21 +1267,15 @@ export default function VehiculesPage() {
                       max={new Date().getFullYear() + 1}
                       value={annee}
                       onChange={(e) => setAnnee(e.target.value)}
-                      placeholder="Ex. 2026"
+                      placeholder="Année"
                       style={inputStyle}
                     />
 
-                    <div style={helpStyle}>
-                      Facultatif si l&apos;année n&apos;est pas
-                      renseignée.
-                    </div>
                   </div>
-
-                  {/* AFFECTATION */}
 
                   <div>
                     <label style={labelStyle}>
-                      Affectation *
+                      Affectation / groupe de Directions
                     </label>
 
                     <input
@@ -1262,13 +1284,10 @@ export default function VehiculesPage() {
                       onChange={(e) =>
                         setAffectation(e.target.value)
                       }
-                      placeholder="Ex. Garage, DG SPAT, CEMEDI..."
-                      required
+                      placeholder="Affectation ou groupe de Directions"
                       style={inputStyle}
                     />
                   </div>
-
-                  {/* STATUT */}
 
                   <div>
                     <label style={labelStyle}>
@@ -1287,13 +1306,8 @@ export default function VehiculesPage() {
                       ))}
                     </select>
 
-                    <div style={helpStyle}>
-                      Indique la disponibilité actuelle dans le
-                      portail.
-                    </div>
                   </div>
 
-                  {/* DATE ECHEANCE ASSURANCE */}
                   <div>
                     <label style={labelStyle}>
                       Date de renouvellement assurance
@@ -1308,12 +1322,7 @@ export default function VehiculesPage() {
                       style={inputStyle}
                     />
 
-                    <div style={helpStyle}>
-                      Date prévue de renouvellement de l&apos;assurance du véhicule (facultatif).
-                    </div>
                   </div>
-
-                  {/* ETAT GENERAL / OBSERVATIONS */}
 
                   <div style={{ gridColumn: "1 / -1" }}>
                     <label style={labelStyle}>
@@ -1325,7 +1334,7 @@ export default function VehiculesPage() {
                       onChange={(e) =>
                         setEtatGeneralObservations(e.target.value)
                       }
-                      placeholder="Ex. État neuf, Bon état, État moyen (Panne BV), pare-brise fissuré..."
+                      placeholder="Observations sur l'état du véhicule"
                       required
                       rows={4}
                       style={{
@@ -1354,7 +1363,7 @@ export default function VehiculesPage() {
                       Annuler
                     </button>
 
-                    <button type="submit" style={btnPrimary}>
+                    <button type="submit" className="btn-spat btn-rouge" style={btnPrimary}>
                       {vehiculeEnEdition
                         ? "Enregistrer"
                         : "Créer"}
@@ -1365,9 +1374,73 @@ export default function VehiculesPage() {
             </div>
           )}
 
-          {/* =================================================
-              PANNEAU HISTORIQUE
-          ================================================= */}
+          {documentsOuvert && vehiculeDocuments && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(15, 23, 42, 0.45)",
+                zIndex: 1000,
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+              onClick={() => setDocumentsOuvert(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "100%",
+                  maxWidth: 520,
+                  height: "100%",
+                  backgroundColor: "white",
+                  boxShadow: "-8px 0 24px rgba(0,0,0,0.12)",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "20px 24px",
+                    borderBottom: "1px solid #e5e7eb",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18, color: "#111827" }}>
+                      Documents
+                    </h3>
+                    <p style={{ margin: "6px 0 0", fontSize: 14, color: "#374151", fontWeight: 700 }}>
+                      {vehiculeDocuments.immatriculation}
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 13, color: "#6b7280" }}>
+                      {vehiculeDocuments.categorie} — {vehiculeDocuments.modeleType}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setDocumentsOuvert(false)}
+                    style={closeBtnStyle}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
+                  <JustificatifsSection
+                    cible={{ kind: "vehicule", id: vehiculeDocuments.id }}
+                    typesAutorises={["CARTE_GRISE", "VISITE_TECHNIQUE", "ASSURANCE", "AUTRE"]}
+                    typeParDefaut="CARTE_GRISE"
+                    peutValider={!lectureSeule}
+                    titre="Pièces du véhicule"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {historiqueOuvert && vehiculeHistorique && (
             <div
@@ -1438,6 +1511,17 @@ export default function VehiculesPage() {
                     </p>
                   </div>
 
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={exporterHistoriqueVehicule}
+                    disabled={chargementHisto || missionsHisto.length === 0}
+                    className="btn-spat btn-orange"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: chargementHisto || missionsHisto.length === 0 ? 0.5 : 1 }}
+                    title="Exporter l'historique des missions en CSV"
+                  >
+                    <Download size={15} /> CSV
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
@@ -1447,6 +1531,7 @@ export default function VehiculesPage() {
                   >
                     ×
                   </button>
+                  </div>
                 </div>
 
                 <div
@@ -1621,10 +1706,6 @@ export default function VehiculesPage() {
             </div>
           )}
 
-          {/* =================================================
-              RECHERCHE
-          ================================================= */}
-
           <div
             style={{
               display: "flex",
@@ -1676,10 +1757,6 @@ export default function VehiculesPage() {
               Page {pageActuelle}/{nombrePages}
             </div>
           </div>
-
-          {/* =================================================
-              TABLEAU
-          ================================================= */}
 
           <div
             style={{
@@ -1914,6 +1991,7 @@ export default function VehiculesPage() {
                                 "#bfdbfe"
                               )}
                               title="Modifier"
+                              aria-label={`Modifier le véhicule ${v.immatriculation}`}
                             >
                               <IconEdit />
                             </button>
@@ -1932,6 +2010,7 @@ export default function VehiculesPage() {
                                 "#fecaca"
                               )}
                               title="Supprimer"
+                              aria-label={`Supprimer le véhicule ${v.immatriculation}`}
                             >
                               <IconTrash />
                             </button>
@@ -1953,6 +2032,23 @@ export default function VehiculesPage() {
                             <IconHistory />
                           </button>
 
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            onClick={() => {
+                              setVehiculeDocuments(v);
+                              setDocumentsOuvert(true);
+                            }}
+                            style={iconBtn(
+                              "#ecfdf5",
+                              "#059669",
+                              "#a7f3d0"
+                            )}
+                            title="Documents (carte grise, visite technique, assurance...)"
+                            aria-label={`Documents du véhicule ${v.immatriculation}`}
+                          >
+                            <FileText size={15} />
+                          </button>
 
                         </div>
                       </td>
@@ -1962,10 +2058,6 @@ export default function VehiculesPage() {
               </tbody>
             </table>
           </div>
-
-          {/* =================================================
-              PAGINATION
-          ================================================= */}
 
           {vehiculesFiltres.length > 0 && (
             <div
@@ -2275,10 +2367,6 @@ function InfoLigne({
   );
 }
 
-// =========================================================
-// STYLES
-// =========================================================
-
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 13,
@@ -2294,12 +2382,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   width: "100%",
   fontSize: 14,
-};
-
-const helpStyle: React.CSSProperties = {
-  marginTop: 5,
-  fontSize: 11,
-  color: "#6b7280",
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -2340,23 +2422,24 @@ const closeBtnStyle: React.CSSProperties = {
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#dc2626",
-  color: "white",
-  border: "1px solid #dc2626",
-  borderRadius: 8,
+  padding: "11px 18px",
+  borderRadius: 10,
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
+  fontSize: 14,
+  transition: "all 150ms ease",
 };
 
 const btnSecondary: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#2563eb",
+  padding: "11px 18px",
+  backgroundColor: "#1d4ed8",
   color: "#ffffff",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 10,
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
+  fontSize: 14,
+  transition: "all 150ms ease",
 };
 
 const iconBtn = (
@@ -2364,8 +2447,8 @@ const iconBtn = (
   color: string,
   border: string
 ): React.CSSProperties => ({
-  width: 30,
-  height: 30,
+  width: 32,
+  height: 32,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -2374,6 +2457,7 @@ const iconBtn = (
   border: `1px solid ${border}`,
   borderRadius: 8,
   cursor: "pointer",
+  transition: "all 150ms ease",
 });
 
 const thStyle: React.CSSProperties = {

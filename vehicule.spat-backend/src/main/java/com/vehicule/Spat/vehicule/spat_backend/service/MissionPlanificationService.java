@@ -49,5 +49,16 @@ public class MissionPlanificationService {
                     missions
             );
         }
+
+        // Après la validation N2, les missions hors ville portent le statut
+        // PLANIFIEE. Elles passent automatiquement en cours à l'heure de
+        // départ, comme les missions rapides en ville.
+        List<Reservation> missionsHorsVille = reservationRepository.findAllByOrderByDateCreationDesc().stream()
+                .filter(mission -> "PLANIFIEE".equalsIgnoreCase(mission.getStatut()))
+                .filter(mission -> mission.getDateDebut() != null && !mission.getDateDebut().isAfter(LocalDateTime.now()))
+                .peek(mission -> mission.setStatut("EN_COURS"))
+                .toList();
+        if (!missionsHorsVille.isEmpty()) reservationRepository.saveAll(missionsHorsVille);
+
     }
 }

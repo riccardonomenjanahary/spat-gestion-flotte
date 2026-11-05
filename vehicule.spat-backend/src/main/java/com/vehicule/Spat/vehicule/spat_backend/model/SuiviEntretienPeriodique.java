@@ -48,6 +48,10 @@ public class SuiviEntretienPeriodique {
     )
     private Double dernierKilometrageConnu;
 
+    /** Compteur absolu au dernier reset de cycle périodique. */
+    @Column(name = "kilometrage_base_cycle")
+    private Double kilometrageBaseCycle;
+
     @Column(
             name = "entretien_periodique_ouvert",
             nullable = false
@@ -132,6 +136,14 @@ public class SuiviEntretienPeriodique {
         this.dernierKilometrageConnu =
                 dernierKilometrageConnu;
     }
+
+        public Double getKilometrageBaseCycle() {
+                return kilometrageBaseCycle;
+        }
+
+        public void setKilometrageBaseCycle(Double kilometrageBaseCycle) {
+                this.kilometrageBaseCycle = kilometrageBaseCycle;
+        }
 
     public Boolean getEntretienPeriodiqueOuvert() {
         return entretienPeriodiqueOuvert;

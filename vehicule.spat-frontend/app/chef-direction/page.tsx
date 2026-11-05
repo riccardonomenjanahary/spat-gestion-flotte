@@ -13,16 +13,27 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import EnTete from "@/components/EnTete";
+import IncidentSignalementButton from "@/components/IncidentSignalementButton";
 import RoleGuard from "@/components/RoleGuard";
+import PersonnelAutocomplete from "@/components/PersonnelAutocomplete";
+import { HabilitationsMotoValidation } from "@/components/HabilitationMoto";
+import AvisIndisponibiliteButton from "@/components/AvisIndisponibiliteButton";
 import { ROLES } from "@/app/lib/roles";
+import { exportCsv, formatDateHeureExport } from "@/app/lib/exportUtils";
 
 import {
   CalendarDays,
   Car,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
+  Download,
   FileText,
+  History,
+  Map as MapIcon,
   MapPin,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -33,9 +44,8 @@ import {
   XCircle,
 } from "lucide-react";
 
-// =========================================================
-// TYPES
-// =========================================================
+import CarteGpsDirection from "@/components/CarteGpsDirection";
+import NotificationsVehiculesPartages from "@/components/NotificationsVehiculesPartages";
 
 type TypeDemande = "PLANIFIEE" | "TARDIVE" | "URGENTE";
 type Mobilisabilite = "FLEXIBLE" | "VERROUILLEE";
@@ -80,6 +90,7 @@ interface Reservation {
     nomComplet?: string | null;
     matricule?: string | null;
     role?: string | null;
+    email?: string | null;
   } | null;
 
   demandeurNom?: string | null;
@@ -103,6 +114,8 @@ interface Reservation {
 
 interface FormulaireReservation {
   zoneMission: ZoneMission | "";
+  typeVehicule: "VOITURE" | "";
+  nomBeneficiaire: string;
   dateDebut: string;
   dateFin: string;
   motif: string;
@@ -117,10 +130,15 @@ interface FormulaireReservation {
   nombrePassagers: string;
   listePassagers: string;
   observations: string;
+  forfaitaire: string;
+  dureeEstimeeMinutes: string;
 }
 
 const formulaireInitial: FormulaireReservation = {
-  zoneMission: "",
+  zoneMission: "HORS_TOAMASINA",
+
+  typeVehicule: "VOITURE",
+  nomBeneficiaire: "",
   dateDebut: "",
   dateFin: "",
   motif: "",
@@ -135,6 +153,8 @@ const formulaireInitial: FormulaireReservation = {
   nombrePassagers: "1",
   listePassagers: "",
   observations: "",
+  forfaitaire: "oui",
+  dureeEstimeeMinutes: "1440",
 };
 
 const statutStyle: Record<
@@ -144,7 +164,7 @@ const statutStyle: Record<
   EN_ATTENTE: {
     bg: "#fef3c7",
     text: "#92400e",
-    label: "En attente",
+    label: "Prévue",
   },
   EN_ATTENTE_AVIS_DID: {
     bg: "#e0f2fe",
@@ -154,12 +174,12 @@ const statutStyle: Record<
   VALIDEE_N1: {
     bg: "#ede9fe",
     text: "#6d28d9",
-    label: "Validée N1",
+    label: "Planifiée",
   },
   VALIDEE: {
     bg: "#dcfce7",
     text: "#166534",
-    label: "Validée",
+    label: "Planifiée",
   },
   REFUSEE: {
     bg: "#fee2e2",
@@ -168,13 +188,9 @@ const statutStyle: Record<
   },
 };
 
-// =========================================================
-// PAGE CHEF DE DIRECTION
-// =========================================================
-
 export default function ChefDirectionPage() {
   return (
-    <RoleGuard role={ROLES.CHEF_DIRECTION}>
+    <RoleGuard roles={[ROLES.CHEF_DIRECTION, ROLES.AGENT_PAR_INTERIM_CHEF]}>
       <ChefDirectionContent />
     </RoleGuard>
   );
@@ -186,11 +202,15 @@ function ChefDirectionContent() {
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [chargement, setChargement] = useState(true);
-  const [recherche, setRecherche] = useState("");
-  const [afficherRefuses, setAfficherRefuses] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [missionSelectionnee, setMissionSelectionnee] = useState<Reservation | null>(null);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [dateCalendrier, setDateCalendrier] = useState(() => new Date());
 
   const [modalOuverte, setModalOuverte] = useState(false);
   const [envoi, setEnvoi] = useState(false);
+
+  const [carteGpsOuverte, setCarteGpsOuverte] = useState(false);
 
   const [formulaire, setFormulaire] =
     useState<FormulaireReservation>(formulaireInitial);
@@ -200,14 +220,11 @@ function ChefDirectionContent() {
     return localStorage.getItem("token");
   };
 
-  // =========================================================
-  // CHARGEMENT DES TICKETS
-  // =========================================================
-
   const chargerDonnees = async () => {
     const token = getToken();
 
     if (!API) {
+      setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
       setChargement(false);
       return;
@@ -219,16 +236,15 @@ function ChefDirectionContent() {
     }
 
     setChargement(true);
+    setErreurChargement(null);
 
     try {
-      const res = await fetch(`${API}/reservations/mes`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      });
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      };
+
+      const res = await fetch(`${API}/reservations`, { method: "GET", headers, cache: "no-store" });
 
       if (res.status === 401) {
         toast.error("Votre session a expiré");
@@ -250,11 +266,12 @@ function ChefDirectionContent() {
       }
 
       const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse missions invalide.");
+      setReservations(data as Reservation[]);
 
-      setReservations(
-        Array.isArray(data) ? (data as Reservation[]) : []
-      );
     } catch (error) {
+      setReservations([]);
+      setErreurChargement(error instanceof Error ? error.message : "Missions indisponibles.");
       toast.error(
         error instanceof Error
           ? error.message
@@ -266,13 +283,10 @@ function ChefDirectionContent() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void chargerDonnees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // =========================================================
-  // MODALE NOUVELLE MISSION
-  // =========================================================
 
   const ouvrirModal = () => {
     setFormulaire(formulaireInitial);
@@ -308,10 +322,6 @@ function ChefDirectionContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOuverte, envoi]);
 
-  // =========================================================
-  // STATISTIQUES ET RECHERCHE
-  // =========================================================
-
   const totalDemandes = reservations.length;
 
   const enAttente = reservations.filter(
@@ -326,72 +336,58 @@ function ChefDirectionContent() {
     (r) => r.statut === "REFUSEE"
   ).length;
 
-  const reservationsFiltrees = useMemo(() => {
-    const terme = normaliserRecherche(recherche);
-
-    const ticketsSource = afficherRefuses
-      ? reservations.filter((r) => r.statut === "REFUSEE")
-      : reservations;
-
-    if (!terme) return ticketsSource;
-
-    return ticketsSource.filter((reservation) => {
-      const ticket = `TKT-${String(reservation.id).padStart(5, "0")}`;
-
-      const typeDemande = obtenirStyleTypeDemande(
-        obtenirTypeDemande(reservation)
-      ).label;
-
-      const statut =
-        statutStyle[reservation.statut]?.label || reservation.statut;
-
-      const texteRecherche = [
-        ticket,
-        reservation.motif,
-        reservation.destination,
-        reservation.pointDepart,
-        reservation.demandeurNom,
-        reservation.demandeurPrenom,
-        reservation.demandeurMatricule,
-        reservation.demandeurEntite,
-        reservation.demandeurTelephone,
-        libelleZoneMission(reservation.zoneMission),
-        libelleEtatOperationnel(reservation),
-        statut,
-        typeDemande,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      return normaliserRecherche(texteRecherche).includes(terme);
+  const missionsCalendrier = useMemo(
+    () => reservations,
+    [reservations]
+  );
+  const missionsParJourCalendrier = useMemo(() => {
+    const parJour = new Map<string, Reservation[]>();
+    missionsCalendrier.forEach((mission) => {
+      const dateDebut = new Date(mission.dateDebut);
+      if (Number.isNaN(dateDebut.getTime())) return;
+      const cle = cleJourCalendrier(dateDebut);
+      const missions = parJour.get(cle);
+      if (missions) missions.push(mission);
+      else parJour.set(cle, [mission]);
     });
-  }, [reservations, recherche, afficherRefuses]);
+    return parJour;
+  }, [missionsCalendrier]);
 
-  // =========================================================
-  // FORMULAIRE
-  // =========================================================
+  const historiqueDuMois = useMemo(
+    () => reservations
+      .filter((mission) => mission.statut === "CLOTUREE" && missionDansMois(mission, dateCalendrier))
+      .sort((a, b) => new Date(b.dateDebut).getTime() - new Date(a.dateDebut).getTime()),
+    [reservations, dateCalendrier]
+  );
 
-  const estHorsDelai24h = useMemo(() => {
-    if (
-      formulaire.zoneMission !== "HORS_TOAMASINA" ||
-      !formulaire.dateDebut
-    ) {
-      return false;
-    }
+  const exporterHistoriqueDuMois = () => {
+    exportCsv({
+      titre: "Historique des missions clôturées",
+      nomFichier: `historique_missions_${titreCalendrier}`,
+      sousTitre: titreCalendrier,
+      donnees: historiqueDuMois,
+      colonnes: [
+        { header: "Ticket", value: (mission) => `TKT-${String(mission.id).padStart(5, "0")}` },
+        { header: "Demandeur", value: (mission) => [mission.demandeurPrenom, mission.demandeurNom].filter(Boolean).join(" ") || mission.demandeur?.nomComplet || "—" },
+        { header: "Entité", value: (mission) => mission.demandeurEntite || "—" },
+        { header: "Motif", value: (mission) => mission.motif || "—" },
+        { header: "Date de départ", value: (mission) => formatDateHeureExport(mission.dateDebut) },
+        { header: "Retour prévu", value: (mission) => formatDateHeureExport(mission.dateFin) },
+        { header: "Point de départ", value: (mission) => mission.pointDepart || "—" },
+        { header: "Destination", value: (mission) => mission.destination || "—" },
+        { header: "Véhicule demandé", value: (mission) => mission.typeVehiculeSouhaite || "—" },
+        { header: "Passagers", key: "listePassagers" },
+      ],
+    });
+    toast.success("Historique exporté au format CSV.");
+  };
 
-    const debut = new Date(formulaire.dateDebut);
+  const joursCalendrier = useMemo(
+    () => obtenirJoursCalendrier(dateCalendrier),
+    [dateCalendrier]
+  );
 
-    if (Number.isNaN(debut.getTime())) return false;
-
-    return debut < new Date(Date.now() + 24 * 60 * 60 * 1000);
-  }, [formulaire.zoneMission, formulaire.dateDebut]);
-
-  const etatOperationnelFormulaire =
-    formulaire.zoneMission === "HORS_TOAMASINA"
-      ? "PLANIFIEE"
-      : formulaire.zoneMission === "VILLE_TOAMASINA"
-        ? "FLEXIBLE"
-        : null;
+  const titreCalendrier = dateCalendrier.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
   const modifierChamp = <K extends keyof FormulaireReservation,>(
     champ: K,
@@ -403,51 +399,27 @@ function ChefDirectionContent() {
     }));
   };
 
-  const lignesPassagers = useMemo(() => {
-    const nombre = Math.max(
-      1,
-      Number.parseInt(formulaire.nombrePassagers || "1", 10) || 1
-    );
-
-    const existants = formulaire.listePassagers
-      .split("\n")
-      .map((nom) => nom.trim());
-
-    return Array.from(
-      { length: nombre },
-      (_, index) => existants[index] || ""
-    );
-  }, [formulaire.nombrePassagers, formulaire.listePassagers]);
-
   const modifierNombrePassagers = (valeur: string) => {
-    const nombre = Math.max(
-      1,
-      Number.parseInt(valeur || "1", 10) || 1
-    );
-
-    const existants = formulaire.listePassagers
-      .split("\n")
-      .map((nom) => nom.trim());
-
+    const nombre = Math.max(1, Number.parseInt(valeur || "1", 10) || 1);
+    const existants = formulaire.listePassagers.split("\n").map((nom) => nom.trim());
     setFormulaire((ancien) => ({
       ...ancien,
       nombrePassagers: valeur,
-      listePassagers: Array.from(
-        { length: nombre },
-        (_, index) => existants[index] || ""
-      ).join("\n"),
+      listePassagers: Array.from({ length: nombre }, (_, index) => existants[index] || "").join("\n"),
     }));
   };
+
+  const lignesPassagers = useMemo(() => {
+    const nombre = Math.max(1, Number.parseInt(formulaire.nombrePassagers || "1", 10) || 1);
+    const existants = formulaire.listePassagers.split("\n").map((nom) => nom.trim());
+    return Array.from({ length: nombre }, (_, index) => existants[index] || "");
+  }, [formulaire.nombrePassagers, formulaire.listePassagers]);
 
   const modifierNomPassager = (index: number, valeur: string) => {
     const copie = [...lignesPassagers];
     copie[index] = valeur;
     modifierChamp("listePassagers", copie.join("\n"));
   };
-
-  // =========================================================
-  // ENVOI D'UNE NOUVELLE MISSION
-  // =========================================================
 
   const envoyerDemande = async (
     event: FormEvent<HTMLFormElement>
@@ -463,13 +435,6 @@ function ChefDirectionContent() {
 
     if (!token) {
       router.replace("/login");
-      return;
-    }
-
-    if (!formulaire.zoneMission) {
-      toast.error(
-        "Veuillez préciser si la mission est dans Toamasina ou hors Toamasina"
-      );
       return;
     }
 
@@ -516,11 +481,6 @@ function ChefDirectionContent() {
       return;
     }
 
-    if (!formulaire.demandeurMatricule.trim()) {
-      toast.error("Le matricule du bénéficiaire est obligatoire");
-      return;
-    }
-
     if (!formulaire.demandeurEntite.trim()) {
       toast.error(
         "La Direction / Département / Service est obligatoire"
@@ -528,18 +488,14 @@ function ChefDirectionContent() {
       return;
     }
 
-    if (!formulaire.demandeurTelephone.trim()) {
-      toast.error("Le numéro de téléphone est obligatoire");
-      return;
-    }
-
-    if (!formulaire.pointDepart.trim()) {
-      toast.error("Le point de départ est obligatoire");
-      return;
-    }
-
     if (!formulaire.destination.trim()) {
       toast.error("La destination est obligatoire");
+      return;
+    }
+
+    const dureeEstimeeMinutes = Number(formulaire.dureeEstimeeMinutes);
+    if (!Number.isInteger(dureeEstimeeMinutes) || dureeEstimeeMinutes < 1440) {
+      toast.error("La durée de la mission doit être d'au moins un jour.");
       return;
     }
 
@@ -555,61 +511,41 @@ function ChefDirectionContent() {
 
     const passagersSaisis = lignesPassagers.map((nom) => nom.trim());
 
-    if (
-      passagersSaisis.length !== nombrePassagers ||
-      passagersSaisis.some((nom) => !nom)
-    ) {
-      toast.error(
-        "Veuillez renseigner le nom et le prénom de chaque passager."
-      );
-      return;
-    }
-
-    if (
-      formulaire.zoneMission === "HORS_TOAMASINA" &&
-      estHorsDelai24h &&
-      !formulaire.motifUrgence.trim()
-    ) {
-      toast.error(
-        "La mission hors Toamasina est créée à moins de 24 heures du départ. Veuillez justifier cette demande tardive."
-      );
-      return;
-    }
-
     const body = {
-      zoneMission: formulaire.zoneMission,
+      vehiculeId: null,
+      chauffeurId: null,
+      zoneMission: "HORS_TOAMASINA",
       dateDebut: convertirDatePourApi(formulaire.dateDebut),
       dateFin: convertirDatePourApi(formulaire.dateFin),
       motif: formulaire.motif.trim(),
 
-      // Les urgences opérationnelles sont traitées par le circuit dédié.
       demandeUrgente: false,
 
-      motifUrgence:
-        formulaire.zoneMission === "HORS_TOAMASINA" &&
-        estHorsDelai24h
-          ? formulaire.motifUrgence.trim()
-          : null,
+      motifUrgence: null,
 
       demandeurNom: formulaire.demandeurNom.trim(),
       demandeurPrenom: formulaire.demandeurPrenom.trim(),
-      demandeurMatricule: formulaire.demandeurMatricule.trim(),
+      demandeurMatricule: formulaire.demandeurMatricule.trim() || null,
       demandeurEntite: formulaire.demandeurEntite.trim(),
-      demandeurTelephone: formulaire.demandeurTelephone.trim(),
+      demandeurTelephone: formulaire.demandeurTelephone.trim() || null,
 
       destination: formulaire.destination.trim(),
-      pointDepart: formulaire.pointDepart.trim(),
+      pointDepart: "SPAT Toamasina",
       nombrePassagers,
-      listePassagers: passagersSaisis.join("\n"),
 
-      // L'affectation du véhicule et du chauffeur relève de la logistique.
-      typeVehiculeSouhaite: null,
+      listePassagers: passagersSaisis.every(p => !p)
+        ? `${formulaire.demandeurPrenom.trim()} ${formulaire.demandeurNom.trim()}`
+        : passagersSaisis.filter(p => p).join("\n"),
+
+      typeVehiculeSouhaite: formulaire.typeVehicule,
       besoinChauffeur: true,
 
-      observations: formulaire.observations.trim() || null,
+      observations: `Forfaitaire: ${formulaire.forfaitaire}${formulaire.observations.trim() ? ` · ${formulaire.observations.trim()}` : ""}`,
     };
 
     setEnvoi(true);
+
+    
 
     try {
       const res = await fetch(`${API}/reservations`, {
@@ -621,6 +557,8 @@ function ChefDirectionContent() {
         },
         body: JSON.stringify(body),
       });
+
+      
 
       if (res.status === 401) {
         toast.error("Votre session a expiré");
@@ -636,9 +574,9 @@ function ChefDirectionContent() {
       }
 
       if (!res.ok) {
-        toast.error(
-          (await lireErreur(res)) || "Impossible d'enregistrer la mission"
-        );
+        const erreur = await lireErreur(res);
+        console.error("Erreur serveur:", erreur);
+        toast.error(erreur || "Impossible d'enregistrer la mission");
         return;
       }
 
@@ -650,12 +588,18 @@ function ChefDirectionContent() {
         ? `TKT-${String(creee.id).padStart(5, "0")}`
         : "Le ticket";
 
-      toast.success(
-        `${ticket} a été transmis au Service Logistique`
-      );
+      toast.success(`${ticket} transmis au Chef du Service Logistique.`);
 
       setModalOuverte(false);
       setFormulaire(formulaireInitial);
+
+      if (creee?.dateDebut) {
+        const dateMission = new Date(creee.dateDebut);
+        if (!Number.isNaN(dateMission.getTime())) {
+          setDateCalendrier(new Date(dateMission.getFullYear(), dateMission.getMonth(), 1));
+        }
+      }
+
       await chargerDonnees();
     } catch {
       toast.error("Erreur de communication avec le serveur");
@@ -663,17 +607,6 @@ function ChefDirectionContent() {
       setEnvoi(false);
     }
   };
-
-  const allerListe = () => {
-    document.getElementById("liste-tickets-direction")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
-
-  // =========================================================
-  // AFFICHAGE
-  // =========================================================
 
   return (
     <>
@@ -743,6 +676,7 @@ function ChefDirectionContent() {
           .passager-ligne {
             grid-template-columns: 1fr !important;
           }
+
         }
 
         @media (max-width: 600px) {
@@ -775,8 +709,9 @@ function ChefDirectionContent() {
         }
       `}</style>
 
-      {/* La cloche de notification est masquée pour cette page. */}
       <EnTete afficherNotifications={false} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 24px 0" }}><IncidentSignalementButton role={ROLES.CHEF_DIRECTION} /></div>
+      {erreurChargement && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>La liste des missions n’a pas été synchronisée : {erreurChargement}.</div>}
 
       <div
         className="page-container"
@@ -787,7 +722,6 @@ function ChefDirectionContent() {
         }}
       >
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-          {/* EN-TÊTE DE PAGE */}
 
           <div
             className="header-page"
@@ -811,30 +745,11 @@ function ChefDirectionContent() {
                 Chef de Direction
               </h1>
 
-              <p
-                style={{
-                  margin: "5px 0 0",
-                  color: "#64748b",
-                  fontSize: 13,
-                }}
-              >
-                Création et suivi des tickets de mission
-              </p>
             </div>
+            <AvisIndisponibiliteButton />
+            <HabilitationsMotoValidation />
 
-            {/* SEUL BOUTON « NOUVELLE MISSION » EN HAUT DE PAGE */}
-            <button
-              type="button"
-              className="bouton-vert bouton-nouvelle"
-              onClick={ouvrirModal}
-              style={boutonVert}
-            >
-              <Plus size={18} />
-              Nouvelle mission
-            </button>
           </div>
-
-          {/* STATISTIQUES */}
 
           <div
             className="stats-grid"
@@ -870,387 +785,285 @@ function ChefDirectionContent() {
             />
           </div>
 
-          {/* NAVIGATION : UNIQUEMENT LES BOUTONS BLEU ET ROUGE */}
-
-          <nav
-            aria-label="Navigation des missions"
-            style={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 20,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            <button
-              type="button"
-              className="bouton-bleu"
-              onClick={() => {
-                setAfficherRefuses(false);
-                allerListe();
-              }}
-              style={{ ...boutonBleu, minHeight: 43 }}
-            >
-              <FileText size={16} />
-              Liste des tickets ({totalDemandes})
-            </button>
-
-            <button
-              type="button"
-              className="bouton-rouge"
-              aria-pressed={afficherRefuses}
-              onClick={() => {
-                setAfficherRefuses((actuel) => !actuel);
-                allerListe();
-              }}
-              style={{
-                ...boutonRouge,
-                minHeight: 43,
-                boxShadow: afficherRefuses
-                  ? "0 0 0 2px #ffffff inset"
-                  : "none",
-              }}
-            >
-              <XCircle size={16} />
-
-              {afficherRefuses
-                ? "Afficher tous les tickets"
-                : `Tickets refusés (${refusees})`}
-            </button>
-          </nav>
-
-          {/* RECHERCHE */}
-
-          <div style={rechercheCardStyle}>
-            <div style={rechercheTitreStyle}>
-              <Search size={17} color="#475569" />
-              Rechercher un ticket
-            </div>
-
-            <div style={{ position: "relative" }}>
-              <Search
-                size={17}
-                color="#9ca3af"
-                style={{
-                  position: "absolute",
-                  left: 12,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  pointerEvents: "none",
-                }}
-              />
-
-              <input
-                type="search"
-                value={recherche}
-                onChange={(e) => setRecherche(e.target.value)}
-                placeholder="Ticket, objet, destination, bénéficiaire, statut..."
-                aria-label="Rechercher dans mes tickets"
-                style={{
-                  ...inputStyle,
-                  paddingLeft: 39,
-                  paddingRight: recherche ? 42 : 12,
-                  height: 42,
-                }}
-              />
-
-              {recherche && (
+          <section aria-label="Calendrier des missions de la direction" style={{ ...rechercheCardStyle, marginBottom: 24 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Calendrier des missions</h2>
                 <button
                   type="button"
-                  onClick={() => setRecherche("")}
-                  aria-label="Effacer la recherche"
-                  title="Effacer la recherche"
-                  style={boutonEffacerRecherche}
+                  className="btn-spat btn-rouge bouton-nouvelle"
+                  onClick={ouvrirModal}
                 >
-                  <X size={15} />
+                  <Plus size={18} />
+                  Nouvelle mission
                 </button>
-              )}
-            </div>
-
-            {recherche.trim() && (
-              <div style={resultatRechercheStyle}>
-                <strong style={{ color: "#374151" }}>
-                  {reservationsFiltrees.length}
-                </strong>{" "}
-                résultat
-                {reservationsFiltrees.length > 1 ? "s" : ""} sur{" "}
-                {reservations.length} ticket
-                {reservations.length > 1 ? "s" : ""}
+                <button
+                  type="button"
+                  onClick={() => setHistoriqueOuvert(true)}
+                  aria-label={`Voir l'historique des missions de ${titreCalendrier}`}
+                  style={boutonSecondaire}
+                >
+                  <History size={17} />
+                  Historique du mois ({historiqueDuMois.length})
+                </button>
+                <button
+                  type="button"
+                  className="btn-spat btn-vert"
+                  onClick={() => setCarteGpsOuverte(true)}
+                  style={{
+                    ...boutonSecondaire,
+                    backgroundColor: "#16a34a",
+                    color: "#ffffff",
+                  }}
+                  title="Suivre les véhicules mutualisés équipés GPS"
+                >
+                  <MapIcon size={17} />
+                  Carte GPS
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* TITRE DE LA LISTE ET ACTUALISATION */}
-
-          <div
-            id="liste-tickets-direction"
-            style={{
-              ...listeHeaderStyle,
-              scrollMarginTop: 85,
-            }}
-          >
-            <h3 style={listeTitreStyle}>
-              {afficherRefuses
-                ? "Tickets refusés de ma direction"
-                : "Tickets de ma direction"}
-            </h3>
-
-            <button
-              type="button"
-              className="bouton-bleu"
-              onClick={() => void chargerDonnees()}
-              disabled={chargement}
-              style={{
-                ...boutonBleu,
-                cursor: chargement ? "not-allowed" : "pointer",
-                opacity: chargement ? 0.6 : 1,
-              }}
-            >
-              <RefreshCw size={15} />
-              Actualiser
-            </button>
-          </div>
-
-          {/* TABLEAU : EN-TÊTE BLANC */}
-
-          <div style={listeBoxStyle}>
-            <div style={tableContainerStyle}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "separate",
-                  borderSpacing: 0,
-                  minWidth: 860,
-                }}
-              >
-                <thead>
-                  <tr style={theadRowStyle}>
-                    <th style={thStyle}>Ticket</th>
-                    <th style={thStyle}>Mission</th>
-                    <th style={thStyle}>Zone</th>
-                    <th style={thStyle}>Destination</th>
-                    <th style={thStyle}>Départ</th>
-                    <th style={thStyle}>État opérationnel</th>
-                    <th style={thStyle}>Étape actuelle</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {chargement ? (
-                    <tr>
-                      <td colSpan={7} style={emptyStyle}>
-                        Chargement des tickets...
-                      </td>
-                    </tr>
-                  ) : reservations.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={emptyStyle}>
-                        <div style={emptyContentStyle}>
-                          <Car size={34} color="#9ca3af" />
-
-                          <strong style={{ color: "#374151" }}>
-                            Aucun ticket
-                          </strong>
-
-                          <span>
-                            Vous n&apos;avez encore créé aucune mission.
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={ouvrirModal}
-                            style={boutonLien}
-                          >
-                            Créer une mission
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : reservationsFiltrees.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={emptyStyle}>
-                        <div style={emptyContentStyle}>
-                          <Search size={32} color="#9ca3af" />
-
-                          <strong style={{ color: "#374151" }}>
-                            Aucun résultat
-                          </strong>
-
-                          <span>
-                            Aucun ticket ne correspond à votre recherche.
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => setRecherche("")}
-                            style={boutonLien}
-                          >
-                            Effacer la recherche
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    reservationsFiltrees.map((reservation, index) => {
-                      const styleStatut =
-                        statutStyle[reservation.statut] || {
-                          bg: "#f3f4f6",
-                          text: "#374151",
-                          label: reservation.statut,
-                        };
-
-                      const styleType = obtenirStyleTypeDemande(
-                        obtenirTypeDemande(reservation)
-                      );
-
-                      return (
-                        <tr
-                          key={reservation.id}
-                          className="ligne-demande"
-                          style={{
-                            backgroundColor:
-                              index % 2 === 0 ? "#ffffff" : "#fcfcfd",
-                          }}
-                        >
-                          <td style={tdStyle}>
-                            <div style={ticketCellStyle}>
-                              <div>
-                                <div
-                                  style={{
-                                    fontWeight: 800,
-                                    color: "#111827",
-                                    whiteSpace: "nowrap",
-                                    letterSpacing: 0.2,
-                                  }}
-                                >
-                                  {`TKT-${String(
-                                    reservation.id
-                                  ).padStart(5, "0")}`}
-                                </div>
-
-                                <div style={{ marginTop: 6 }}>
-                                  <span
-                                    style={{
-                                      backgroundColor: styleType.bg,
-                                      color: styleType.text,
-                                      padding: "4px 9px",
-                                      borderRadius: 999,
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      whiteSpace: "nowrap",
-                                      border: `1px solid ${styleType.text}22`,
-                                    }}
-                                  >
-                                    {styleType.label}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td style={tdStyle}>
-                            <div style={missionCellStyle}>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: "#111827",
-                                  maxWidth: 250,
-                                  lineHeight: 1.45,
-                                }}
-                              >
-                                {reservation.motif}
-                              </div>
-
-                              <div style={texteSecondaireStyle}>
-                                Créé le{" "}
-                                {formatDateHeure(reservation.dateCreation)}
-                              </div>
-
-                              {reservation.demandeur?.role ===
-                                ROLES.ASSISTANT_DIRECTION && (
-                                <div style={texteSecondaireStyle}>
-                                  Créé par l’assistant :{" "}
-                                  {reservation.demandeur.nomComplet ||
-                                    reservation.demandeur.matricule ||
-                                    "—"}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          <td style={tdStyle}>
-                            {libelleZoneMission(
-                              reservation.zoneMission
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            <div style={iconeTexteStyle}>
-                              <MapPin size={14} color="#6b7280" />
-                              {reservation.destination || "—"}
-                            </div>
-                          </td>
-
-                          <td style={tdStyle}>
-                            <div
-                              style={{
-                                ...iconeTexteStyle,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              <CalendarDays
-                                size={14}
-                                color="#6b7280"
-                              />
-                              {formatDateHeure(
-                                reservation.dateDebut
-                              )}
-                            </div>
-                          </td>
-
-                          <td style={tdStyle}>
-                            <BadgeEtatOperationnel
-                              libelle={libelleEtatOperationnel(
-                                reservation
-                              )}
-                            />
-                          </td>
-
-                          <td style={tdStyle}>
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                backgroundColor: styleStatut.bg,
-                                color: styleStatut.text,
-                                padding: "6px 11px",
-                                borderRadius: 999,
-                                fontSize: 12,
-                                fontWeight: 700,
-                                whiteSpace: "nowrap",
-                                border: `1px solid ${styleStatut.text}22`,
-                              }}
-                            >
-                              {styleStatut.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <button type="button" aria-label="Mois précédent" title="Mois précédent"
+                  onClick={() => setDateCalendrier((date) => decalerDateCalendrier(date, -1))}
+                  style={boutonNavigationCalendrier}><ChevronLeft size={19} /></button>
+                <strong style={{ minWidth: 180, textAlign: "center", color: "#334155", textTransform: "capitalize" }}>{titreCalendrier}</strong>
+                <button type="button" aria-label="Mois suivant" title="Mois suivant"
+                  onClick={() => setDateCalendrier((date) => decalerDateCalendrier(date, 1))}
+                  style={boutonNavigationCalendrier}><ChevronRight size={19} /></button>
+              </div>
             </div>
-          </div>
+            <div style={{ width: "100%", padding: "4px 0 12px" }}>
+              <article style={{ display: "grid", gridTemplateColumns: "minmax(180px, 23%) minmax(0, 1fr)", width: "100%", minHeight: 410, overflow: "hidden", border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", boxShadow: "0 12px 30px rgba(15, 23, 42, 0.12)" }}>
+                <div style={{ position: "relative", overflow: "hidden", background: "#fff", color: "#111827", minHeight: 410 }}>
+                  <div style={{ position: "absolute", inset: 0, background: "#fff", clipPath: "polygon(0 60%, 100% 44%, 100% 100%, 0 100%)" }} />
+                  <div style={{ position: "absolute", top: -36, left: -35, width: 205, height: 205, borderRadius: "50%", background: "#fff", boxShadow: "12px 15px 0 rgba(15,23,42,.04)" }} />
+                  <span style={{ position: "absolute", top: 45, left: 22, fontSize: 74, lineHeight: 1, fontWeight: 800, letterSpacing: -4, color: "#111827" }}>{String(dateCalendrier.getMonth() + 1).padStart(2, "0")}</span>
+                </div>
+                <div style={{ minWidth: 0, padding: "28px clamp(18px, 5vw, 64px) 22px", display: "flex", flexDirection: "column" }}>
+                  <div style={{ textAlign: "right", lineHeight: 1, marginBottom: 22 }}>
+                    <strong style={{ display: "block", color: "#111827", fontSize: 38, lineHeight: 1, fontWeight: 800 }}>{dateCalendrier.getFullYear()}</strong>
+                    <span style={{ display: "block", marginTop: 7, color: "#1e293b", fontSize: 15, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>{dateCalendrier.toLocaleDateString("fr-FR", { month: "long" })}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 5, textAlign: "center" }}>
+                    {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((jour) => <span key={jour} style={{ color: "#64748b", fontSize: 11, fontWeight: 800, paddingBottom: 7 }}>{jour}</span>)}
+                    {joursCalendrier.map(({ date, dansPeriode }) => {
+                      const missionsDuJour = dansPeriode ? missionsParJourCalendrier.get(cleJourCalendrier(date)) || [] : [];
+                      const maintenant = new Date();
+                      const estAujourdhui = dansPeriode
+                        && date.getFullYear() === maintenant.getFullYear()
+                        && date.getMonth() === maintenant.getMonth()
+                        && date.getDate() === maintenant.getDate();
+                      return <div key={date.toISOString()} style={{ minHeight: 54, padding: "5px 4px", border: missionsDuJour.length ? "1px solid #cbd5e1" : "1px solid transparent", borderRadius: 6, background: "#fff", color: !dansPeriode ? "#cbd5e1" : "#334155", overflow: "visible" }}>
+                        <strong style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 12, lineHeight: "16px", color: estAujourdhui ? "#111827" : undefined, fontWeight: estAujourdhui ? 900 : undefined }}>
+                          {dansPeriode ? date.getDate() : ""}
+                          {missionsDuJour.length > 0 && <span aria-label="Mission prévue" style={{ width: 5, height: 5, flex: "0 0 auto", borderRadius: "50%", background: "#64748b" }} />}
+                        </strong>
+                        <div style={{ display: "grid", gap: 5, marginTop: 5 }}>
+                          {missionsDuJour.map((mission) => {
+                            const typeVehicule = mission.typeVehiculeSouhaite === "MOTO" ? "🏍️" : mission.typeVehiculeSouhaite === "VOITURE" ? "🚗" : "";
+                            return <button key={mission.id} type="button" title={`TKT-${String(mission.id).padStart(5, "0")} · ${formatHeure(mission.dateDebut)} — détails`}
+                              onClick={() => setMissionSelectionnee(mission)}
+                              style={{ display: "block", width: "100%", overflow: "hidden", border: "1px solid #e2e8f0", borderRadius: 4, padding: "4px 3px", background: "#fff", color: "#374151", fontSize: 13, fontWeight: 700, lineHeight: 1.25, textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}>
+                              {`${typeVehicule} ${formatHeure(mission.dateDebut)}`}
+                            </button>;
+                          })}
+                        </div>
+                      </div>;
+                    })}
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
         </div>
       </div>
 
-      {/* =====================================================
-          MODALE NOUVELLE MISSION
-      ===================================================== */}
+      {missionSelectionnee && (
+        <div
+          className="modal-container"
+          onMouseDown={() => setMissionSelectionnee(null)}
+          style={modalOverlayStyle}
+        >
+          <div
+            className="modal-content"
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ ...modalContentStyle, maxWidth: 700 }}
+          >
+            <div style={modalHeaderStyle}>
+              <div style={iconeTexteStyle}>
+                <div style={modalIconStyle}>
+                  <FileText size={21} color="#dc2626" />
+                </div>
+                <h3 style={modalTitleStyle}>
+                  Détails de la mission TKT-{String(missionSelectionnee.id).padStart(5, "0")}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMissionSelectionnee(null)}
+                aria-label="Fermer"
+                style={closeButtonStyle}
+              >
+                <X size={19} color="#4b5563" />
+              </button>
+            </div>
+            <div style={{ padding: 22 }}>
+              <div style={{ display: "grid", gap: 16 }}>
+                <div>
+                  <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Objet</strong>
+                  <div style={{ color: "#111827", fontSize: 14 }}>{missionSelectionnee.motif}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+                  <div>
+                    <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Départ</strong>
+                    <div style={{ color: "#111827", fontSize: 14 }}>{formatDateHeure(missionSelectionnee.dateDebut)}</div>
+                  </div>
+                  <div>
+                    <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Retour</strong>
+                    <div style={{ color: "#111827", fontSize: 14 }}>{formatDateHeure(missionSelectionnee.dateFin)}</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+                  <div>
+                    <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Point de départ</strong>
+                    <div style={{ color: "#111827", fontSize: 14 }}>{missionSelectionnee.pointDepart || "—"}</div>
+                  </div>
+                  <div>
+                    <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Destination</strong>
+                    <div style={{ color: "#111827", fontSize: 14 }}>{missionSelectionnee.destination || "—"}</div>
+                  </div>
+                </div>
+                <div>
+                  <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Bénéficiaire</strong>
+                  <div style={{ color: "#111827", fontSize: 14 }}>
+                    {missionSelectionnee.demandeurNom} {missionSelectionnee.demandeurPrenom}
+                  </div>
+                </div>
+                <div>
+                  <strong style={{ display: "block", color: "#64748b", fontSize: 12, marginBottom: 4 }}>Statut</strong>
+                  <div>
+                    <span style={{
+                      backgroundColor: statutStyle[missionSelectionnee.statut]?.bg || "#f3f4f6",
+                      color: statutStyle[missionSelectionnee.statut]?.text || "#374151",
+                      padding: "6px 11px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}>
+                      {statutStyle[missionSelectionnee.statut]?.label || missionSelectionnee.statut}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={modalFooterStyle}>
+              <button
+                type="button"
+                onClick={() => setMissionSelectionnee(null)}
+                style={boutonBleu}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historiqueOuvert && (
+        <div
+          className="modal-container"
+          onMouseDown={() => setHistoriqueOuvert(false)}
+          style={modalOverlayStyle}
+        >
+          <div
+            className="modal-content"
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ ...modalContentStyle, maxWidth: 800 }}
+          >
+            <div style={modalHeaderStyle}>
+              <div style={iconeTexteStyle}>
+                <div style={modalIconStyle}>
+                  <History size={21} color="#dc2626" />
+                </div>
+                <div>
+                  <h3 style={modalTitleStyle}>Historique du mois</h3>
+                  <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 14, textTransform: "capitalize" }}>
+                    {titreCalendrier} · {historiqueDuMois.length} mission{historiqueDuMois.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={exporterHistoriqueDuMois}
+                disabled={historiqueDuMois.length === 0}
+                className="btn-spat btn-orange"
+                style={{ marginRight: 8, opacity: historiqueDuMois.length ? 1 : 0.5 }}
+                title="Exporter l'historique du mois en CSV"
+              >
+                <Download size={16} /> Exporter CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoriqueOuvert(false)}
+                aria-label="Fermer"
+                style={closeButtonStyle}
+              >
+                <X size={19} color="#4b5563" />
+              </button>
+            </div>
+            <div style={{ padding: 22, maxHeight: "60vh", overflowY: "auto" }}>
+              {historiqueDuMois.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                  <History size={40} style={{ margin: "0 auto 16px" }} />
+                  <p>Aucune mission clôturée ce mois-ci</p>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {historiqueDuMois.map((mission) => (
+                    <div
+                      key={mission.id}
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 8,
+                        padding: 16,
+                        background: "#fff",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 8 }}>
+                        <strong style={{ color: "#111827", fontSize: 14 }}>
+                          TKT-{String(mission.id).padStart(5, "0")}
+                        </strong>
+                        <span style={{
+                          backgroundColor: "#dcfce7",
+                          color: "#166534",
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}>
+                          Clôturée
+                        </span>
+                      </div>
+                      <div style={{ color: "#374151", fontSize: 13, marginBottom: 8 }}>{mission.motif}</div>
+                      <div style={{ color: "#64748b", fontSize: 12 }}>
+                        {formatDateHeure(mission.dateDebut)} → {formatDateHeure(mission.dateFin)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={modalFooterStyle}>
+              <button
+                type="button"
+                onClick={() => setHistoriqueOuvert(false)}
+                style={boutonBleu}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalOuverte && (
         <div
@@ -1262,7 +1075,7 @@ function ChefDirectionContent() {
             className="modal-content"
             onSubmit={envoyerDemande}
             onMouseDown={(event) => event.stopPropagation()}
-            style={modalContentStyle}
+            style={{ ...modalContentStyle, maxWidth: 1100 }}
           >
             <div style={modalHeaderStyle}>
               <div style={iconeTexteStyle}>
@@ -1289,127 +1102,64 @@ function ChefDirectionContent() {
             </div>
 
             <div style={{ padding: 22 }}>
-              {/* BÉNÉFICIAIRE */}
 
-              <BlocFormulaire
-                numero="1"
-                titre="Bénéficiaire de la mission"
-                icone={<UserRound size={18} color="#2563eb" />}
-              >
-                <div className="form-grid" style={gridDeuxColonnes}>
-                  <Champ label="Nom" obligatoire>
-                    <input
-                      value={formulaire.demandeurNom}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "demandeurNom",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Nom du bénéficiaire"
-                      style={inputStyle}
+              {formulaire.typeVehicule && (
+                <BlocFormulaire
+                  numero="1"
+                  titre="Bénéficiaire de la mission"
+                  icone={<UserRound size={18} color="#2563eb" />}
+                >
+                  <div className="form-grid" style={gridDeuxColonnes}>
+                    <PersonnelAutocomplete
+                      label="Demandeur"
+                      style={{ gridColumn: "1 / -1" }}
+                      onSelect={(personnel) => {
+                        setFormulaire((ancien) => ({
+                          ...ancien,
+                          demandeurNom: personnel.nom,
+                          demandeurPrenom: personnel.prenom,
+                          demandeurMatricule: personnel.matricule,
+                          demandeurEntite: personnel.direction || personnel.poste,
+                        }));
+                      }}
                     />
-                  </Champ>
-
-                  <Champ label="Prénom" obligatoire>
-                    <input
-                      value={formulaire.demandeurPrenom}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "demandeurPrenom",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Prénom du bénéficiaire"
-                      style={inputStyle}
-                    />
-                  </Champ>
-
-                  <Champ label="Matricule" obligatoire>
-                    <input
-                      value={formulaire.demandeurMatricule}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "demandeurMatricule",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Ex. SPAT00125"
-                      style={inputStyle}
-                    />
-                  </Champ>
-
-                  <Champ label="Téléphone" obligatoire>
-                    <input
-                      type="tel"
-                      value={formulaire.demandeurTelephone}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "demandeurTelephone",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Numéro joignable"
-                      style={inputStyle}
-                    />
-                  </Champ>
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <Champ
-                      label="Direction / Département / Service"
-                      obligatoire
-                    >
-                      <input
-                        value={formulaire.demandeurEntite}
-                        onChange={(e) =>
-                          modifierChamp(
-                            "demandeurEntite",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Ex. Direction Financière et de la Performance"
-                        style={inputStyle}
-                      />
-                    </Champ>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <Champ
+                        label="Direction / Département / Service"
+                        obligatoire
+                      >
+                        <input
+                          value={formulaire.demandeurEntite}
+                          onChange={(e) =>
+                            modifierChamp(
+                              "demandeurEntite",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Ex. Direction Financière et de la Performance"
+                          style={inputStyle}
+                        />
+                      </Champ>
+                    </div>
                   </div>
-                </div>
-              </BlocFormulaire>
-
-              {/* INFORMATIONS SUR LA MISSION */}
+                </BlocFormulaire>
+              )}
 
               <BlocFormulaire
-                numero="2"
+                numero={formulaire.typeVehicule ? "2" : "1"}
                 titre="Informations sur la mission"
                 icone={<MapPin size={18} color="#16a34a" />}
               >
                 <div className="form-grid" style={gridDeuxColonnes}>
                   <Champ label="Zone de mission" obligatoire>
-                    <select
-                      value={formulaire.zoneMission}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "zoneMission",
-                          e.target.value as ZoneMission | ""
-                        )
-                      }
-                      style={inputStyle}
-                    >
-                      <option value="">Sélectionner la zone</option>
-
-                      <option value="VILLE_TOAMASINA">
-                        Dans la ville de Toamasina
-                      </option>
-
-                      <option value="HORS_TOAMASINA">
-                        Hors ville de Toamasina
-                      </option>
-                    </select>
+                    <div style={readOnlyStyle}>
+                      Hors ville de Toamasina
+                    </div>
                   </Champ>
 
                   <Champ label="État opérationnel">
                     <div style={readOnlyStyle}>
-                      {etatOperationnelFormulaire ||
-                        "Sélectionnez la zone"}
+                      PLANIFIEE
                     </div>
                   </Champ>
                 </div>
@@ -1435,21 +1185,7 @@ function ChefDirectionContent() {
                     marginTop: 16,
                   }}
                 >
-                  <Champ label="Point de départ" obligatoire>
-                    <input
-                      value={formulaire.pointDepart}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "pointDepart",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Ex. SPAT Toamasina"
-                      style={inputStyle}
-                    />
-                  </Champ>
-
-                  <Champ label="Destination" obligatoire>
+                  <Champ label="Lieu de placement" obligatoire>
                     <input
                       value={formulaire.destination}
                       onChange={(e) =>
@@ -1458,9 +1194,35 @@ function ChefDirectionContent() {
                           e.target.value
                         )
                       }
-                      placeholder="Lieu de destination"
+                      placeholder="Ex. Antananarivo"
                       style={inputStyle}
                     />
+                  </Champ>
+
+                  <Champ label="Nombre de jours" obligatoire>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={Math.max(1, Math.ceil(Number(formulaire.dureeEstimeeMinutes || 1440) / 1440))}
+                      onChange={(e) => {
+                        const jours = Math.max(1, Number(e.target.value) || 1);
+                        modifierChamp("dureeEstimeeMinutes", String(jours * 1440));
+                        if (formulaire.dateDebut) {
+                          const fin = new Date(formulaire.dateDebut);
+                          fin.setMinutes(fin.getMinutes() + jours * 1440);
+                          modifierChamp("dateFin", dateHeureLocale(fin));
+                        }
+                      }}
+                      style={inputStyle}
+                    />
+                  </Champ>
+
+                  <Champ label="Forfaitaire" obligatoire>
+                    <select value={formulaire.forfaitaire} onChange={(e) => modifierChamp("forfaitaire", e.target.value)} style={inputStyle}>
+                      <option value="oui">Oui</option>
+                      <option value="non">Non</option>
+                    </select>
                   </Champ>
 
                   <Champ
@@ -1470,12 +1232,14 @@ function ChefDirectionContent() {
                     <input
                       type="datetime-local"
                       value={formulaire.dateDebut}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "dateDebut",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => {
+                        modifierChamp("dateDebut", e.target.value);
+                        if (e.target.value) {
+                          const fin = new Date(e.target.value);
+                          fin.setMinutes(fin.getMinutes() + Math.max(1440, Number(formulaire.dureeEstimeeMinutes) || 1440));
+                          modifierChamp("dateFin", dateHeureLocale(fin));
+                        }
+                      }}
                       style={inputStyle}
                     />
                   </Champ>
@@ -1498,54 +1262,10 @@ function ChefDirectionContent() {
                   </Champ>
                 </div>
 
-                {formulaire.zoneMission === "HORS_TOAMASINA" &&
-                  estHorsDelai24h &&
-                  formulaire.dateDebut && (
-                    <div style={warningJauneStyle}>
-                      <div style={warningRowStyle}>
-                        <Clock3
-                          size={20}
-                          color="#d97706"
-                          style={{ flexShrink: 0 }}
-                        />
-
-                        <div style={{ flex: 1 }}>
-                          <strong>
-                            Mission hors ville créée tardivement
-                          </strong>
-
-                          <p style={warningTextStyle}>
-                            Le départ est prévu à moins de 24 heures.
-                            Une justification est obligatoire.
-                          </p>
-
-                          <Champ
-                            label="Justification de la demande tardive"
-                            obligatoire
-                          >
-                            <textarea
-                              value={formulaire.motifUrgence}
-                              onChange={(e) =>
-                                modifierChamp(
-                                  "motifUrgence",
-                                  e.target.value
-                                )
-                              }
-                              rows={3}
-                              placeholder="Ex. Mission confirmée tardivement..."
-                              style={textareaStyle}
-                            />
-                          </Champ>
-                        </div>
-                      </div>
-                    </div>
-                  )}
               </BlocFormulaire>
 
-              {/* PASSAGERS ET CONTRAINTES */}
-
               <BlocFormulaire
-                numero="3"
+                numero={formulaire.typeVehicule ? "3" : "2"}
                 titre="Passagers et contraintes"
                 icone={<Users size={18} color="#7c3aed" />}
               >
@@ -1565,7 +1285,7 @@ function ChefDirectionContent() {
                 </div>
 
                 <div style={{ marginTop: 16 }}>
-                  <Champ label="Liste des passagers" obligatoire>
+                  <Champ label="Liste des passagers">
                     <div style={{ display: "grid", gap: 10 }}>
                       {lignesPassagers.map((nom, index) => (
                         <div
@@ -1573,34 +1293,23 @@ function ChefDirectionContent() {
                           className="passager-ligne"
                           style={{
                             display: "grid",
-                            gridTemplateColumns:
-                              "110px minmax(0, 1fr)",
+                            gridTemplateColumns: "110px minmax(0, 1fr)",
                             gap: 10,
                             alignItems: "center",
                           }}
                         >
-                          <span
-                            style={{
-                              color: "#64748b",
-                              fontSize: 12,
-                              fontWeight: 700,
-                            }}
-                          >
+                          <span style={{ color: "#64748b", fontSize: 12, fontWeight: 700 }}>
                             Passager {index + 1}
                           </span>
-
-                          <input
-                            value={nom}
-                            onChange={(e) =>
+                          <PersonnelAutocomplete
+                            label={`Passager ${index + 1}`}
+                            placeholder="Rechercher par nom, matricule ou poste..."
+                            onSelect={(personnel) =>
                               modifierNomPassager(
                                 index,
-                                e.target.value
+                                `${personnel.prenom} ${personnel.nom}`.trim(),
                               )
                             }
-                            placeholder={`Nom et prénom du passager ${
-                              index + 1
-                            }`}
-                            style={inputStyle}
                           />
                         </div>
                       ))}
@@ -1609,25 +1318,19 @@ function ChefDirectionContent() {
                 </div>
 
                 <div style={{ marginTop: 16 }}>
-                  <Champ label="Observations / contraintes particulières">
+                  <Champ label="Observations / justification hors horaires, week-end ou jour férié">
                     <textarea
                       value={formulaire.observations}
-                      onChange={(e) =>
-                        modifierChamp(
-                          "observations",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => modifierChamp("observations", e.target.value)}
                       rows={3}
-                      placeholder="Matériel à transporter, accès difficile, attente sur place..."
+                      placeholder="Observations liées à la mission"
                       style={textareaStyle}
                     />
                   </Champ>
                 </div>
+
               </BlocFormulaire>
             </div>
-
-            {/* ACTIONS DU FORMULAIRE */}
 
             <div style={modalFooterStyle}>
               <button
@@ -1669,13 +1372,17 @@ function ChefDirectionContent() {
           </form>
         </div>
       )}
+
+      {carteGpsOuverte && (
+        <CarteGpsDirection
+          onClose={() => setCarteGpsOuverte(false)}
+        />
+      )}
+
+      <NotificationsVehiculesPartages />
     </>
   );
 }
-
-// =========================================================
-// COMPOSANTS
-// =========================================================
 
 function StatCard({
   titre,
@@ -1725,25 +1432,23 @@ function BlocFormulaire({
 function Champ({
   label,
   obligatoire = false,
+  interactif = false,
   children,
 }: {
   label: string;
   obligatoire?: boolean;
+  interactif?: boolean;
   children: ReactNode;
 }) {
-  return (
-    <label style={{ display: "block" }}>
-      <div style={champLabelStyle}>
-        {label}
-        {obligatoire && (
-          <span style={{ color: "#dc2626", marginLeft: 3 }}>
-            *
-          </span>
-        )}
-      </div>
-      {children}
-    </label>
+  const titre = (
+    <div style={champLabelStyle}>
+      {label}
+      {obligatoire && <span style={{ color: "#dc2626", marginLeft: 3 }}>*</span>}
+    </div>
   );
+  return interactif
+    ? <div style={{ display: "block" }} role="group" aria-label={label}>{titre}{children}</div>
+    : <label style={{ display: "block" }}>{titre}{children}</label>;
 }
 
 function BadgeEtatOperationnel({
@@ -1775,10 +1480,6 @@ function BadgeEtatOperationnel({
     </span>
   );
 }
-
-// =========================================================
-// HELPERS MÉTIER
-// =========================================================
 
 function obtenirTypeDemande(
   reservation: Reservation
@@ -1865,6 +1566,11 @@ function convertirDatePourApi(valeur: string) {
   return valeur;
 }
 
+function dateHeureLocale(date: Date) {
+  const decalee = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return decalee.toISOString().slice(0, 16);
+}
+
 function formatDateHeure(
   valeur?: string | null
 ) {
@@ -1901,9 +1607,43 @@ async function lireErreur(res: Response) {
   }
 }
 
-// =========================================================
-// STYLES
-// =========================================================
+function obtenirJoursCalendrier(date: Date) {
+  const premier = new Date(date.getFullYear(), date.getMonth(), 1);
+  premier.setDate(premier.getDate() - ((premier.getDay() + 6) % 7));
+  return Array.from({ length: 42 }, (_, index) => {
+    const jour = new Date(premier);
+    jour.setDate(premier.getDate() + index);
+    return { date: jour, dansPeriode: jour.getMonth() === date.getMonth() };
+  });
+}
+
+function decalerDateCalendrier(date: Date, pas: number) {
+  const suivante = new Date(date);
+  suivante.setDate(1);
+  suivante.setMonth(suivante.getMonth() + pas);
+  return suivante;
+}
+
+function cleJourCalendrier(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function missionDansMois(mission: Reservation, mois: Date) {
+  const debut = new Date(mission.dateDebut);
+  return Number.isFinite(debut.getTime())
+    && debut.getFullYear() === mois.getFullYear()
+    && debut.getMonth() === mois.getMonth();
+}
+
+function formatHeure(valeur?: string | null) {
+  if (!valeur) return "—";
+  const date = new Date(valeur);
+  if (Number.isNaN(date.getTime())) return valeur;
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
 const gridDeuxColonnes: CSSProperties = {
   display: "grid",
@@ -1930,10 +1670,10 @@ const textareaStyle: CSSProperties = {
 };
 
 const boutonBase: CSSProperties = {
-  border: "1px solid transparent",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 10,
   color: "#ffffff",
-  padding: "11px 17px",
+  padding: "11px 18px",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1941,24 +1681,54 @@ const boutonBase: CSSProperties = {
   cursor: "pointer",
   fontWeight: 700,
   fontSize: 13,
+  transition: "all 150ms ease",
 };
 
 const boutonVert: CSSProperties = {
   ...boutonBase,
-  backgroundColor: "#16a34a",
-  borderColor: "#16a34a",
+  backgroundColor: "#15803d",
 };
 
 const boutonBleu: CSSProperties = {
   ...boutonBase,
-  backgroundColor: "#2563eb",
-  borderColor: "#2563eb",
+  backgroundColor: "#1d4ed8",
 };
 
 const boutonRouge: CSSProperties = {
   ...boutonBase,
-  backgroundColor: "#dc2626",
-  borderColor: "#dc2626",
+  backgroundColor: "#bc1019",
+};
+
+const boutonNavigationCalendrier: CSSProperties = {
+  width: 38,
+  height: 38,
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "#fff",
+  color: "#475569",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 14,
+  transition: "all 150ms ease",
+};
+
+const boutonSecondaire: CSSProperties = {
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "#fff",
+  color: "#475569",
+  padding: "9px 14px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 13,
+  transition: "all 150ms ease",
 };
 
 const rechercheCardStyle: CSSProperties = {
@@ -2032,8 +1802,6 @@ const tableContainerStyle: CSSProperties = {
   backgroundColor: "#ffffff",
   overflowX: "auto",
 };
-
-// EN-TÊTE BLANC DU TABLEAU
 
 const theadRowStyle: CSSProperties = {
   backgroundColor: "#ffffff",
@@ -2223,7 +1991,7 @@ const blocStyle: CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   marginBottom: 18,
-  overflow: "hidden",
+  overflow: "visible",
 };
 
 const blocHeaderStyle: CSSProperties = {
@@ -2233,6 +2001,8 @@ const blocHeaderStyle: CSSProperties = {
   backgroundColor: "#f9fafb",
   padding: "13px 16px",
   borderBottom: "1px solid #e5e7eb",
+  borderTopLeftRadius: 10,
+  borderTopRightRadius: 10,
 };
 
 const numeroStyle: CSSProperties = {

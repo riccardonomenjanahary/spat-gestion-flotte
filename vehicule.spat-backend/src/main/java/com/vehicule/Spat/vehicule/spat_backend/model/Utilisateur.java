@@ -2,6 +2,7 @@ package com.vehicule.Spat.vehicule.spat_backend.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "utilisateurs")
@@ -33,11 +34,22 @@ public class Utilisateur {
     @Column(name = "departement_id")
     private Long departementId;
 
+    @Column(name = "direction_id")
+    private Long directionId;
+
     @Column(nullable = false)
     private boolean actif = true;
 
     @Column(name = "doit_changer_mot_de_passe", nullable = false)
     private boolean doitChangerMotDePasse = false;
+
+    @JsonIgnore
+    @Column(name = "mot_de_passe_temporaire_hash", length = 100)
+    private String motDePasseTemporaireHash;
+
+    @JsonIgnore
+    @Column(name = "mot_de_passe_temporaire_expire_le")
+    private LocalDateTime motDePasseTemporaireExpireLe;
 
     public Long getId() {
         return id;
@@ -103,6 +115,14 @@ public class Utilisateur {
         this.departementId = departementId;
     }
 
+    public Long getDirectionId() {
+        return directionId;
+    }
+
+    public void setDirectionId(Long directionId) {
+        this.directionId = directionId;
+    }
+
     public boolean isActif() {
         return actif;
     }
@@ -117,5 +137,21 @@ public class Utilisateur {
 
     public void setDoitChangerMotDePasse(boolean doitChangerMotDePasse) {
         this.doitChangerMotDePasse = doitChangerMotDePasse;
+    }
+
+    public String getMotDePasseTemporaireHash() {
+        return motDePasseTemporaireHash;
+    }
+
+    public void setMotDePasseTemporaireHash(String motDePasseTemporaireHash) {
+        this.motDePasseTemporaireHash = motDePasseTemporaireHash;
+    }
+
+    public LocalDateTime getMotDePasseTemporaireExpireLe() {
+        return motDePasseTemporaireExpireLe;
+    }
+
+    public void setMotDePasseTemporaireExpireLe(LocalDateTime motDePasseTemporaireExpireLe) {
+        this.motDePasseTemporaireExpireLe = motDePasseTemporaireExpireLe;
     }
 }

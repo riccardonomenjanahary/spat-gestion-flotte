@@ -1,4 +1,5 @@
 "use client";
+import { redirect } from "next/navigation";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
@@ -9,9 +10,9 @@ import {
   CalendarDays,
   CheckCircle2,
   Car,
+  Download,
   Fuel,
   MapPin,
-  RefreshCw,
   Route,
   Send,
   UserRound,
@@ -20,7 +21,9 @@ import {
 
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import SlideInPanel from "@/app/components/SlideInPanel";
 import { ROLES } from "@/app/lib/roles";
+import { exportCsv, formatDateHeureExport } from "@/app/lib/exportUtils";
 
 interface Vehicule {
   id: number;
@@ -61,6 +64,7 @@ interface Reservation {
   demandeurEntite?: string | null;
 
   nombrePassagers?: number | null;
+  incidentCloture?: string | null;
 }
 
 interface TransactionCarburant {
@@ -83,14 +87,6 @@ interface TransactionCarburant {
   observation?: string | null;
 }
 
-/**
- Signalement technique créé par un chauffeur.
- 
-  Il ne s'agit PAS d'une planification administrative d'entretien.
-  Le chauffeur signale une anomalie constatée sur un véhicule qui lui
-  a été affecté. Le mécanicien DID reçoit ensuite le signalement pour
-  diagnostic et avis technique.
- */
 interface SignalementEntretien {
   id: string | number;
   vehicule?: Vehicule | null;
@@ -104,6 +100,7 @@ interface SignalementEntretien {
   statut?: string | null;
   dateSignalement?: string | null;
   dateCreation?: string | null;
+  dateCloture?: string | null;
 }
 
 interface AlerteEntretienPeriodique {
@@ -122,15 +119,12 @@ interface AlerteEntretienPeriodique {
 
 type Onglet =
   | "TICKETS"
+  | "HISTORIQUE"
   | "DECLARER"
   | "ENTRETIEN";
 
 export default function ChauffeurPage() {
-  return (
-    <RoleGuard role={ROLES.CHAUFFEUR}>
-      <ChauffeurContent />
-    </RoleGuard>
-  );
+  redirect("/non-autorise");
 }
 
 function ChauffeurContent() {
@@ -139,9 +133,15 @@ function ChauffeurContent() {
 
   const [onglet, setOnglet] = useState<Onglet>("TICKETS");
   const [ticketDetailsOuvert, setTicketDetailsOuvert] = useState<number | null>(null);
+  const [formSignalementOuvert, setFormSignalementOuvert] = useState(false);
 
   const [profil, setProfil] = useState<Chauffeur | null>(null);
   const [missions, setMissions] = useState<Reservation[]>([]);
+  const missionsAffichees = missions.filter((mission) =>
+    onglet === "HISTORIQUE"
+      ? String(mission.statut || "").toUpperCase() === "CLOTUREE"
+      : String(mission.statut || "").toUpperCase() !== "CLOTUREE"
+  );
   const [consommations, setConsommations] = useState<TransactionCarburant[]>(
     []
   );
@@ -151,9 +151,11 @@ function ChauffeurContent() {
     useState<AlerteEntretienPeriodique[]>([]);
 
   const [chargement, setChargement] = useState(true);
+  const [erreurChargementPrincipal, setErreurChargementPrincipal] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [envoiSignalement, setEnvoiSignalement] = useState(false);
   const [clotureEnCoursId, setClotureEnCoursId] = useState<number | null>(null);
+  const [incidentCloture, setIncidentCloture] = useState("");
 
   const [reservationId, setReservationId] = useState("");
   const [quantite, setQuantite] = useState("");
@@ -166,13 +168,11 @@ function ChauffeurContent() {
   const [justificatif, setJustificatif] = useState("");
   const [observation, setObservation] = useState("");
 
-
-  // SIGNALEMENT ENTRETIEN PAR LE CHAUFFEUR - TICKET
- 
-
   const [signalementReservationId, setSignalementReservationId] =
     useState("");
   const [signalementTypeProbleme, setSignalementTypeProbleme] =
+    useState("");
+  const [signalementAutreProbleme, setSignalementAutreProbleme] =
     useState("");
   const [signalementDescription, setSignalementDescription] =
     useState("");
@@ -190,14 +190,12 @@ function ChauffeurContent() {
     const texte = await res.text();
     if (!texte) return "Une erreur est survenue.";
 
-    // Ne pas afficher dans une notification utilisateur la requête SQL
-    // ou la trace interne renvoyée par le backend en cas d'erreur 500.
     let message = texte;
     try {
       const json = JSON.parse(texte);
       message = typeof json.message === "string" ? json.message : texte;
     } catch {
-      // Une réponse texte simple peut être un message métier valide.
+
     }
     if (res.status >= 500 || /could not execute statement|org\.postgresql|maintenance_statut_check/i.test(message)) {
       return "Erreur d'enregistrement côté serveur. Vérifiez les journaux du backend et la base de données.";
@@ -207,6 +205,7 @@ function ChauffeurContent() {
 
   const charger = async () => {
     if (!API) {
+      setErreurChargementPrincipal("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée.");
       setChargement(false);
       return;
@@ -220,6 +219,7 @@ function ChauffeurContent() {
     }
 
     setChargement(true);
+    setErreurChargementPrincipal(null);
 
     try {
       const headers = {
@@ -258,15 +258,16 @@ function ChauffeurContent() {
         throw new Error(await lireErreur(consommationsRes));
       }
 
-      setProfil(await profilRes.json());
-      setMissions(await missionsRes.json());
-      setConsommations(await consommationsRes.json());
+      const [profilData, missionsData, consommationsData]: [unknown, unknown, unknown] = await Promise.all([
+        profilRes.json(), missionsRes.json(), consommationsRes.json(),
+      ]);
+      if (!profilData || typeof profilData !== "object" || !Array.isArray(missionsData) || !Array.isArray(consommationsData)) {
+        throw new Error("Format de réponse invalide pour les données du chauffeur.");
+      }
+      setProfil(profilData as Chauffeur);
+      setMissions(missionsData as Reservation[]);
+      setConsommations(consommationsData as TransactionCarburant[]);
 
-      /*
-        Le module Signalement entretien est chargé séparément.
-        Tant que le nouvel endpoint backend n'est pas encore créé,
-        son absence ne doit pas bloquer l'espace Chauffeur.
-       */
       try {
         const signalementsRes = await fetch(
           `${API}/chauffeur/signalements-entretien`,
@@ -274,10 +275,12 @@ function ChauffeurContent() {
         );
 
         if (signalementsRes.ok) {
-          const data = await signalementsRes.json();
-          setSignalements(Array.isArray(data) ? data : []);
+          const data: unknown = await signalementsRes.json();
+          if (!Array.isArray(data)) throw new Error("Format de réponse signalements invalide.");
+          setSignalements(data as SignalementEntretien[]);
         } else {
           setSignalements([]);
+          toast.error(`Les signalements d'entretien sont indisponibles (HTTP ${signalementsRes.status}).`);
         }
       } catch (errorSignalement) {
         console.warn(
@@ -285,16 +288,9 @@ function ChauffeurContent() {
           errorSignalement
         );
         setSignalements([]);
+        toast.error("Impossible de synchroniser les signalements d'entretien avec l'API.");
       }
 
-      /*
-       * L'entretien périodique est complètement séparé de la
-       * demande d'entretien manuelle.
-       *
-       * Cette liste contient uniquement les alertes automatiques
-       * des véhicules affectés au chauffeur ayant atteint le seuil
-       * périodique de 5 000 km.
-       */
       try {
         const alertesRes = await fetch(
           `${API}/chauffeur/alertes-entretien-periodique`,
@@ -302,10 +298,12 @@ function ChauffeurContent() {
         );
 
         if (alertesRes.ok) {
-          const data = await alertesRes.json();
-          setAlertesPeriodiques(Array.isArray(data) ? data : []);
+          const data: unknown = await alertesRes.json();
+          if (!Array.isArray(data)) throw new Error("Format de réponse des alertes périodiques invalide.");
+          setAlertesPeriodiques(data as AlerteEntretienPeriodique[]);
         } else {
           setAlertesPeriodiques([]);
+          toast.error(`Les alertes d'entretien périodique sont indisponibles (HTTP ${alertesRes.status}).`);
         }
       } catch (errorAlerte) {
         console.warn(
@@ -313,9 +311,15 @@ function ChauffeurContent() {
           errorAlerte
         );
         setAlertesPeriodiques([]);
+        toast.error("Impossible de synchroniser les alertes périodiques avec l'API.");
       }
     } catch (error) {
       console.error("Erreur espace chauffeur :", error);
+      setProfil(null);
+      setMissions([]);
+      setConsommations([]);
+      setErreurChargementPrincipal(error instanceof Error
+        ? error.message : "Données du chauffeur indisponibles.");
 
       toast.error(
         error instanceof Error
@@ -331,8 +335,6 @@ function ChauffeurContent() {
     charger();
   }, []);
 
-  // Une clôture est enregistrée par le serveur pour la mission du chauffeur connecté.
-  // Le frontend n'invente pas un statut local et ne crée aucune notification lui-même.
   const cloturerMission = async (mission: Reservation) => {
     if (clotureEnCoursId !== null) return;
     if (String(mission.statut || "").toUpperCase() !== "VALIDEE" || !mission.vehicule) {
@@ -356,14 +358,16 @@ function ChauffeurContent() {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ incident: incidentCloture.trim() }),
       });
       if (res.status === 401) {
         router.replace("/login");
         return;
       }
       if (!res.ok) {
-        // Il faut ajouter l'endpoint au backend avant d'activer cette fonction.
+
         toast.error(
           res.status === 404
             ? "Clôture indisponible : vérifiez l'endpoint serveur ou l'affectation de ce ticket."
@@ -371,8 +375,9 @@ function ChauffeurContent() {
         );
         return;
       }
-      toast.success("Mission clôturée. L'Agent Flotte est informé.");
+      toast.success("Mission clôturée. Le Chef du Service Logistique est informé.");
       setTicketDetailsOuvert(null);
+      setIncidentCloture("");
       await charger();
     } catch (error) {
       console.error("Erreur clôture mission chauffeur :", error);
@@ -561,11 +566,6 @@ function ChauffeurContent() {
     }
   };
 
-
-  
-  // SIGNALEMENT D'UN BESOIN D'ENTRETIEN LIE A UN TICKET
-  
-
   const resetSignalementForm = () => {
     setSignalementReservationId("");
     setSignalementTypeProbleme("");
@@ -606,6 +606,11 @@ function ChauffeurContent() {
       return;
     }
 
+    if (signalementTypeProbleme === "AUTRE" && !signalementAutreProbleme.trim()) {
+      toast.error("Veuillez préciser le type de problème.");
+      return;
+    }
+
     if (!signalementDescription.trim()) {
       toast.error("Veuillez décrire l'anomalie constatée.");
       return;
@@ -638,7 +643,9 @@ function ChauffeurContent() {
           body: JSON.stringify({
             reservationId: Number(signalementReservationId),
             vehiculeId: missionSignalementSelectionnee.vehicule.id,
-            typeProbleme: signalementTypeProbleme,
+            typeProbleme: signalementTypeProbleme === "AUTRE"
+              ? `AUTRE — ${signalementAutreProbleme.trim()}`
+              : signalementTypeProbleme,
             descriptionSignalement: signalementDescription.trim(),
             niveauUrgence: signalementNiveau,
             kilometrageSignale: valeurKm,
@@ -667,6 +674,7 @@ function ChauffeurContent() {
       );
 
       resetSignalementForm();
+      setFormSignalementOuvert(false);
 
       const nouveauSignalement = await res.json().catch(() => null);
 
@@ -682,6 +690,27 @@ function ChauffeurContent() {
     } finally {
       setEnvoiSignalement(false);
     }
+  };
+
+  const exporterHistoriqueMissions = () => {
+    const historique = missions.filter((mission) => String(mission.statut || "").toUpperCase() === "CLOTUREE");
+    exportCsv({
+      titre: "Historique des missions clôturées",
+      nomFichier: "historique_missions_chauffeur",
+      donnees: historique,
+      colonnes: [
+        { header: "Ticket", value: (mission) => `TKT-${String(mission.id).padStart(5, "0")}` },
+        { header: "Motif", key: "motif" },
+        { header: "Début", value: (mission) => formatDateHeureExport(mission.dateDebut) },
+        { header: "Fin", value: (mission) => formatDateHeureExport(mission.dateFin) },
+        { header: "Point de départ", value: (mission) => mission.pointDepart || "—" },
+        { header: "Destination", value: (mission) => mission.destination || "—" },
+        { header: "Véhicule", value: (mission) => mission.vehicule?.immatriculation || "Non affecté" },
+        { header: "Passagers", key: "nombrePassagers" },
+        { header: "Incident déclaré", value: (mission) => mission.incidentCloture || "Aucun" },
+      ],
+    });
+    toast.success("Historique des missions exporté au format CSV.");
   };
 
   return (
@@ -725,6 +754,7 @@ function ChauffeurContent() {
       `}</style>
 
       <EnTete/>
+      {erreurChargementPrincipal && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Espace chauffeur non synchronisé : {erreurChargementPrincipal}. Les missions et indicateurs ne sont pas à jour.</div>}
 
       <main style={pageStyle}>
         <div style={containerStyle}>
@@ -734,18 +764,8 @@ function ChauffeurContent() {
                 Espace Chauffeur
               </h1>
 
-              
             </div>
 
-            <button
-              type="button"
-              onClick={charger}
-              disabled={chargement}
-              style={refreshButton}
-            >
-              <RefreshCw size={16} />
-              Actualiser
-            </button>
           </header>
 
           {profil && (
@@ -794,11 +814,6 @@ function ChauffeurContent() {
                     Notification entretien périodique
                   </h2>
 
-                  <div style={secondaireStyle}>
-                    Alerte automatique générée lorsque le véhicule atteint
-                    l&apos;échéance des 5 000 km. Aucune demande manuelle
-                    n&apos;est nécessaire.
-                  </div>
                 </div>
               </div>
 
@@ -895,7 +910,15 @@ function ChauffeurContent() {
               actif={onglet === "TICKETS"}
               onClick={() => setOnglet("TICKETS")}
             >
-              Mes tickets
+              Missions à suivre
+            </TabButton>
+
+            <TabButton
+              couleur="VERT"
+              actif={onglet === "HISTORIQUE"}
+              onClick={() => setOnglet("HISTORIQUE")}
+            >
+              Historique
             </TabButton>
 
             <TabButton
@@ -919,13 +942,24 @@ function ChauffeurContent() {
             <section style={cardStyle}>
               <div style={emptyStyle}>Chargement...</div>
             </section>
-          ) : onglet === "TICKETS" ? (
+          ) : onglet === "TICKETS" || onglet === "HISTORIQUE" ? (
             <section style={cardStyle}>
               <div style={cardHeaderStyle}>
                 <div>
-                  <h2 style={cardTitleStyle}>Mes tickets</h2>
-                  
+                  <h2 style={cardTitleStyle}>{onglet === "HISTORIQUE" ? "Historique des missions clôturées" : "Missions à suivre"}</h2>
+
                 </div>
+                {onglet === "HISTORIQUE" && (
+                  <button
+                    type="button"
+                    className="btn-spat btn-orange"
+                    onClick={exporterHistoriqueMissions}
+                    disabled={missionsAffichees.length === 0}
+                    style={{ opacity: missionsAffichees.length ? 1 : 0.5 }}
+                  >
+                    <Download size={15} /> Exporter CSV
+                  </button>
+                )}
               </div>
 
               <div style={{ overflowX: "auto" }}>
@@ -942,7 +976,7 @@ function ChauffeurContent() {
                   </thead>
 
                   <tbody>
-                    {missions.map((mission) => (
+                    {missionsAffichees.map((mission) => (
                       <Fragment key={mission.id}><tr>
                         <td style={tdStyle}>
                           <strong style={{ color: "#111827" }}>
@@ -987,7 +1021,10 @@ function ChauffeurContent() {
                           <Statut statut={mission.statut} />
                         </td>
                         <td style={tdStyle}>
-                          <button type="button" style={primaryButton} onClick={() => setTicketDetailsOuvert(old => old === mission.id ? null : mission.id)}>
+                          <button type="button" className="btn-spat btn-jaune" onClick={() => {
+                            setTicketDetailsOuvert(old => old === mission.id ? null : mission.id);
+                            setIncidentCloture("");
+                          }}>
                             {ticketDetailsOuvert === mission.id ? "Fermer" : "Détails"}
                           </button>
                         </td>
@@ -999,26 +1036,47 @@ function ChauffeurContent() {
                           )}
                         </div>
                         {String(mission.statut || "").toUpperCase() === "VALIDEE" && mission.vehicule && (
-                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                            <button
-                              type="button"
-                              onClick={() => cloturerMission(mission)}
-                              disabled={clotureEnCoursId !== null}
-                              style={{
-                                ...primaryButton,
-                                backgroundColor: "#16a34a",
-                                opacity: clotureEnCoursId !== null ? 0.65 : 1,
-                                cursor: clotureEnCoursId !== null ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              <CheckCircle2 size={16} />
-                              {clotureEnCoursId === mission.id ? "Clôture en cours…" : "Clôturer la mission"}
-                            </button>
-                          </div>
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              void cloturerMission(mission);
+                            }}
+                            style={{ display: "grid", gap: 10, marginTop: 12 }}
+                          >
+                            <label style={{ display: "grid", gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>Incident</span>
+                              <textarea
+                                value={incidentCloture}
+                                onChange={(e) => setIncidentCloture(e.target.value)}
+                                maxLength={2000}
+                                rows={3}
+                                placeholder="Aucun incident, ou décrire l'incident constaté pendant la mission"
+                                style={{ ...inputStyle, minHeight: 84, resize: "vertical" }}
+                              />
+                            </label>
+                            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                              <button
+                                type="submit"
+                                className="btn-spat btn-vert"
+                                disabled={clotureEnCoursId !== null}
+                                style={{
+                                  ...primaryButton,
+                                  backgroundColor: "#16a34a",
+                                  opacity: clotureEnCoursId !== null ? 0.65 : 1,
+                                  cursor: clotureEnCoursId !== null ? "not-allowed" : "pointer",
+                                }}
+                              >
+                                <CheckCircle2 size={16} />
+                                {clotureEnCoursId === mission.id ? "Clôture en cours…" : "Clôturer la mission"}
+                              </button>
+                            </div>
+                          </form>
                         )}
                         {String(mission.statut || "").toUpperCase() === "CLOTUREE" && (
                           <p style={{ color: "#166534", fontSize: 12, fontWeight: 700, margin: "12px 0 0" }}>
-                            Mission clôturée : aucune nouvelle clôture possible.
+                            Mission clôturée : {mission.incidentCloture?.trim()
+                              ? `incident — ${mission.incidentCloture}`
+                              : "aucun incident déclaré."}
                           </p>
                         )}
                       </td></tr>}
@@ -1028,7 +1086,9 @@ function ChauffeurContent() {
                     {missions.length === 0 && (
                       <tr>
                         <td colSpan={6} style={emptyStyle}>
-                          Aucun ticket ne vous est actuellement affecté.
+                          {onglet === "HISTORIQUE"
+                            ? "Aucune mission clôturée pour le moment."
+                            : "Aucune mission non clôturée ne vous est actuellement affectée."}
                         </td>
                       </tr>
                     )}
@@ -1044,7 +1104,7 @@ function ChauffeurContent() {
                   <h2 style={cardTitleStyle}>
                     Déclarer une consommation carburant
                   </h2>
-                  
+
                 </div>
               </div>
 
@@ -1100,7 +1160,7 @@ function ChauffeurContent() {
                       </div>
                     </Champ>
 
-                    <Champ label="Quantité consommée (L) *">
+                    <Champ label="Quantité consommée *">
                       <input
                         type="number"
                         min="0.1"
@@ -1135,12 +1195,10 @@ function ChauffeurContent() {
                         placeholder="Ex. 67141"
                         required
                       />
-                      
+
                     </Champ>
 
-                   
-
-                    <Champ label="Prix unitaire (Ar/L)">
+                    <Champ label="Prix unitaire">
                       <input
                         type="number"
                         min="0"
@@ -1165,7 +1223,6 @@ function ChauffeurContent() {
                       </div>
                     </Champ>
 
-                    {/* Référence obligatoire pour l'enregistrement dans le backend. */}
                     <Champ label="Référence du justificatif *">
                       <input
                         type="text"
@@ -1177,14 +1234,12 @@ function ChauffeurContent() {
                       />
                     </Champ>
 
-                    
-
-                    
                   </div>
 
                   <div style={formActions}>
                     <button
                       type="submit"
+                      className="btn-spat btn-vert"
                       disabled={envoi}
                       style={{
                         ...primaryButton,
@@ -1203,12 +1258,10 @@ function ChauffeurContent() {
             </section>
             <div>
                   <h2 style={{ ...cardTitleStyle, color: "#000000" }}>Mes consommations</h2>
-                 
-                </div>
-            {/* Historique accessible directement sous la déclaration. */}
-            <section style={{ ...cardStyle, marginTop: 18 }}>
 
-              {/* Liste sur fond blanc : pas d'en-tête noir ou vide. */}
+                </div>
+
+            <section style={{ ...cardStyle, marginTop: 18 }}>
 
               <div style={{ overflowX: "auto" }}>
                 <table style={tableStyle}>
@@ -1279,11 +1332,9 @@ function ChauffeurContent() {
                   <h2 style={cardTitleStyle}>
                     Signaler une anomalie constatée
                   </h2>
-                  
+
                 </div>
               </div>
-
-              
 
               {missionsAvecVehicule.length === 0 ? (
                 <div style={emptyStyle}>
@@ -1291,9 +1342,21 @@ function ChauffeurContent() {
                   faire l&apos;objet d&apos;un signalement.
                 </div>
               ) : (
-                <form
+                <>
+                <button type="button" className={`btn-spat ${formSignalementOuvert ? "btn-neutre" : "btn-rouge"}`}
+                  aria-expanded={formSignalementOuvert}
+                  onClick={() => setFormSignalementOuvert((ouvert) => !ouvert)}>
+                  {formSignalementOuvert ? "Fermer le formulaire" : "Nouveau signalement"}
+                </button>
+                <SlideInPanel
+                  open={formSignalementOuvert}
+                  eyebrow="Espace chauffeur"
+                  title="Nouveau signalement d’entretien"
+                  onClose={() => setFormSignalementOuvert(false)}
+                >
+                {formSignalementOuvert && <form
                   onSubmit={soumettreSignalementEntretien}
-                  style={{ padding: "0 20px 20px" }}
+                  style={{ display: "grid", gap: 14, paddingBottom: 20 }}
                 >
                   <div className="chauffeur-form-grid">
                     <Champ label="Ticket / véhicule concerné *">
@@ -1338,7 +1401,11 @@ function ChauffeurContent() {
                       <select
                         value={signalementTypeProbleme}
                         onChange={(e) =>
-                          setSignalementTypeProbleme(e.target.value)
+                          (() => {
+                            const valeur = e.target.value;
+                            setSignalementTypeProbleme(valeur);
+                            if (valeur !== "AUTRE") setSignalementAutreProbleme("");
+                          })()
                         }
                         style={inputStyle}
                         required
@@ -1355,6 +1422,19 @@ function ChauffeurContent() {
                         <option value="AUTRE">Autre</option>
                       </select>
                     </Champ>
+
+                    {signalementTypeProbleme === "AUTRE" && (
+                      <Champ label="Précisez le problème *">
+                        <input
+                          value={signalementAutreProbleme}
+                          onChange={(e) => setSignalementAutreProbleme(e.target.value)}
+                          maxLength={255}
+                          style={inputStyle}
+                          required
+                          placeholder="Décrivez le problème"
+                        />
+                      </Champ>
+                    )}
 
                     <Champ label="Niveau constaté *">
                       <select
@@ -1414,6 +1494,7 @@ function ChauffeurContent() {
                   <div style={formActions}>
                     <button
                       type="submit"
+                      className="btn-spat btn-rouge"
                       disabled={envoiSignalement}
                       style={{
                         ...primaryButton,
@@ -1426,7 +1507,9 @@ function ChauffeurContent() {
                         : "Envoyer la demande d’entretien"}
                     </button>
                   </div>
-                </form>
+                </form>}
+                </SlideInPanel>
+                </>
               )}
 
               <div style={historiqueSignalementsStyle}>
@@ -1449,6 +1532,7 @@ function ChauffeurContent() {
                           <th style={thStyle}>Problème</th>
                           <th style={thStyle}>Niveau</th>
                           <th style={thStyle}>Statut</th>
+                          <th style={thStyle}>Date de clôture</th>
                         </tr>
                       </thead>
 
@@ -1498,6 +1582,11 @@ function ChauffeurContent() {
                               <StatutSignalement
                                 statut={signalement.statut}
                               />
+                            </td>
+                            <td style={tdStyle}>
+                              {signalement.dateCloture
+                                ? formatDateHeure(signalement.dateCloture)
+                                : "—"}
                             </td>
                           </tr>
                         ))}
@@ -1638,7 +1727,6 @@ function Statut({ statut }: { statut: string }) {
   );
 }
 
-
 function NiveauSignalement({
   niveau,
 }: {
@@ -1695,22 +1783,27 @@ function StatutSignalement({
     { label: string; bg: string; color: string }
   > = {
     EN_ATTENTE_VALIDATION_ENTRETIEN: {
-      label: "En attente du chef",
+      label: "En cours",
       bg: "#f1f5f9",
       color: "#334155",
     },
     ENTRETIEN_AUTORISE: {
-      label: "Entretien autorisé",
+      label: "En cours",
       bg: "#f1f5f9",
       color: "#334155",
     },
     ENTRETIEN_TERMINE: {
-      label: "Entretien terminé",
+      label: "Terminé",
       bg: "#f1f5f9",
       color: "#334155",
     },
     REFUSEE: {
-      label: "Demande refusée",
+      label: "Annulé",
+      bg: "#f1f5f9",
+      color: "#334155",
+    },
+    ENTRETIEN_ANNULE: {
+      label: "Annulé",
       bg: "#f1f5f9",
       color: "#334155",
     },
@@ -1730,12 +1823,12 @@ function StatutSignalement({
       color: "#166534",
     },
     CLOTURE: {
-      label: "Clôturé",
+      label: "Terminé",
       bg: "#f1f5f9",
       color: "#475569",
     },
     CLOTUREE: {
-      label: "Clôturé",
+      label: "Terminé",
       bg: "#f1f5f9",
       color: "#475569",
     },
@@ -1869,7 +1962,6 @@ const logoutIconStyle: CSSProperties = {
   objectFit: "contain",
 };
 
-
 const signalementInfoStyle: CSSProperties = {
   margin: "18px 20px",
   padding: 14,
@@ -1926,19 +2018,6 @@ const sousTitreStyle: CSSProperties = {
   margin: 0,
   color: "#64748b",
   fontSize: 14,
-};
-
-const refreshButton: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 7,
-  border: "1px solid #2563eb",
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  borderRadius: 8,
-  padding: "9px 13px",
-  cursor: "pointer",
-  fontWeight: 700,
 };
 
 const profilCard: CSSProperties = {
@@ -2017,12 +2096,13 @@ const tabsStyle: CSSProperties = {
 };
 
 const tabButtonStyle: CSSProperties = {
-  border: "1px solid #2563eb",
-  borderRadius: 8,
-  padding: "11px 16px",
+  border: "none",
+  borderRadius: 10,
+  padding: "11px 18px",
   cursor: "pointer",
   fontWeight: 700,
   whiteSpace: "nowrap",
+  transition: "all 150ms ease",
 };
 
 const cardStyle: CSSProperties = {
@@ -2136,10 +2216,11 @@ const primaryButton: CSSProperties = {
   alignItems: "center",
   gap: 7,
   border: "none",
-  borderRadius: 8,
-  backgroundColor: "#2563eb",
+  borderRadius: 10,
+  backgroundColor: "#1d4ed8",
   color: "#ffffff",
-  padding: "10px 16px",
+  padding: "11px 18px",
   cursor: "pointer",
-  fontWeight: 800,
+  fontWeight: 700,
+  transition: "all 150ms ease",
 };

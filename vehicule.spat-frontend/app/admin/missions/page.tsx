@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import EnTete from "@/components/EnTete";
+import type { GpsPosition } from "@/components/FlotteMap";
+import FlotteMap from "@/components/FlotteMap";
 
 const MissionCard = dynamic<any>(() => import("@/components/MissionCard"), {
   ssr: false,
@@ -56,27 +58,9 @@ interface Chauffeur {
   statut: string;
 }
 
-interface GpsPosition {
-  vehiculeId: number;
-  immatriculation: string;
-  latitude: number | null;
-  longitude: number | null;
-
-  vitesse?: number | null;
-  statutGps?: string | null;
-  dateGps?: string | null;
-  timestampGps?: number | null;
-  derniereReceptionSpat?: number | null;
-}
-
 interface Mission {
   id: number;
 
-  /*
-   * Compatibilité avec les deux formes JSON :
-   * - IDs directs
-   * - objets JPA véhicule/chauffeur
-   */
   vehiculeId?: number | null;
   chauffeurId?: number | null;
 
@@ -87,9 +71,11 @@ interface Mission {
   dateFin?: string | null;
 
   statut?: string | null;
+  typeDemande?: string | null;
   description?: string | null;
   destination?: string | null;
   emailEnvoye?: boolean | null;
+  positionGps?: GpsPosition | null;
 }
 
 type Filtre = "TOUTES" | "EN_COURS" | "TERMINEE";
@@ -104,21 +90,19 @@ export default function MissionsPage() {
   const [positionsGps, setPositionsGps] = useState<GpsPosition[]>([]);
 
   const [chargement, setChargement] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [erreurGps, setErreurGps] = useState<string | null>(null);
   const [filtre, setFiltre] = useState<Filtre>("EN_COURS");
   const [recherche, setRecherche] = useState("");
-
-  const [formOuvert, setFormOuvert] = useState(false);
-  const [vehiculeId, setVehiculeId] = useState<number | "">("");
-  const [chauffeurId, setChauffeurId] = useState<number | "">("");
-  const [loadingSubmit, setLoadingSubmit] = useState(false);
-
-  const [role, setRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    setRole(localStorage.getItem("role"));
-  }, []);
-
-  const lectureSeule = role === "DIRECTEUR_DFP";
+  const [selectionGps, setSelectionGps] = useState<number | null>(null);
+  const [vueGps, setVueGps] = useState<"CARTE" | "HISTORIQUE">("CARTE");
+  const [dateHistorique, setDateHistorique] = useState(() => {
+    const date = new Date();
+    return date.toISOString().split('T')[0];
+  });
+  const [relevesHistorique, setRelevesHistorique] = useState<any[]>([]);
+  const [chargementHistorique, setChargementHistorique] = useState(false);
+  const [erreurHistorique, setErreurHistorique] = useState<string | null>(null);
 
   const getToken = () => {
     if (typeof window === "undefined") return null;
@@ -154,12 +138,12 @@ export default function MissionsPage() {
       throw new Error(await lireErreur(res));
     }
 
-    const data = await res.json();
+    const data: unknown = await res.json();
 
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.content)) return data.content;
+    if (Array.isArray(data)) return data as T[];
+    if (data && typeof data === "object" && "content" in data && Array.isArray(data.content)) return data.content as T[];
 
-    return [];
+    throw new Error(`Format de réponse invalide : ${url}`);
   };
 
   const charger = useCallback(
@@ -181,6 +165,7 @@ export default function MissionsPage() {
       }
 
       if (!silencieux) setChargement(true);
+      setErreurChargement(null);
 
       try {
         const [m, v, c] = await Promise.all([
@@ -194,6 +179,7 @@ export default function MissionsPage() {
         setChauffeurs(c);
       } catch (error) {
         console.error("Erreur chargement missions :", error);
+        setErreurChargement(error instanceof Error ? error.message : "Impossible de charger les missions.");
 
         if (!silencieux) {
           toast.error(
@@ -216,11 +202,6 @@ export default function MissionsPage() {
     const token = getToken();
     if (!token) return;
 
-    /*
-     * Le GPS est un enrichissement uniquement.
-     * Une erreur GPS ne doit jamais empêcher la liste des missions
-     * et des affectations de fonctionner.
-     */
     try {
       const res = await fetch(`${API}/gps/positions`, {
         headers: {
@@ -230,15 +211,51 @@ export default function MissionsPage() {
         cache: "no-store",
       });
 
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data = await res.json();
-
-      setPositionsGps(Array.isArray(data) ? data : []);
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse GPS invalide.");
+      setPositionsGps(data as GpsPosition[]);
+      setErreurGps(null);
     } catch (error) {
       console.warn("Actualisation GPS missions indisponible :", error);
+      setPositionsGps([]);
+      setErreurGps(error instanceof Error ? error.message : "Positions GPS indisponibles.");
     }
   }, [API]);
+
+  const chargerHistoriqueGps = useCallback(async () => {
+    if (!API || selectionGps === null) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    setChargementHistorique(true);
+    setErreurHistorique(null);
+
+    try {
+      const res = await fetch(`${API}/gps/historique?vehiculeId=${selectionGps}&date=${dateHistorique}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse historique GPS invalide.");
+      setRelevesHistorique(data as any[]);
+      setErreurHistorique(null);
+    } catch (error) {
+      console.warn("Actualisation historique GPS indisponible :", error);
+      setRelevesHistorique([]);
+      setErreurHistorique(error instanceof Error ? error.message : "Historique GPS indisponible.");
+    } finally {
+      setChargementHistorique(false);
+    }
+  }, [API, selectionGps, dateHistorique]);
 
   useEffect(() => {
     charger();
@@ -252,6 +269,12 @@ export default function MissionsPage() {
       window.clearInterval(intervalGps);
     };
   }, [charger, chargerGps]);
+
+  useEffect(() => {
+    if (vueGps === "HISTORIQUE" && selectionGps !== null) {
+      chargerHistoriqueGps();
+    }
+  }, [vueGps, selectionGps, dateHistorique, chargerHistoriqueGps]);
 
   const gpsParVehicule = useMemo(() => {
     const map = new Map<number, GpsPosition>();
@@ -315,8 +338,6 @@ export default function MissionsPage() {
         return {
           ...m,
 
-          // Normalisation pour rester compatible avec MissionCard
-          // même si l'API renvoie des objets JPA imbriqués.
           vehiculeId: vId ?? 0,
           chauffeurId: cId ?? 0,
           dateDebut: m.dateDebut ?? "",
@@ -334,9 +355,13 @@ export default function MissionsPage() {
               : undefined) ||
             m.chauffeur ||
             null,
+          positionGps:
+            vId != null
+              ? gpsParVehicule.get(vId) ?? null
+              : null,
         };
       }),
-    [missions, vehiculesAvecGps, chauffeurs]
+    [missions, vehiculesAvecGps, chauffeurs, gpsParVehicule]
   );
 
   const missionsFiltrees = useMemo(() => {
@@ -380,12 +405,6 @@ export default function MissionsPage() {
     (v) => String(v.statut || "").toUpperCase() === "DISPONIBLE"
   );
 
-  const chauffeursDispo = chauffeurs.filter((c) =>
-    ["DISPONIBLE", "SUR_PLACE"].includes(
-      String(c.statut || "").toUpperCase()
-    )
-  );
-
   const missionsActives = missionsEnrichies.filter(missionEnCours);
 
   const vehiculesEnMissionIds = new Set(
@@ -394,101 +413,14 @@ export default function MissionsPage() {
       .filter((id): id is number => id != null)
   );
 
-  const handleCreer = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (lectureSeule || !API) return;
-
-    if (!vehiculeId || !chauffeurId) {
-      toast.error("Véhicule et chauffeur sont obligatoires.");
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    setLoadingSubmit(true);
-
-    try {
-      /*
-       * On conserve exactement le contrat déjà utilisé
-       * par le backend des affectations.
-       */
-      const res = await fetch(`${API}/affectations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          vehiculeId,
-          chauffeurId,
-        }),
-      });
-
-      if (!res.ok) {
-        toast.error(await lireErreur(res));
-        return;
-      }
-
-      toast.success("Mission démarrée.");
-
-      setFormOuvert(false);
-      setVehiculeId("");
-      setChauffeurId("");
-
-      await charger();
-    } catch {
-      toast.error("Impossible de contacter le serveur.");
-    } finally {
-      setLoadingSubmit(false);
-    }
-  };
-
-  const handleTerminer = (m: Mission) => {
-    if (lectureSeule || !API) return;
-
-    toast("Terminer cette mission ?", {
-      description:
-        "Le véhicule et le chauffeur repasseront disponibles selon les règles du backend.",
-      action: {
-        label: "Terminer",
-        onClick: async () => {
-          const token = getToken();
-
-          if (!token) {
-            router.replace("/login");
-            return;
-          }
-
-          try {
-            const res = await fetch(`${API}/affectations/${m.id}/terminer`, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/json",
-              },
-            });
-
-            if (!res.ok) {
-              toast.error(await lireErreur(res));
-              return;
-            }
-
-            toast.success("Mission terminée.");
-            await charger();
-          } catch {
-            toast.error("Impossible de contacter le serveur.");
-          }
-        },
-      },
+  const missionParVehicule = useMemo(() => {
+    const map = new Map<number, Mission>();
+    missionsActives.forEach((m) => {
+      const vId = idVehiculeMission(m);
+      if (vId != null) map.set(vId, m);
     });
-  };
+    return map;
+  }, [missionsActives]);
 
   return (
     <>
@@ -518,6 +450,13 @@ export default function MissionsPage() {
 
       <EnTete afficherNotifications={false} afficherProfil={false} />
 
+      {erreurChargement && (
+        <div role="alert" style={{ margin: "12px 24px", padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b" }}>
+          Données missions indisponibles : {erreurChargement}. Les listes ci-dessous ne peuvent pas être considérées comme à jour.
+        </div>
+      )}
+      {erreurGps && <div role="status" style={{ margin: "0 24px 12px", padding: 10, border: "1px solid #fed7aa", borderRadius: 8, background: "#fff7ed", color: "#9a3412" }}>Positions GPS non actualisées : {erreurGps}. Les missions restent disponibles, sans données de position.</div>}
+
       <main style={pageStyle}>
         <div style={containerStyle}>
           <header style={headerStyle}>
@@ -528,35 +467,8 @@ export default function MissionsPage() {
 
               <h2 style={titreStyle}>Gestion des flux en temps réel</h2>
 
-             
             </div>
 
-            <div style={{ display: "flex", gap: 9 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  charger();
-                  chargerGps();
-                }}
-                style={secondaryButton}
-              >
-                Actualiser
-              </button>
-
-              {!lectureSeule && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVehiculeId("");
-                    setChauffeurId("");
-                    setFormOuvert(true);
-                  }}
-                  style={primaryButton}
-                >
-                  + Nouvelle mission
-                </button>
-              )}
-            </div>
           </header>
 
           <section className="mission-kpis" style={{ marginBottom: 23 }}>
@@ -576,6 +488,104 @@ export default function MissionsPage() {
               valeur={vehiculesEnMissionIds.size}
               accent="#d97706"
             />
+          </section>
+
+          <section style={{ display: "flex", gap: 16, marginBottom: 23, minHeight: 500 }}>
+
+            <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#475569", marginBottom: 4 }}>
+                Véhicules GPS ({positionsGps.length})
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>
+                {selectionGps ? "Cliquez sur 'Tout voir' pour afficher tous les véhicules" : "Sélectionnez un véhicule pour le voir seul sur la carte"}
+              </div>
+              <input
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                placeholder="Rechercher véhicule..."
+                style={{ padding: "8px 10px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12 }}
+              />
+              <button
+                type="button"
+                onClick={() => setSelectionGps(null)}
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #2563eb",
+                  borderRadius: 6,
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: 12,
+                }}
+              >
+                Tout voir
+              </button>
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, maxHeight: 400 }}>
+                {positionsGps.map((p) => {
+                  const mission = missionParVehicule.get(p.vehiculeId);
+                  return (
+                    <button
+                      key={p.vehiculeId}
+                      type="button"
+                      onClick={() => setSelectionGps(p.vehiculeId)}
+                      style={{
+                        padding: "10px 12px",
+                        border: selectionGps === p.vehiculeId ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        background: selectionGps === p.vehiculeId ? "#eff6ff" : "#ffffff",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontSize: 12,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                        <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{p.immatriculation}</div>
+                        <div style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          background: (p.vitesse ?? 0) > 0 ? "#16a34a" : "#2563eb",
+                        }} />
+                      </div>
+                      {p.vitesse != null && (
+                        <div style={{ color: "#64748b", fontSize: 11 }}>
+                          {Math.round(p.vitesse)} km/h
+                        </div>
+                      )}
+                      {mission && (
+                        <div style={{ color: "#475569", fontSize: 11 }}>
+                          <span style={{ fontWeight: 600 }}>
+                            {mission.typeDemande === "PATROUILLE" ? "Patrouille : " : "Mission : "}
+                          </span>
+                          {mission.description || mission.destination || "Non renseignée"}
+                        </div>
+                      )}
+                      {p.routeNationale && (
+                        <div style={{ color: "#dc2626", fontSize: 11, fontWeight: 600 }}>
+                          {p.routeNationale}
+                          {p.distanceRouteMetres != null && ` · à ${p.distanceRouteMetres} m`}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", minHeight: 500 }}>
+              <FlotteMap
+                positions={selectionGps === null ? positionsGps : positionsGps.filter(p => p.vehiculeId === selectionGps)}
+                height="100%"
+                showHeader={true}
+                showFullscreenControl={true}
+                emptyMessage="Aucune position GPS disponible pour les véhicules en mission."
+              />
+            </div>
           </section>
 
           <div style={filtersStyle}>
@@ -620,7 +630,7 @@ export default function MissionsPage() {
                 <MissionCard
                   key={m.id}
                   mission={m}
-                  onTerminer={lectureSeule ? undefined : handleTerminer}
+                  positionGps={m.positionGps}
                 />
               ))}
             </div>
@@ -628,123 +638,8 @@ export default function MissionsPage() {
         </div>
       </main>
 
-      {formOuvert && !lectureSeule && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <div style={modalHeaderStyle}>
-              <div>
-                <h3 style={modalTitleStyle}>Nouvelle mission</h3>
-                <p style={modalSubtitleStyle}>
-                  Les listes utilisent les véhicules et chauffeurs réellement
-                  disponibles dans le système.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setFormOuvert(false)}
-                style={closeButtonStyle}
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleCreer}>
-              <label style={{ display: "block", marginBottom: 14 }}>
-                <span style={labelStyle}>Véhicule disponible *</span>
-
-                <select
-                  value={vehiculeId}
-                  onChange={(e) =>
-                    setVehiculeId(e.target.value ? Number(e.target.value) : "")
-                  }
-                  required
-                  style={inputStyle}
-                >
-                  <option value="">Sélectionner</option>
-
-                  {vehiculesDispo.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {libelleVehicule(v)}
-                    </option>
-                  ))}
-                </select>
-
-                {vehiculesDispo.length === 0 && (
-                  <p style={errorHintStyle}>Aucun véhicule disponible.</p>
-                )}
-              </label>
-
-              <label style={{ display: "block" }}>
-                <span style={labelStyle}>Chauffeur disponible *</span>
-
-                <select
-                  value={chauffeurId}
-                  onChange={(e) =>
-                    setChauffeurId(e.target.value ? Number(e.target.value) : "")
-                  }
-                  required
-                  style={inputStyle}
-                >
-                  <option value="">Sélectionner</option>
-
-                  {chauffeursDispo.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {libelleChauffeur(c)}
-                    </option>
-                  ))}
-                </select>
-
-                {chauffeursDispo.length === 0 && (
-                  <p style={errorHintStyle}>Aucun chauffeur disponible.</p>
-                )}
-              </label>
-
-              <div style={modalActionsStyle}>
-                <button
-                  type="button"
-                  onClick={() => setFormOuvert(false)}
-                  style={secondaryButton}
-                >
-                  Annuler
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loadingSubmit || !vehiculeId || !chauffeurId}
-                  style={{
-                    ...primaryButton,
-                    opacity:
-                      loadingSubmit || !vehiculeId || !chauffeurId ? 0.6 : 1,
-                  }}
-                >
-                  {loadingSubmit ? "Création..." : "Démarrer"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
-}
-
-function libelleVehicule(v: Vehicule) {
-  const modele =
-    [v.marque, v.modele, v.modeleType, v.categorie]
-      .map((x) => x?.trim())
-      .filter(Boolean)
-      .filter((x, i, tab) => tab.indexOf(x) === i)
-      .join(" ") || "";
-
-  return modele ? `${v.immatriculation} — ${modele}` : v.immatriculation;
-}
-
-function libelleChauffeur(c: Chauffeur) {
-  const nom = `${c.prenom || ""} ${c.nom || ""}`.trim();
-
-  if (nom && c.matricule) return `${nom} — ${c.matricule}`;
-  return nom || c.matricule || `Chauffeur #${c.id}`;
 }
 
 function StatCard({
@@ -775,6 +670,8 @@ const pageStyle: CSSProperties = {
   minHeight: "100vh",
   backgroundColor: "#f3f4f6",
   padding: "28px 18px",
+  display: "flex",
+  flexDirection: "column",
 };
 
 const containerStyle: CSSProperties = {
@@ -840,11 +737,12 @@ const filtersStyle: CSSProperties = {
 };
 
 const filterButtonStyle: CSSProperties = {
-  padding: "7px 13px",
-  borderRadius: 999,
+  padding: "8px 15px",
+  borderRadius: 10,
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 700,
+  transition: "all 150ms ease",
 };
 
 const searchStyle: CSSProperties = {
@@ -865,105 +763,5 @@ const emptyStyle: CSSProperties = {
   backgroundColor: "#ffffff",
   border: "1px solid #e2e8f0",
   borderRadius: 9,
-};
-
-const primaryButton: CSSProperties = {
-  padding: "10px 16px",
-  border: "1px solid #dc2626",
-  borderRadius: 8,
-  backgroundColor: "#dc2626",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaryButton: CSSProperties = {
-  padding: "10px 14px",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const overlayStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 1000,
-  padding: 20,
-  backgroundColor: "rgba(15,23,42,.65)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const modalStyle: CSSProperties = {
-  width: "100%",
-  maxWidth: 480,
-  padding: 26,
-  borderRadius: 12,
-  backgroundColor: "#ffffff",
-  boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-};
-
-const modalHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 15,
-  marginBottom: 20,
-};
-
-const modalTitleStyle: CSSProperties = {
-  margin: 0,
-  color: "#111827",
-  fontSize: 20,
-};
-
-const modalSubtitleStyle: CSSProperties = {
-  margin: "5px 0 0",
-  color: "#64748b",
-  fontSize: 12,
-  lineHeight: 1.5,
-};
-
-const closeButtonStyle: CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: "#64748b",
-  cursor: "pointer",
-  fontSize: 24,
-};
-
-const labelStyle: CSSProperties = {
-  display: "block",
-  marginBottom: 6,
-  color: "#374151",
-  fontSize: 12,
-  fontWeight: 700,
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  padding: "10px 11px",
-  border: "1px solid #94a3b8",
-  borderRadius: 8,
-  backgroundColor: "#ffffff",
-  color: "#111827",
-  fontSize: 13,
-};
-
-const errorHintStyle: CSSProperties = {
-  margin: "5px 0 0",
-  color: "#dc2626",
-  fontSize: 11,
-};
-
-const modalActionsStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 20,
 };
 

@@ -1,5 +1,7 @@
 package com.vehicule.Spat.vehicule.spat_backend.config;
 
+import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
+import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,15 +16,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.List;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+        private final UtilisateurRepository utilisateurRepository;
 
-    public JwtAuthFilter(JwtUtil jwtUtil) {
+        public JwtAuthFilter(JwtUtil jwtUtil, UtilisateurRepository utilisateurRepository) {
         this.jwtUtil = jwtUtil;
+                this.utilisateurRepository = utilisateurRepository;
     }
 
     // =========================================================
@@ -74,31 +79,35 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                 if (jwtUtil.estValide(token)) {
 
-                    String email =
+                    String matricule =
                             jwtUtil.extraireEmail(token);
 
-                    String role =
-                            jwtUtil.extraireRole(token);
+                    Utilisateur utilisateur = utilisateurRepository
+                            .findByMatricule(matricule)
+                            .filter(Utilisateur::isActif)
+                            .orElse(null);
+
+                    String role = utilisateur == null || utilisateur.getRole() == null
+                            ? null
+                            : utilisateur.getRole().trim().replaceFirst("^ROLE_", "")
+                                    .toUpperCase(Locale.ROOT);
 
                     System.out.println(
-                            "JWT EMAIL = " + email
+                            "JWT MATRICULE = " + matricule
                     );
 
                     System.out.println(
-                            "JWT ROLE = [" + role + "]"
+                            "ROLE COMPTE ACTUEL = [" + role + "]"
                     );
 
                     // =============================================
                     // NORMALISATION DU ROLE
                     // =============================================
 
-                    if (role != null
-                            && !role.trim().isEmpty()) {
-
-                        role = role.trim();
+                    if (role != null && !role.isBlank() && !"CHAUFFEUR".equals(role)) {
 
                         /*
-                         * Si le JWT contient :
+                         * Si le compte contient :
                          *
                          * MECANICIEN_DID
                          *
@@ -107,7 +116,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                          * ROLE_MECANICIEN_DID
                          *
                          *
-                         * Si le JWT contient déjà :
+                         * Si le compte contient déjà :
                          *
                          * ROLE_MECANICIEN_DID
                          *
@@ -115,11 +124,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                          */
 
                         String authority;
+                        String roleCompat = switch (role) {
+                            case "CHEF_ATELIER" -> "MECANICIEN_DID";
+                            case "DIRECTION_GENERALE", "CONTROLE_GESTION" -> "CO_ADMIN";
+                            default -> role;
+                        };
 
-                        if (role.startsWith("ROLE_")) {
-                            authority = role;
+                        if (roleCompat.startsWith("ROLE_")) {
+                            authority = roleCompat;
                         } else {
-                            authority = "ROLE_" + role;
+                            authority = "ROLE_" + roleCompat;
                         }
 
                         // =========================================
@@ -128,7 +142,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                         UsernamePasswordAuthenticationToken authentication =
                                 new UsernamePasswordAuthenticationToken(
-                                        email,
+                                        matricule,
                                         null,
                                         List.of(
                                                 new SimpleGrantedAuthority(
@@ -148,9 +162,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         // =========================================
 
                         System.out.println(
-                                "JWT AUTH → email="
-                                        + email
-                                        + " | role JWT="
+                                "JWT AUTH → matricule="
+                                        + matricule
+                                        + " | rôle actuel="
                                         + role
                                         + " | authority="
                                         + authority

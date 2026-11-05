@@ -41,4 +41,6 @@ public interface TransactionCarburantRepository
     findByReservationIdOrderByDateOperationDesc(
             Long reservationId
     );
+
+    boolean existsByReservationId(Long reservationId);
 }

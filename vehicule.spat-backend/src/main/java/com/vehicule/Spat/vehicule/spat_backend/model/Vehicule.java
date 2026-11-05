@@ -2,6 +2,10 @@ package com.vehicule.Spat.vehicule.spat_backend.model;
 
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 @Entity
 @Table(name = "vehicules")
 public class Vehicule {
@@ -49,6 +53,54 @@ public class Vehicule {
 
     @Column(nullable = false, length = 50)
     private String statut = "DISPONIBLE";
+
+
+    // =========================================================
+    // DISPOSITIF DGAL
+    // =========================================================
+
+    /**
+     * Mode de détention du véhicule :
+     *
+     * PROPRIETE : véhicule appartenant à la SPAT
+     * (police flotte SPAT).
+     *
+     * LEASING : véhicule pris en leasing, les
+     * assurances et sinistres sont suivis auprès
+     * du bailleur (notamment les motos électriques).
+     */
+    @Column(name = "mode_detention", length = 30)
+    private String modeDetention;
+
+    /**
+     * Date d'expiration de la visite technique.
+     * Une visite technique expirée bloque toute
+     * nouvelle affectation du véhicule.
+     */
+    @Column(name = "date_expiration_visite_technique")
+    private LocalDate dateExpirationVisiteTechnique;
+    private LocalDate dateProchainEntretien;
+
+    public LocalDate getDateProchainEntretien() { return dateProchainEntretien; }
+    public void setDateProchainEntretien(LocalDate date) { this.dateProchainEntretien = date; }
+
+    /**
+     * Directions auxquelles le véhicule est affecté.
+     *
+     * Pour les voitures de service mutualisées du
+     * dispositif DGAL, plusieurs Directions forment
+     * le groupe d'affectation (jusqu'à 3 :
+     * DID/DAJ/DAGR). L'ancien champ texte
+     * "affectation" reste synchronisé pour
+     * l'affichage et la compatibilité.
+     */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "vehicule_directions",
+            joinColumns = @JoinColumn(name = "vehicule_id"),
+            inverseJoinColumns = @JoinColumn(name = "direction_id")
+    )
+    private Set<Direction> directions = new LinkedHashSet<>();
 
 
     // =========================================================
@@ -171,6 +223,42 @@ public class Vehicule {
 
     public void setStatut(String statut) {
         this.statut = statut;
+    }
+
+
+    // =========================================================
+    // DISPOSITIF DGAL
+    // =========================================================
+
+    public String getModeDetention() {
+        return modeDetention;
+    }
+
+    public void setModeDetention(String modeDetention) {
+        this.modeDetention = modeDetention;
+    }
+
+
+    public LocalDate getDateExpirationVisiteTechnique() {
+        return dateExpirationVisiteTechnique;
+    }
+
+    public void setDateExpirationVisiteTechnique(
+            LocalDate dateExpirationVisiteTechnique
+    ) {
+        this.dateExpirationVisiteTechnique =
+                dateExpirationVisiteTechnique;
+    }
+
+
+    public Set<Direction> getDirections() {
+        return directions;
+    }
+
+    public void setDirections(Set<Direction> directions) {
+        this.directions = directions != null
+                ? directions
+                : new LinkedHashSet<>();
     }
 
 

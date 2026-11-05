@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -20,6 +21,8 @@ import java.util.List;
 
 @Configuration
 public class SecurityConfig {
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:3000}")
+    private String frontendUrl = "http://localhost:3000";
 
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtAuthFilter jwtAuthFilter;
@@ -82,7 +85,7 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(
                 List.of(
-                        "http://localhost:3000"
+                        frontendUrl.replaceAll("/+$", "")
                 )
         );
 
@@ -157,9 +160,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(
                         auth -> auth
 
-                                // =========================================
-                                // PREFLIGHT CORS
-                                // =========================================
+                                .requestMatchers(HttpMethod.POST, "/api/requisitions", "/api/requisitions/**")
+                                .hasRole("CHEF_DGAL")
+                                .requestMatchers(HttpMethod.PUT, "/api/requisitions/**")
+                                .hasRole("CHEF_DGAL")
 
                                 .requestMatchers(
                                         HttpMethod.OPTIONS,
@@ -167,15 +171,6 @@ public class SecurityConfig {
                                 )
                                 .permitAll()
 
-                                // =========================================
-                                // AUTHENTIFICATION
-                                // =========================================
-
-                                /*
-                                 * Mot de passe oublié :
-                                 * route publique car l'utilisateur n'a pas
-                                 * encore de JWT lorsqu'il est sur /login.
-                                 */
                                 .requestMatchers(
                                         HttpMethod.POST,
                                         "/api/auth/mot-de-passe-oublie"
@@ -204,23 +199,113 @@ public class SecurityConfig {
                                 )
                                 .permitAll()
 
+                                // Le co-admin peut lire les données, mais aucune écriture API.
+                                .requestMatchers(request -> {
+                                    var authentication = SecurityContextHolder.getContext().getAuthentication();
+                                    boolean coAdmin = authentication != null
+                                            && authentication.getAuthorities().stream()
+                                            .anyMatch(authority -> authority.getAuthority().equals("ROLE_" + Roles.CO_ADMIN)
+                                                    || authority.getAuthority().equals("ROLE_" + Roles.DIRECTEUR_DFP));
+                                    return coAdmin
+                                            && !HttpMethod.GET.matches(request.getMethod())
+                                            && !HttpMethod.OPTIONS.matches(request.getMethod());
+                                })
+                                .denyAll()
+
                                 // =========================================
                                 // GPS
                                 // NE PAS MODIFIER
                                 // =========================================
 
+                                .requestMatchers("/api/navettes-pact", "/api/navettes-pact/**")
+                                .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
+                                .requestMatchers(HttpMethod.PUT, "/api/reservations/*/assistant-direction/decision")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
+                                .requestMatchers(HttpMethod.POST, "/api/reservations/assistant-direction/rapide",
+                                        "/api/reservations/*/assistant-direction/cloturer")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
+                                .requestMatchers(HttpMethod.PUT, "/api/conducteurs-autorises/*/valider")
+                                .hasAnyRole(Roles.CHEF_DIRECTION, Roles.AGENT_PAR_INTERIM_CHEF)
+                                .requestMatchers(HttpMethod.POST, "/api/conducteurs-autorises")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT, Roles.CHEF_DIRECTION, Roles.ADMIN, Roles.SUPER_ADMIN)
+                                .requestMatchers(HttpMethod.PUT, "/api/conducteurs-autorises/**")
+                                .hasAnyRole(Roles.CHEF_DIRECTION, Roles.ADMIN, Roles.SUPER_ADMIN)
+                                .requestMatchers(HttpMethod.GET, "/api/conducteurs-autorises/**")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT, Roles.CHEF_DIRECTION, Roles.AGENT_PAR_INTERIM_CHEF, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_DGAL, Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
+                                .requestMatchers(HttpMethod.GET, "/api/requisitions/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_DGAL, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.AGENT_FLOTTE, Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
+                                .requestMatchers(HttpMethod.PUT, "/api/signalements-incidents/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.MECANICIEN_DID, Roles.AGENT_FLOTTE)
+                                .requestMatchers(HttpMethod.GET, "/api/signalements-incidents/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.AGENT_FLOTTE,
+                                        Roles.CHEF_DGAL, Roles.MECANICIEN_DID, Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
+                                .requestMatchers(HttpMethod.POST, "/api/signalements-incidents")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.CHEF_DIRECTION, Roles.AGENT_PAR_INTERIM_CHEF,
+                                        Roles.MECANICIEN_DID, Roles.CHEF_ATELIER)
+                                .requestMatchers(HttpMethod.POST, "/api/indisponibilites")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.CHEF_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT, Roles.AGENT_PAR_INTERIM_CHEF)
+                                .requestMatchers(HttpMethod.POST, "/api/carnet-bord", "/api/carnet-bord/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION)
+                                .requestMatchers(HttpMethod.GET, "/api/carnet-bord", "/api/carnet-bord/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION, Roles.CHEF_DGAL, Roles.AGENT_SURETE,
+                                        Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
+                                .requestMatchers(HttpMethod.PUT, "/api/carnet-bord/**")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION)
+                                .requestMatchers(HttpMethod.GET, "/api/justificatifs/a-valider")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.CHEF_DGAL)
+
                                 .requestMatchers(
                                         HttpMethod.GET,
-                                        "/api/gps/positions",
-                                        "/api/gps/positions/**"
+                                        "/api/gps/positions"
                                 )
                                 .hasAnyRole(
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN,
                                         Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN,
                                         Roles.CHEF_DGAL,
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
-                                        Roles.AGENT_FLOTTE
+                                        Roles.AGENT_FLOTTE,
+                                        Roles.AGENT_SURETE,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.CHEF_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_CHEF
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/gps/positions-direction"
+                                )
+                                .hasAnyRole(
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.CHEF_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_CHEF
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/gps/positions/**",
+                                        "/api/gps/historique"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN,
+                                        Roles.CHEF_DGAL,
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.AGENT_FLOTTE,
+                                        Roles.AGENT_SURETE
                                 )
 
                                 // =========================================
@@ -268,7 +353,9 @@ public class SecurityConfig {
                                 .hasAnyRole(
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN,
-                                        Roles.CHEF_SERVICE_LOGISTIQUE
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT
                                 )
 
                                 /*
@@ -281,7 +368,22 @@ public class SecurityConfig {
                                 .hasAnyRole(
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN,
-                                        Roles.CHEF_DGAL
+                                        Roles.CHEF_DGAL,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT
+                                )
+
+                                .requestMatchers(HttpMethod.DELETE, "/api/reservations/*/chef-dgal")
+                                .hasAnyRole(Roles.CHEF_DGAL, Roles.ADMIN, Roles.SUPER_ADMIN)
+
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/api/reservations/*/demande-avis-entretien"
+                                )
+                                .hasAnyRole(
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT
                                 )
 
                                 /*
@@ -291,8 +393,9 @@ public class SecurityConfig {
                                         HttpMethod.PUT,
                                         "/api/reservations/*/avis-chef-direction"
                                 )
-                                .hasRole(
-                                        Roles.CHEF_DIRECTION
+                                .hasAnyRole(
+                                        Roles.CHEF_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_CHEF
                                 )
 
                                 /*
@@ -307,7 +410,10 @@ public class SecurityConfig {
                                         Roles.SUPER_ADMIN,
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.CHEF_DIRECTION,
-                                        Roles.ASSISTANT_DIRECTION
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.AGENT_PAR_INTERIM_CHEF,
+                                        Roles.AGENT_SURETE
                                 )
 
                                 /*
@@ -326,13 +432,38 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.CHEF_DIRECTION,
                                         Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.AGENT_PAR_INTERIM_CHEF,
                                         Roles.CHEF_DGAL,
-                                        Roles.AGENT_FLOTTE
+                                        Roles.AGENT_FLOTTE,
+                                        Roles.AGENT_SURETE
                                 )
+
+                                .requestMatchers(
+                                        HttpMethod.DELETE,
+                                        "/api/reservations/*/assistant-direction/historique"
+                                )
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/reservations/assistant-direction/**"
+                                )
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
 
                                 /*
                                  * CONSULTATION DES RESERVATIONS
                                  */
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/reservations/*/ordre-mission/destinataire"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.CHEF_SERVICE_LOGISTIQUE
+                                )
+
                                 .requestMatchers(
                                         HttpMethod.GET,
                                         "/api/reservations/**"
@@ -344,13 +475,65 @@ public class SecurityConfig {
                                         Roles.CHEF_DIRECTION,
                                         Roles.CHEF_DGAL,
                                         Roles.AGENT_FLOTTE,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.AGENT_PAR_INTERIM_CHEF
                                 )
 
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/api/reservations/*/ordre-mission/email"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.CHEF_DIRECTION,
+                                        Roles.CHEF_DGAL,
+                                        Roles.AGENT_FLOTTE,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
+                                        Roles.AGENT_PAR_INTERIM_CHEF
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/api/reservations/*/assistant-direction"
+                                )
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
 
                                 // =========================================
                                 // VEHICULE -> CHAUFFEUR ACTIF
                                 // =========================================
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/api/vehicules/*/directions"
+                                )
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN)
+
+                                // Le mécanicien DID doit pouvoir lire le
+                                // référentiel des véhicules pour ouvrir la
+                                // fiche de contrôle qui lui est attribuée.
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/vehicules"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.CHEF_DIRECTION,
+                                        Roles.CHEF_DGAL,
+                                        Roles.AGENT_FLOTTE,
+                                        Roles.MECANICIEN_DID,
+                                        Roles.AGENT_SURETE,
+                                        "MECANICIEN",
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
+                                )
 
                                 /*
                                  * Lecture uniquement.
@@ -395,74 +578,63 @@ public class SecurityConfig {
                                 .hasRole(Roles.AGENT_FLOTTE)
 
                                 // =========================================
-                                // ESPACE CHAUFFEUR
-                                // =========================================
-                                // Seul le chauffeur connecte peut cloturer son ticket.
-                                // Le controller verifie ensuite qu'il est affecte a la mission.
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/api/chauffeur/tickets/*/cloturer"
-                                )
-                                .hasRole(Roles.CHAUFFEUR)
-
-
-                                .requestMatchers(
-                                        HttpMethod.GET,
-                                        "/api/chauffeur/**"
-                                )
-                                .hasRole(
-                                        Roles.CHAUFFEUR
-                                )
-
-                                .requestMatchers(HttpMethod.POST,
-                                        "/api/chauffeur/signalements-entretien")
-                                .hasRole(Roles.CHAUFFEUR)
-
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/api/chauffeur/consommations"
-                                )
-                                .hasRole(
-                                        Roles.CHAUFFEUR
-                                )
-
-                                // =========================================
                                 // MAINTENANCES
                                 // =========================================
 
                                 // Nouveau circuit d'entretien : chaque action est réservée à son rôle.
                                 .requestMatchers(HttpMethod.POST,
                                         "/api/maintenances/demandes-entretien")
-                                .hasRole(Roles.MECANICIEN_DID)
+                                .hasAnyRole(Roles.MECANICIEN_DID, Roles.ASSISTANT_DIRECTION)
 
                                 .requestMatchers(HttpMethod.PUT,
                                         "/api/maintenances/*/decision-entretien")
                                 .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
 
                                 .requestMatchers(HttpMethod.PUT,
+                                        "/api/maintenances/*/transmettre-periodique")
+                                .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
+
+                                .requestMatchers(HttpMethod.POST,
+                                        "/api/reservations/*/urgence-chef-logistique",
+                                        "/api/reservations/*/demande-avis-arrivee",
+                                        "/api/reservations/*/cloturer-apres-avis-did",
+                                        "/api/reservations/*/cloturer-urgence")
+                                .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
+
+                                .requestMatchers(HttpMethod.PUT,
+                                        "/api/maintenances/*/cloturer-entretien",
+                                        "/api/maintenances/*/annuler-entretien")
+                                .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
+
+                                .requestMatchers(HttpMethod.PUT,
                                         "/api/maintenances/*/terminer-entretien")
-                                .hasRole(Roles.MECANICIEN_DID)
+                                .hasAnyRole(Roles.MECANICIEN_DID, "MECANICIEN")
 
                                 .requestMatchers(
                                         HttpMethod.PUT,
-                                        "/api/maintenances/*/avis-did"
+                                        "/api/maintenances/*/avis-did",
+                                        "/api/maintenances/*/controle-avant-mission",
+                                        "/api/maintenances/*/controle-apres-mission"
                                 )
                                 .hasAnyRole(
-                                        Roles.MECANICIEN_DID
+                                        Roles.MECANICIEN_DID,
+                                        "MECANICIEN"
                                 )
 
                                 .requestMatchers(
                                         HttpMethod.GET,
                                         "/api/maintenances/en-attente-avis"
                                 )
-                                .hasRole(
-                                        Roles.MECANICIEN_DID
+                                .hasAnyRole(
+                                        Roles.MECANICIEN_DID,
+                                        "MECANICIEN"
                                 )
 
                                 .requestMatchers(
                                         HttpMethod.GET,
                                         "/api/maintenances",
-                                        "/api/maintenances/**"
+                                        "/api/maintenances/**",
+                                        "/api/entretien-periodique"
                                 )
                                 .hasAnyRole(
                                         Roles.ADMIN,
@@ -471,7 +643,10 @@ public class SecurityConfig {
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
                                         Roles.DIRECTEUR_DFP,
-                                        Roles.MECANICIEN_DID
+                                        Roles.CO_ADMIN,
+                                        Roles.MECANICIEN_DID,
+                                        "MECANICIEN",
+                                        Roles.ASSISTANT_DIRECTION
                                 )
 
                                 .requestMatchers(
@@ -519,7 +694,8 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 // =========================================
@@ -537,7 +713,8 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 .requestMatchers(
@@ -589,7 +766,8 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 .requestMatchers(
@@ -652,7 +830,8 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 .requestMatchers(
@@ -684,12 +863,39 @@ public class SecurityConfig {
 
                                 .requestMatchers(
                                         HttpMethod.GET,
+                                        "/api/admin/modifications",
+                                        "/api/admin/modifications/**"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.CO_ADMIN,
+                                        Roles.DIRECTEUR_DFP
+                                )
+
+                                // Les listes d'administration doivent être accessibles
+                                // au Super Admin et à l'Admin connecté.
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/admin/utilisateurs",
+                                        "/api/admin/utilisateurs/**"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN,
+                                        Roles.CO_ADMIN,
+                                        Roles.DIRECTEUR_DFP
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
                                         "/api/admin/**"
                                 )
                                 .hasAnyRole(
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 .requestMatchers(
@@ -734,7 +940,8 @@ public class SecurityConfig {
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL,
-                                        Roles.DIRECTEUR_DFP
+                                        Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN
                                 )
 
                                 .requestMatchers(
@@ -761,6 +968,7 @@ public class SecurityConfig {
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN,
                                         Roles.DIRECTEUR_DFP,
+                                        Roles.CO_ADMIN,
                                         Roles.CHEF_SERVICE_LOGISTIQUE,
                                         Roles.AGENT_FLOTTE,
                                         Roles.CHEF_DGAL
@@ -774,6 +982,57 @@ public class SecurityConfig {
                                         Roles.ADMIN,
                                         Roles.SUPER_ADMIN
                                 )
+
+                                // =========================================
+                                // JUSTIFICATIFS (documents du dispositif)
+                                // =========================================
+
+                                .requestMatchers(HttpMethod.POST, "/api/fiches-surete")
+                                .hasAnyRole(Roles.AGENT_SURETE)
+                                .requestMatchers(HttpMethod.GET, "/api/fiches-surete/profil")
+                                .hasAnyRole(Roles.AGENT_SURETE)
+                                .requestMatchers(HttpMethod.GET, "/api/fiches-surete", "/api/fiches-surete/**")
+                                .hasAnyRole(Roles.CHEF_DGAL, Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/api/justificatifs/*/fichier"
+                                )
+                                .hasAnyRole(
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.CHEF_DGAL,
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/api/justificatifs/*/validation"
+                                )
+                                .hasAnyRole(
+                                        Roles.CHEF_SERVICE_LOGISTIQUE,
+                                        Roles.CHEF_DGAL,
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.DELETE,
+                                        "/api/justificatifs/**"
+                                )
+                                .hasAnyRole(
+                                        Roles.ADMIN,
+                                        Roles.SUPER_ADMIN
+                                )
+
+                                .requestMatchers(
+                                        "/api/justificatifs/**"
+                                )
+                                .authenticated()
+
+                                // Aucun compte ni espace chauffeur : les fiches
+                                // chauffeur restent des ressources gérées par la Logistique.
+                                .requestMatchers("/api/chauffeur/**").denyAll()
 
                                 // =========================================
                                 // REGLE PAR DEFAUT

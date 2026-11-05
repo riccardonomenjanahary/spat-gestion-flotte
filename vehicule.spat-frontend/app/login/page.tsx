@@ -1,14 +1,14 @@
 
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LockKeyhole, UserRound, LoaderCircle } from "lucide-react";
+import { LockKeyhole, UserRound, LoaderCircle, Eye, EyeOff } from "lucide-react";
 
 type Role =
   | "SUPER_ADMIN"
   | "ADMIN"
+  | "CO_ADMIN"
   | "DIRECTEUR_DFP"
   | "CHEF_SERVICE_LOGISTIQUE"
   | "CHEF_DIRECTION"
@@ -16,12 +16,17 @@ type Role =
   | "CHEF_DGAL"
   | "MECANICIEN_DID"
   | "AGENT_FLOTTE"
-  | "CHAUFFEUR";
+  | "AGENT_SURETE";
 
 interface LoginResponse {
   token: string;
   role: Role;
   numMatricule: string;
+}
+
+interface EmailPersonnel {
+  nom: string;
+  email: string;
 }
 
 function homeForRole(role: string | null | undefined): string {
@@ -30,6 +35,7 @@ function homeForRole(role: string | null | undefined): string {
       return "/super-admin";
 
     case "ADMIN":
+    case "CO_ADMIN":
     case "DIRECTEUR_DFP":
       return "/admin";
 
@@ -50,9 +56,8 @@ function homeForRole(role: string | null | undefined): string {
 
     case "AGENT_FLOTTE":
       return "/agent-flotte";
-
-    case "CHAUFFEUR":
-      return "/chauffeur";
+    case "AGENT_SURETE":
+      return "/agent-surete";
 
     default:
       return "/login";
@@ -63,6 +68,7 @@ function isValidRole(role: string): role is Role {
   return [
     "SUPER_ADMIN",
     "ADMIN",
+    "CO_ADMIN",
     "DIRECTEUR_DFP",
     "CHEF_SERVICE_LOGISTIQUE",
     "CHEF_DIRECTION",
@@ -70,25 +76,47 @@ function isValidRole(role: string): role is Role {
     "CHEF_DGAL",
     "MECANICIEN_DID",
     "AGENT_FLOTTE",
-    "CHAUFFEUR",
+    "AGENT_SURETE",
   ].includes(role);
 }
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [numMatricule, setNumMatricule] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
+  const [motDePasseVisible, setMotDePasseVisible] = useState(false);
   const [erreur, setErreur] = useState("");
   const [chargement, setChargement] = useState(false);
 
   const [afficherModalAdmin, setAfficherModalAdmin] = useState(false);
   const [demandeEnCours, setDemandeEnCours] = useState(false);
   const [demandeEnvoyee, setDemandeEnvoyee] = useState(false);
+  const [methodeMotDePasse, setMethodeMotDePasse] = useState<"choix" | "ancienne" | "email">("choix");
+  const [emailMotDePasse, setEmailMotDePasse] = useState("");
+  const [motDePasseTemporaire, setMotDePasseTemporaire] = useState("");
+  const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
+  const [confirmationNouveauMotDePasse, setConfirmationNouveauMotDePasse] = useState("");
+  const [emailTemporaireEnvoye, setEmailTemporaireEnvoye] = useState(false);
+  const [emailsPersonnel, setEmailsPersonnel] = useState<EmailPersonnel[]>([]);
+  const [rechercheEmail, setRechercheEmail] = useState("");
 
-  // =====================================================
-  // CONNEXION
-  // =====================================================
+  useEffect(() => {
+    fetch("/data/emails-personnel.json", { cache: "force-cache" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Répertoire email indisponible");
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error("Format du répertoire email invalide");
+        setEmailsPersonnel(data as EmailPersonnel[]);
+      })
+      .catch(() => setEmailsPersonnel([]));
+  }, []);
+
+  const emailsFiltres = useMemo(() => {
+    const terme = rechercheEmail.trim().toLocaleLowerCase("fr");
+    if (!terme) return [];
+    return emailsPersonnel
+      .filter((contact) => `${contact.nom} ${contact.email}`.toLocaleLowerCase("fr").includes(terme))
+      .slice(0, 30);
+  }, [emailsPersonnel, rechercheEmail]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -175,7 +203,9 @@ export default function LoginPage() {
 
       toast.success("Connexion réussie.");
 
-      router.replace(homeForRole(loginData.role));
+      const destination = homeForRole(loginData.role);
+
+      window.location.replace(destination);
     } catch (error) {
       console.error("Erreur de connexion :", error);
 
@@ -192,12 +222,15 @@ export default function LoginPage() {
     }
   };
 
-  // =====================================================
-  // MOT DE PASSE OUBLIÉ
-  // =====================================================
-
   const ouvrirMotDePasseOublie = () => {
     setDemandeEnvoyee(false);
+    setMethodeMotDePasse("choix");
+    setEmailMotDePasse("");
+    setRechercheEmail("");
+    setMotDePasseTemporaire("");
+    setNouveauMotDePasse("");
+    setConfirmationNouveauMotDePasse("");
+    setEmailTemporaireEnvoye(false);
     setAfficherModalAdmin(true);
   };
 
@@ -259,17 +292,92 @@ export default function LoginPage() {
     }
   };
 
-  // =====================================================
-  // INTERFACE
-  // =====================================================
+  const demanderMotDePasseTemporaire = async () => {
+    if (demandeEnCours) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const email = emailMotDePasse.trim();
+    if (!apiUrl) {
+      toast.error("La variable NEXT_PUBLIC_API_URL n'est pas configurée.");
+      return;
+    }
+    if (!email) {
+      toast.error("Veuillez saisir votre adresse email.");
+      return;
+    }
+
+    setDemandeEnCours(true);
+    try {
+      const response = await fetch(`${apiUrl}/auth/mot-de-passe-oublie/nouvelle-methode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(data?.message || "Impossible de traiter la demande.");
+        return;
+      }
+      setEmailTemporaireEnvoye(true);
+      setMotDePasseTemporaire("");
+      setNouveauMotDePasse("");
+      setConfirmationNouveauMotDePasse("");
+      toast.success("Si cette adresse correspond à un compte, un mot de passe temporaire a été envoyé.");
+    } catch {
+      toast.error("Impossible de contacter le serveur.");
+    } finally {
+      setDemandeEnCours(false);
+    }
+  };
+
+  const changerMotDePasseTemporaire = async () => {
+    if (demandeEnCours) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      toast.error("La variable NEXT_PUBLIC_API_URL n'est pas configurée.");
+      return;
+    }
+    if (!motDePasseTemporaire || !nouveauMotDePasse) {
+      toast.error("Veuillez renseigner le mot de passe temporaire et le nouveau mot de passe.");
+      return;
+    }
+    if (nouveauMotDePasse.length < 8) {
+      toast.error("Le nouveau mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+    if (nouveauMotDePasse !== confirmationNouveauMotDePasse) {
+      toast.error("La confirmation du nouveau mot de passe ne correspond pas.");
+      return;
+    }
+
+    setDemandeEnCours(true);
+    try {
+      const response = await fetch(`${apiUrl}/auth/mot-de-passe-oublie/changer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          email: emailMotDePasse.trim(),
+          motDePasseTemporaire,
+          nouveauMotDePasse,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(data?.message || "Impossible de changer le mot de passe.");
+        return;
+      }
+      toast.success(data?.message || "Mot de passe changé. Vous pouvez vous connecter.");
+      setAfficherModalAdmin(false);
+      setMotDePasse(nouveauMotDePasse);
+    } catch {
+      toast.error("Impossible de contacter le serveur.");
+    } finally {
+      setDemandeEnCours(false);
+    }
+  };
 
   return (
     <main className="login-page">
       <div className="login-layout">
-
-        {/* ================================================
-            PARTIE GAUCHE : IDENTITÉ SPAT
-        ================================================ */}
 
         <section className="brand-panel">
           <div className="brand-content">
@@ -281,25 +389,19 @@ export default function LoginPage() {
               />
             </div>
 
-            <h2>GESTION DU PARC AUTOMOBILE</h2>
+            <h2>G.P.A</h2>
           </div>
         </section>
-
-        {/* ================================================
-            PARTIE DROITE : FORMULAIRE
-        ================================================ */}
 
         <section className="form-panel">
           <div className="form-content">
             <header className="login-header">
               <h1>LOGIN</h1>
-              <p>Connectez-vous ici pour acceder à votre compte</p>
+
             </header>
 
             <div className="form-card">
               <form onSubmit={handleSubmit}>
-
-                {/* NUMÉRO MATRICULE */}
 
                 <div className="field">
                   <label
@@ -332,8 +434,6 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* MOT DE PASSE */}
-
                 <div className="field">
                   <label
                     htmlFor="motDePasse"
@@ -352,7 +452,7 @@ export default function LoginPage() {
                     <input
                       id="motDePasse"
                       name="motDePasse"
-                      type="password"
+                      type={motDePasseVisible ? "text" : "password"}
                       placeholder="Mot de passe"
                       value={motDePasse}
                       onChange={(e) =>
@@ -362,10 +462,18 @@ export default function LoginPage() {
                       required
                       disabled={chargement}
                     />
+                    <button
+                      type="button"
+                      className="password-visibility-button"
+                      onClick={() => setMotDePasseVisible((visible) => !visible)}
+                      disabled={chargement}
+                      aria-label={motDePasseVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      aria-pressed={motDePasseVisible}
+                    >
+                      {motDePasseVisible ? <EyeOff size={19} /> : <Eye size={19} />}
+                    </button>
                   </div>
                 </div>
-
-                {/* MESSAGE D'ERREUR */}
 
                 {erreur && (
                   <p className="error-message" role="alert">
@@ -373,11 +481,10 @@ export default function LoginPage() {
                   </p>
                 )}
 
-                {/* BOUTON DE CONNEXION */}
-
                 <button
                   type="submit"
                   className="login-button"
+                  data-default-primary="true"
                   disabled={chargement}
                 >
                   {chargement ? (
@@ -396,8 +503,6 @@ export default function LoginPage() {
               </form>
             </div>
 
-            {/* MOT DE PASSE OUBLIÉ */}
-
             <button
               type="button"
               className="forgot-password-button"
@@ -408,10 +513,6 @@ export default function LoginPage() {
           </div>
         </section>
       </div>
-
-      {/* =================================================
-          MODALE : MOT DE PASSE OUBLIÉ
-      ================================================= */}
 
       {afficherModalAdmin && (
         <div
@@ -433,65 +534,86 @@ export default function LoginPage() {
               Réinitialisation du mot de passe
             </h2>
 
-            {!demandeEnvoyee ? (
-              <>
-                <p>
-                  Veuillez contacter votre administrateur
-                  pour réinitialiser votre mot de passe.
-                </p>
+            <div className="reset-method-buttons" role="group" aria-label="Méthode de réinitialisation">
+              <button
+                type="button"
+                aria-pressed={methodeMotDePasse === "ancienne"}
+                onClick={() => setMethodeMotDePasse("ancienne")}
+                className={`reset-method-button${methodeMotDePasse === "ancienne" ? " selected" : ""}`}
+              >
+                Contacter le Super Admin
+              </button>
+              <button
+                type="button"
+                aria-pressed={methodeMotDePasse === "email"}
+                onClick={() => setMethodeMotDePasse("email")}
+                className={`reset-method-button${methodeMotDePasse === "email" ? " selected" : ""}`}
+              >
+                Pas besoin de Super Admin
+              </button>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={demanderNouveauMotDePasse}
-                  disabled={demandeEnCours}
-                  className="modal-request-button"
-                >
-                  {demandeEnCours
-                    ? "Envoi en cours..."
-                    : "Demander un nouveau mot de passe"}
-                </button>
+            {methodeMotDePasse === "choix" && (
+              null
+            )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAfficherModalAdmin(false)
-                  }
-                  disabled={demandeEnCours}
-                  className="modal-close-button"
-                >
-                  Fermer
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="success-message">
-                  Demande envoyée au Super Admin.
-                </div>
+            {methodeMotDePasse === "ancienne" && (
+              !demandeEnvoyee ? (
+                <>
 
-                <p>
-                  Le Super Admin a reçu une notification
-                  pour le matricule{" "}
-                  <strong>{numMatricule.trim()}</strong>.
-                </p>
+                  <button type="button" onClick={demanderNouveauMotDePasse} disabled={demandeEnCours} className="modal-request-button">
+                    {demandeEnCours ? "Envoi en cours..." : "Demander au Super Admin"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="success-message">Demande envoyée au Super Admin.</div>
+                  <p>Une notification a été envoyée pour le matricule <strong>{numMatricule.trim()}</strong>.</p>
+                  <button type="button" onClick={() => setAfficherModalAdmin(false)} className="modal-close-button">Fermer</button>
+                </>
+              )
+            )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setAfficherModalAdmin(false)
-                  }
-                  className="modal-close-button"
-                >
-                  Fermer
-                </button>
-              </>
+            {methodeMotDePasse === "email" && (
+              !emailTemporaireEnvoye ? (
+                <>
+
+                  <label className="reset-field-label" htmlFor="email-personnel-search">Rechercher un personnel ou un email</label>
+                  <input id="email-personnel-search" className="reset-input" value={rechercheEmail} onChange={(event) => setRechercheEmail(event.target.value)} placeholder="Nom ou adresse email" />
+                  <div role="radiogroup" aria-label="Emails du personnel" style={{ maxHeight: 190, overflowY: "auto", display: "grid", gap: 6, margin: "8px 0 12px" }}>
+                    {emailsFiltres.map((contact) => (
+                      <label key={`${contact.email}-${contact.nom}`} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", border: "1px solid #dbe3ea", borderRadius: 8, cursor: "pointer" }}>
+                        <input type="radio" name="email-personnel" value={contact.email} checked={emailMotDePasse === contact.email} onChange={() => setEmailMotDePasse(contact.email)} />
+                        <span><strong style={{ display: "block" }}>{contact.nom}</strong><small style={{ color: "#64748b" }}>{contact.email}</small></span>
+                      </label>
+                    ))}
+
+                    {rechercheEmail.trim() && !emailsFiltres.length && <span style={{ color: "#64748b", fontSize: 13 }}>Aucun email correspondant.</span>}
+                  </div>
+                  <button type="button" onClick={demanderMotDePasseTemporaire} disabled={demandeEnCours} className="modal-request-button">
+                    {demandeEnCours ? "Envoi en cours..." : "Envoyer le mot de passe temporaire"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="success-message">Si cette adresse correspond à un compte actif, un mot de passe temporaire lui a été envoyé. Il expire après une heure.</div>
+
+                  <label className="reset-field-label" htmlFor="temporary-password">Mot de passe temporaire</label>
+                  <input id="temporary-password" className="reset-input" type="password" autoComplete="one-time-code" value={motDePasseTemporaire} onChange={(event) => setMotDePasseTemporaire(event.target.value)} />
+                  <label className="reset-field-label" htmlFor="new-password">Nouveau mot de passe</label>
+                  <input id="new-password" className="reset-input" type="password" autoComplete="new-password" minLength={8} value={nouveauMotDePasse} onChange={(event) => setNouveauMotDePasse(event.target.value)} />
+                  <label className="reset-field-label" htmlFor="confirm-new-password">Confirmer le nouveau mot de passe</label>
+                  <input id="confirm-new-password" className="reset-input" type="password" autoComplete="new-password" minLength={8} value={confirmationNouveauMotDePasse} onChange={(event) => setConfirmationNouveauMotDePasse(event.target.value)} />
+                  <button type="button" onClick={changerMotDePasseTemporaire} disabled={demandeEnCours} className="modal-request-button">
+                    {demandeEnCours ? "Modification en cours..." : "Changer le mot de passe"}
+                  </button>
+                  <button type="button" onClick={demanderMotDePasseTemporaire} disabled={demandeEnCours} className="modal-close-button">Renvoyer un mot de passe temporaire</button>
+                </>
+              )
             )}
           </div>
         </div>
       )}
-
-      {/* =================================================
-          STYLES
-      ================================================= */}
 
       <style jsx>{`
         .login-page {
@@ -518,9 +640,7 @@ export default function LoginPage() {
           box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
         }
 
-        /* ==============================================
-           PANNEAU GAUCHE BLANC
-        ============================================== */
+        
 
         .brand-panel {
           position: relative;
@@ -598,9 +718,7 @@ export default function LoginPage() {
           letter-spacing: 0.2px;
         }
 
-        /* ==============================================
-           PANNEAU DROIT
-        ============================================== */
+        
 
         .form-panel {
           display: flex;
@@ -622,7 +740,7 @@ export default function LoginPage() {
 
         .login-header h1 {
           display: table;
-          margin: 0;
+          margin: 0 auto;
           padding-bottom: 5px;
           color: #172033;
           font-size: 37px;
@@ -635,6 +753,7 @@ export default function LoginPage() {
           margin: 13px 0 0;
           color: #64748b;
           font-size: 16px;
+          text-align: center;
         }
 
         .form-card {
@@ -702,9 +821,44 @@ export default function LoginPage() {
           cursor: not-allowed;
         }
 
-        /* ==============================================
-           BOUTON ROUGE
-        ============================================== */
+        .input-wrapper input[name="motDePasse"] {
+          padding-right: 54px;
+        }
+
+        .password-visibility-button {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 38px;
+          height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: #64748b;
+          cursor: pointer;
+          transition: background 150ms ease, color 150ms ease;
+        }
+
+        .password-visibility-button:hover {
+          background: #f1f5f9;
+          color: #172033;
+        }
+
+        .password-visibility-button:focus-visible {
+          outline: 2px solid #64748b;
+          outline-offset: 1px;
+        }
+
+        .password-visibility-button:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        
 
         .login-button {
           display: flex;
@@ -776,9 +930,7 @@ export default function LoginPage() {
           text-decoration: underline;
         }
 
-        /* ==============================================
-           MODALE
-        ============================================== */
+        
 
         .modal-overlay {
           position: fixed;
@@ -839,6 +991,76 @@ export default function LoginPage() {
           background: #991b1b;
         }
 
+        .reset-method-buttons {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          margin-bottom: 20px;
+        }
+
+        .reset-method-button {
+          min-height: 43px;
+          padding: 9px 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          background: #ffffff;
+          color: #334155;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+        }
+
+        .reset-method-button.selected {
+          border-color: #1d4ed8;
+          background: #1d4ed8;
+          color: #ffffff;
+        }
+
+        .reset-method-button:focus-visible {
+          outline: 2px solid #93c5fd;
+          outline-offset: 2px;
+        }
+
+        @media (max-width: 480px) {
+          .reset-method-buttons {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .reset-field-label {
+          display: block;
+          margin: 12px 0 6px;
+          color: #334155;
+          text-align: left;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .reset-input {
+          width: 100%;
+          min-height: 44px;
+          margin-bottom: 9px;
+          padding: 10px 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          color: #172033;
+          background: #fff;
+          font: inherit;
+          text-align: left;
+        }
+
+        .reset-input:focus {
+          outline: 2px solid #93c5fd;
+          outline-offset: 1px;
+          border-color: #3b82f6;
+        }
+
+        .modal-close-button {
+          width: 100%;
+          margin-top: 3px;
+        }
+
         .modal-request-button:disabled,
         .modal-close-button:disabled {
           opacity: 0.6;
@@ -868,9 +1090,7 @@ export default function LoginPage() {
           border: 0;
         }
 
-        /* ==============================================
-           RESPONSIVE
-        ============================================== */
+        
 
         @media (max-width: 850px) {
           .login-layout {

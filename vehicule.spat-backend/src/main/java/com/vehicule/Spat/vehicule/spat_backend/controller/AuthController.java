@@ -75,6 +75,15 @@ public class AuthController {
                     );
         }
 
+        String role = utilisateur.getRole() == null
+                ? ""
+                : utilisateur.getRole().trim().replaceFirst("^ROLE_", "");
+        if ("CHAUFFEUR".equalsIgnoreCase(role)) {
+            return ResponseEntity.status(403).body(
+                    Map.of("message", "Les comptes chauffeur ne sont plus disponibles dans l'application.")
+            );
+        }
+
         String token = jwtUtil.genererToken(
                 utilisateur.getMatricule(),
                 utilisateur.getRole()

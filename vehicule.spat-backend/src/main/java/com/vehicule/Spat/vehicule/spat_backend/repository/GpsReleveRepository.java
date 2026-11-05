@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 
 public interface GpsReleveRepository extends JpaRepository<GpsReleve, Long> {
+    List<GpsReleve> findByGpsDeviceIdAndDateGpsBetweenOrderByDateGpsAsc(
+            Long gpsDeviceId, Instant debut, Instant fin);
     boolean existsByGpsDeviceIdAndTimestampGps(Long gpsDeviceId, Long timestampGps);
     List<GpsReleve> findByVehiculeIdAndDateGpsGreaterThanEqualAndDateGpsLessThanOrderByDateGpsAscIdAsc(
             Long vehiculeId, Instant debutInclus, Instant finExclue);

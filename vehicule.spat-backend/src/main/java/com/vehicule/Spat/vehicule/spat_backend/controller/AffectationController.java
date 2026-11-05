@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/affectations")
@@ -20,15 +21,21 @@ public class AffectationController {
     private final AffectationRepository affectationRepository;
     private final ChauffeurRepository chauffeurRepository;
     private final VehiculeRepository vehiculeRepository;
+    private final com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository reservations;
+    private final com.vehicule.Spat.vehicule.spat_backend.service.ReglesDispositifService regles;
 
     public AffectationController(
             AffectationRepository affectationRepository,
             ChauffeurRepository chauffeurRepository,
-            VehiculeRepository vehiculeRepository
+            VehiculeRepository vehiculeRepository,
+            com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository reservations,
+            com.vehicule.Spat.vehicule.spat_backend.service.ReglesDispositifService regles
     ) {
         this.affectationRepository = affectationRepository;
         this.chauffeurRepository = chauffeurRepository;
         this.vehiculeRepository = vehiculeRepository;
+        this.reservations = reservations;
+        this.regles = regles;
     }
 
     @GetMapping
@@ -44,9 +51,20 @@ public class AffectationController {
     }
 
     @PostMapping
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> creer(
             @RequestBody Map<String, Object> body
     ) {
+
+        if (body.get("reservationId") == null || body.get("chauffeurId") == null || body.get("vehiculeId") == null)
+            return ResponseEntity.badRequest().body("Un ticket validé, un véhicule et un chauffeur sont obligatoires.");
+        Long reservationId;
+        try { reservationId = Long.valueOf(body.get("reservationId").toString()); }
+        catch (NumberFormatException e) { return ResponseEntity.badRequest().body("Numéro de ticket invalide."); }
+        var reservation = reservations.findByIdForUpdate(reservationId).orElse(null);
+        if (reservation == null || !Set.of("VALIDEE", "PLANIFIEE").contains(reservation.getStatut())
+                || reservation.getVehicule() == null || reservation.getChauffeur() == null)
+            return ResponseEntity.status(409).body("L'affectation nécessite un ticket validé avec véhicule et chauffeur.");
 
         Long chauffeurId =
                 Long.valueOf(body.get("chauffeurId").toString());
@@ -67,7 +85,7 @@ public class AffectationController {
 
         Vehicule vehicule =
                 vehiculeRepository
-                        .findById(vehiculeId)
+                        .findByIdForUpdate(vehiculeId)
                         .orElse(null);
 
         if (chauffeur == null || vehicule == null) {
@@ -76,12 +94,26 @@ public class AffectationController {
                     .body("Chauffeur ou véhicule introuvable");
         }
 
+        if (!vehiculeId.equals(reservation.getVehicule().getId())
+                || !chauffeurId.equals(reservation.getChauffeur().getId()))
+            return ResponseEntity.status(409).body("Les ressources doivent correspondre à celles du ticket validé.");
+        String erreur = regles.verifier(reservation);
+        if (erreur != null) return ResponseEntity.status(409).body(erreur);
+        LocalDateTime maintenant = LocalDateTime.now();
+        if (maintenant.isBefore(reservation.getDateDebut()) || !maintenant.isBefore(reservation.getDateFin()))
+            return ResponseEntity.status(409).body("La sortie doit avoir lieu pendant la période autorisée du ticket.");
+
+        if (!"DISPONIBLE".equalsIgnoreCase(vehicule.getStatut())) {
+            return ResponseEntity.status(409)
+                    .body("Seul un véhicule disponible peut être affecté.");
+        }
+
         Affectation affectation = new Affectation();
 
         affectation.setChauffeur(chauffeur);
         affectation.setVehicule(vehicule);
-        affectation.setDestination(destination);
-        affectation.setDescription(description);
+        affectation.setDestination(reservation.getDestination());
+        affectation.setDescription("Ticket " + reservation.getId() + " : " + reservation.getMotif());
         affectation.setDateDebut(LocalDateTime.now());
         affectation.setStatut("ACTIVE");
 
@@ -99,36 +131,4 @@ public class AffectationController {
         return ResponseEntity.ok(sauvegarde);
     }
 
-    @org.springframework.transaction.annotation.Transactional
-    @RequestMapping(
-            value = {"/{id}/terminer", "/{id}/cloturer"},
-            method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST}
-    )
-    public ResponseEntity<?> terminerMission(@PathVariable Long id) {
-        Affectation affectation = affectationRepository.findById(id).orElse(null);
-        if (affectation == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        affectation.setDateFin(LocalDateTime.now());
-        affectation.setStatut("TERMINEE");
-        Affectation sauvegarde = affectationRepository.save(affectation);
-
-        if (affectation.getChauffeur() != null) {
-            Chauffeur chauffeur = affectation.getChauffeur();
-            chauffeur.setStatut("DISPONIBLE");
-            chauffeurRepository.save(chauffeur);
-        }
-
-        if (affectation.getVehicule() != null) {
-            Vehicule vehicule = affectation.getVehicule();
-            String statutVehicule = String.valueOf(vehicule.getStatut()).toUpperCase();
-            if (!"MAINTENANCE".equals(statutVehicule) && !"HORS_SERVICE".equals(statutVehicule) && !"REFORME".equals(statutVehicule)) {
-                vehicule.setStatut("DISPONIBLE");
-                vehiculeRepository.save(vehicule);
-            }
-        }
-
-        return ResponseEntity.ok(sauvegarde);
-    }
 }

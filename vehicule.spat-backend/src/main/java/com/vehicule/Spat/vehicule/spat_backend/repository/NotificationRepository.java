@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    @Transactional
+    long deleteByReservationId(Long reservationId);
+
     // Methodes existantes : conservees pour la cloche de notifications.
     List<Notification> findTop50ByDestinataireMatriculeOrderByDateCreationDesc(String destinataireMatricule);
     List<Notification> findTop50ByDestinataireMatriculeAndLuFalseOrderByDateCreationDesc(String destinataireMatricule);

@@ -1,5 +1,6 @@
 package com.vehicule.Spat.vehicule.spat_backend.controller;
 
+import com.vehicule.Spat.vehicule.spat_backend.dto.ClotureMissionChauffeurRequest;
 import com.vehicule.Spat.vehicule.spat_backend.dto.CreateConsommationChauffeurRequest;
 import com.vehicule.Spat.vehicule.spat_backend.dto.CreateSignalementEntretienChauffeurRequest;
 
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -198,6 +200,7 @@ public class ChauffeurEspaceController {
     @Transactional
     public ResponseEntity<?> cloturerMission(
             @PathVariable("id") Long id,
+            @RequestBody(required = false) ClotureMissionChauffeurRequest body,
             Authentication authentication
     ) {
         Chauffeur chauffeur = chauffeurCourant(authentication);
@@ -223,7 +226,7 @@ public class ChauffeurEspaceController {
             );
         }
 
-        if (!"VALIDEE".equalsIgnoreCase(mission.getStatut())) {
+        if (!"VALIDEE".equalsIgnoreCase(mission.getStatut()) && !"PLANIFIEE".equalsIgnoreCase(mission.getStatut())) {
             return ResponseEntity.status(409).body(
                     "Cette mission ne peut pas etre cloturee. Statut actuel : "
                             + mission.getStatut()
@@ -236,40 +239,53 @@ public class ChauffeurEspaceController {
             );
         }
 
+        String incident = body == null || body.getIncident() == null
+                ? ""
+                : body.getIncident().trim();
+        if (incident.length() > 2000) {
+            incident = incident.substring(0, 2000);
+        }
+        LocalDateTime retourReel = LocalDateTime.now();
+        if (mission.getDateDebut() == null || !retourReel.isAfter(mission.getDateDebut()))
+            return ResponseEntity.status(409).body("La mission ne peut pas être clôturée avant son départ.");
+        mission.setDateFin(retourReel);
+        mission.setDureeUtilisationMinutes((int) java.time.Duration.between(mission.getDateDebut(), retourReel).toMinutes());
+        mission.setIncidentCloture(incident.isBlank() ? null : incident);
         mission.setStatut("CLOTUREE");
         Reservation sauvegardee = reservationRepository.saveAndFlush(mission);
+        maintenanceService.synchroniserStatutApresMission(sauvegardee.getVehicule());
 
         // Les notifications sont enregistrees dans la MEME transaction que
         // la cloture. Une erreur de creation fait annuler l'ensemble :
         // le chauffeur ne recoit pas un faux succes de cloture sans notification.
-        String numeroTicket = "TKT-" + String.format("%05d", sauvegardee.getId());
+        String numeroCourt = String.format("%05d", sauvegardee.getId());
+        String titreNotification = "ticket-" + numeroCourt + " clôturé";
         String immatriculation = sauvegardee.getVehicule().getImmatriculation();
         String nomComplet = (Objects.toString(chauffeur.getPrenom(), "") + " "
                 + Objects.toString(chauffeur.getNom(), "")).trim();
         String chauffeurAffiche = nomComplet.isBlank()
                 ? chauffeur.getMatricule() : nomComplet;
-
-        for (Utilisateur destinataire : utilisateurRepository.findAll()) {
-            if (destinataire.getRole() == null
-                    || !"AGENT_FLOTTE".equalsIgnoreCase(destinataire.getRole().trim())
-                    || !destinataire.isActif()) {
-                continue;
-            }
-
-            notificationService.creerPourUtilisateur(
-                    destinataire,
-                    "MISSION_CLOTUREE",
-                    "INFO",
-                    "Mission cloturee par un chauffeur",
-                    "Le chauffeur " + chauffeurAffiche + " a cloture " + numeroTicket
-                            + " (vehicule " + immatriculation + ").",
-                    "/agent-flotte",
-                    sauvegardee.getId(),
-                    null,
-                    sauvegardee.getVehicule().getId(),
-                    false // Notification dans l'application, pas d'email non demande.
-            );
+        String message = "Le chauffeur " + chauffeurAffiche
+                + " a clôturé ticket-" + numeroCourt
+                + " (véhicule " + immatriculation + ").";
+        if (incident.isBlank()) {
+            message += " Aucun incident déclaré.";
+        } else {
+            message += " Incident : " + incident;
         }
+
+        notificationService.creerPourRole(
+                "CHEF_SERVICE_LOGISTIQUE",
+                "MISSION_CLOTUREE",
+                "INFO",
+                titreNotification,
+                message,
+                "/chef-service-logistique",
+                sauvegardee.getId(),
+                null,
+                sauvegardee.getVehicule().getId(),
+                false
+        );
 
         return ResponseEntity.ok(sauvegardee);
     }
@@ -544,9 +560,7 @@ public class ChauffeurEspaceController {
                     );
         }
 
-        if (!"VALIDEE".equalsIgnoreCase(
-                reservation.getStatut()
-        )) {
+        if (!"VALIDEE".equalsIgnoreCase(reservation.getStatut()) && !"PLANIFIEE".equalsIgnoreCase(reservation.getStatut())) {
 
             return ResponseEntity
                     .status(409)
@@ -862,9 +876,7 @@ public class ChauffeurEspaceController {
                     );
         }
 
-        if (!"VALIDEE".equalsIgnoreCase(
-                ticket.getStatut()
-        )) {
+        if (!"VALIDEE".equalsIgnoreCase(ticket.getStatut()) && !"PLANIFIEE".equalsIgnoreCase(ticket.getStatut())) {
 
             return ResponseEntity
                     .status(409)
@@ -1113,6 +1125,9 @@ public class ChauffeurEspaceController {
         );
 
         if (maintenance != null) {
+
+            response.put("dateCreation", maintenance.getDateCreation());
+            response.put("dateCloture", maintenance.getDateCloture());
 
             response.put(
                     "maintenanceId",

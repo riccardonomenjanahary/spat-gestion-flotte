@@ -15,5 +15,6 @@ public enum StatutMaintenance {
     // Circuit des demandes d'entretien : distinct du contrôle technique préalable.
     EN_ATTENTE_VALIDATION_ENTRETIEN,
     ENTRETIEN_AUTORISE,
-    ENTRETIEN_TERMINE
+    ENTRETIEN_TERMINE,
+    ENTRETIEN_ANNULE
 }

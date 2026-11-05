@@ -1,17 +1,25 @@
 "use client";
+import { releveAssistante } from "@/app/lib/circuits";
+import { observationsDepuisFiche } from "@/app/lib/observationsMecanicien";
 
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
+  type FormEvent,
   type ReactNode,
 } from "react";
 
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
+import SignalementsIncidentsWorkflow from "@/components/SignalementsIncidentsWorkflow";
+import NavettesPact from "@/components/NavettesPact";
+import OrdreMissionActions from "@/components/OrdreMissionActions";
 import BoutonsRapportSpat from "@/app/components/BoutonsRapportSpat";
+import SlideInSelect from "@/app/components/SlideInSelect";
 import type { RapportSpat } from "@/app/lib/spatRapports";
 import { ROLES } from "@/app/lib/roles";
 import { toast } from "sonner";
@@ -20,20 +28,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  Clock,
   Download,
   Eye,
   Fuel,
+  Mail,
   RefreshCw,
+  Route,
   Search,
   Send,
   Truck,
   Wrench,
+  X,
   XCircle,
 } from "lucide-react";
-
-// =========================================================
-// TYPES
-// =========================================================
 
 interface Vehicule {
   id: number;
@@ -71,10 +79,6 @@ interface Chauffeur {
   statut: string;
 }
 
-// =========================================================
-// RESERVATION
-// =========================================================
-
 interface Reservation {
   id: number;
 
@@ -84,11 +88,15 @@ interface Reservation {
 
   dateDebut: string;
   dateFin: string;
+  zoneMission?: string | null;
+  typeDemande?: string | null;
+  modeCreation?: string | null;
 
   motif: string;
 
   demandeUrgente: boolean;
   motifUrgence?: string | null;
+  horsDelai24h?: boolean | null;
 
   statut: string;
   dateCreation: string;
@@ -116,13 +124,8 @@ interface Reservation {
   validationN1Par?: UtilisateurSimple | null;
   dateValidationN1?: string | null;
 
-  // Permet de savoir si l'avis DID a été demandé
   avisDIDDemande?: boolean | null;
 }
-
-// =========================================================
-// VEHICULE DISPONIBLE
-// =========================================================
 
 interface VehiculeDisponible {
   id: number;
@@ -133,7 +136,13 @@ interface VehiculeDisponible {
   statut: string;
 }
 
-// Lecture du planning depuis le backend, pour la periode exacte du ticket.
+const VEHICULES_MISSION_HORS_VILLE = new Set(["1614WWA", "1615WWA", "01614WWA", "01615WWA"]);
+
+function estVehiculeMissionHorsVille(vehicule?: { immatriculation?: string | null } | null) {
+  const plaque = String(vehicule?.immatriculation || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  return VEHICULES_MISSION_HORS_VILLE.has(plaque) || VEHICULES_MISSION_HORS_VILLE.has(plaque.replace(/^0/, ""));
+}
+
 interface EtatPlanningVehicule {
   id: number;
   immatriculation: string;
@@ -148,12 +157,9 @@ interface ChauffeurDisponible {
   nom?: string | null;
   prenom?: string | null;
   telephone?: string | null;
+  affectationService?: string | null;
   statut: string;
 }
-
-// =========================================================
-// DISPONIBILITE
-// =========================================================
 
 interface DisponibiliteReservation {
   reservationId: number;
@@ -175,16 +181,29 @@ interface DisponibiliteReservation {
   chauffeursDisponibles: ChauffeurDisponible[];
 }
 
-// Position courante : consultation seule, sans modifier le suivi GPS de l'Agent Flotte.
 interface PositionGpsCarburant {
   vehiculeId: number;
   odometreKm?: number | null;
   dateGps?: string | null;
 }
 
-// =========================================================
-// MAINTENANCE / AVIS DID
-// =========================================================
+interface NavetteRappel {
+  id: number;
+  motif: string;
+  dateDebut: string;
+  statut: string;
+  vehicule?: Vehicule | null;
+  chauffeur?: Chauffeur | null;
+}
+
+interface NavetteRappel {
+  id: number;
+  motif: string;
+  dateDebut: string;
+  statut: string;
+  vehicule?: Vehicule | null;
+  chauffeur?: Chauffeur | null;
+}
 
 interface Maintenance {
   id: string;
@@ -221,9 +240,9 @@ interface Maintenance {
   dateAvisdid?: string | null;
   dateAvisDID?: string | null;
 
-  // Informations techniques retournées par le mécanicien DID
   diagnosticVisuel?: string | null;
   observationsMecanicien?: string | null;
+  ficheControle?: string | null;
   piecesNecessaires?: string | null;
   mecanicienEmail?: string | null;
   decisiondid?: string | null;
@@ -235,10 +254,6 @@ interface Maintenance {
   dateCreation?: string | null;
   dateCloture?: string | null;
 }
-
-// =========================================================
-// CARBURANT — CONSULTATION UNIQUEMENT
-// =========================================================
 
 interface TransactionCarburant {
   id: string;
@@ -257,18 +272,18 @@ interface TransactionCarburant {
   agentEmail?: string | null;
 }
 
-
 interface SuiviEntretienPeriodique {
   id?: number | null;
   vehicule?: Vehicule | null;
   kilometrageDernierEntretien?: number | null;
   prochaineEcheanceKm?: number | null;
   dernierKilometrageConnu?: number | null;
+  kilometrageDepuisDernierEntretien?: number | null;
   kilometresRestants?: number | null;
   entretienPeriodiqueOuvert?: boolean | null;
   statut?: string | null;
   intervalleKm?: number | null;
-  // Disponible lorsque le backend aura enregistré la date prévisionnelle.
+
   datePrevueEntretien?: string | null;
   dateEcheanceEntretien?: string | null;
 }
@@ -284,8 +299,6 @@ interface Assurance {
   statut?: string | null;
 }
 
-// Comparaison au jour civil : une échéance datée YYYY-MM-DD ne dépend pas
-// du décalage horaire du navigateur ni de l'heure de consultation.
 function joursAvantDate(date?: string | null): number | null {
   if (!date) return null;
   const valeurs = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
@@ -310,109 +323,13 @@ function dateEntretienPrevue(s: SuiviEntretienPeriodique): string | null {
   return s.datePrevueEntretien || s.dateEcheanceEntretien || null;
 }
 
-// =========================================================
-// DECISION
-// =========================================================
-
 type DecisionReservation =
   | "VALIDEE_N1"
   | "REFUSEE";
 
-// =========================================================
-// AFFECTATIONS DOCUMENTAIRES DES CHAUFFEURS
-// =========================================================
-// Correspondances de GROUPES issues des listes SPAT fournies.
-// Ces documents ne précisent PAS un conducteur nominatif pour chaque
-// immatriculation. Ne pas inventer de lien véhicule ↔ chauffeur individuel.
-// Les autres véhicules conservent la liste complète des chauffeurs disponibles.
-
-type GroupeChauffeurs = "DG" | "GARAGE" | "AMBULANCE";
-
-const groupesVehiculesDocument: Record<string, GroupeChauffeurs> = {
-  // Voitures affectées au DG SPAT
-  "40560WWT": "DG",
-  "33803WWT": "DG",
-  "11881WWT": "DG",
-  "3940TBU": "DG",
-  // Voitures de service du garage
-  "1205TCA": "GARAGE",
-  "1218TCA": "GARAGE",
-  "5174AH": "GARAGE",
-  "5533AE": "GARAGE",
-  "6742AJ": "GARAGE",
-  "6743AJ": "GARAGE",
-  "5334AJ": "GARAGE",
-  // Ambulances, y compris celle stationnée au garage pour réparation
-  "0040AH": "AMBULANCE",
-  "17045WWT": "AMBULANCE",
-};
-
-const chauffeursDocument: Record<
-  GroupeChauffeurs,
-  ReadonlyArray<{ matricule: string; nom: string }>
-> = {
-  DG: [{ matricule: "2014007", nom: "EMMANUEL" }],
-  AMBULANCE: [
-    { matricule: "2014012", nom: "VELONJARA PARIZERA" },
-    { matricule: "2024095", nom: "RAMANANTSOA FIDELE" },
-  ],
-  GARAGE: [
-    { matricule: "2014011", nom: "RABE VENOR" },
-    { matricule: "2014010", nom: "RANDRIANANTENAINA SABIN JOEL" },
-    { matricule: "2014013", nom: "LEZOMA GERMAIN" },
-    { matricule: "2021045", nom: "LERA" },
-    { matricule: "2024103", nom: "RAZAFINDRAKATSO RICHARD" },
-    { matricule: "2024106", nom: "RAZANAMAHAVONJY ESCANDE C" },
-    { matricule: "2024089", nom: "LEDOA NATHANIEL RICCO" },
-    { matricule: "2024109", nom: "ROMAIN" },
-    { matricule: "2014009", nom: "YAMICOLE GIDICAEL" },
-  ],
-};
-
-function normaliserAffectation(texte?: string | null): string {
-  return (texte || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+function cleChauffeursVehicule(reservationId: number, vehiculeId: number | string) {
+  return `${reservationId}:${vehiculeId}`;
 }
-
-function groupePourVehicule(
-  vehicule?: Vehicule | VehiculeDisponible | null
-): GroupeChauffeurs | null {
-  if (!vehicule) return null;
-  return groupesVehiculesDocument[
-    normaliserAffectation(vehicule.immatriculation)
-  ] ?? null;
-}
-
-function chauffeursEligiblesPourVehicule(
-  vehicule: Vehicule | VehiculeDisponible | null | undefined,
-  chauffeursDisponibles: ChauffeurDisponible[]
-): ChauffeurDisponible[] {
-  const groupe = groupePourVehicule(vehicule);
-  if (!groupe) return chauffeursDisponibles;
-
-  const associes = chauffeursDocument[groupe];
-  return chauffeursDisponibles.filter((chauffeur) => {
-    const matricule = normaliserAffectation(chauffeur.matricule);
-    const nom = normaliserAffectation(
-      `${chauffeur.nom || ""} ${chauffeur.prenom || ""}`
-    );
-    const prenomNom = normaliserAffectation(
-      `${chauffeur.prenom || ""} ${chauffeur.nom || ""}`
-    );
-    return associes.some((c) =>
-      (matricule && matricule === normaliserAffectation(c.matricule)) ||
-      (nom && nom === normaliserAffectation(c.nom)) ||
-      (prenomNom && prenomNom === normaliserAffectation(c.nom))
-    );
-  });
-}
-
-// =========================================================
-// PAGE
-// =========================================================
 
 export default function ChefServiceLogistiquePage() {
   return (
@@ -422,22 +339,19 @@ export default function ChefServiceLogistiquePage() {
   );
 }
 
-// =========================================================
-// CONTENU
-// =========================================================
-
 function ChefServiceLogistiqueContent() {
   const API = process.env.NEXT_PUBLIC_API_URL;
-
-  // =======================================================
-  // DONNEES
-  // =======================================================
 
   const [vehicules, setVehicules] =
     useState<Vehicule[]>([]);
 
   const [reservations, setReservations] =
     useState<Reservation[]>([]);
+
+  const [chauffeursParVehicule, setChauffeursParVehicule] =
+    useState<Record<string, ChauffeurDisponible[]>>({});
+  const [chargementChauffeursParVehicule, setChargementChauffeursParVehicule] =
+    useState<Record<string, boolean>>({});
 
   const [maintenances, setMaintenances] =
     useState<Maintenance[]>([]);
@@ -453,10 +367,6 @@ function ChefServiceLogistiqueContent() {
   const [chargement, setChargement] =
     useState(true);
 
-  // =======================================================
-  // DISPONIBILITES
-  // =======================================================
-
   const [disponibilites, setDisponibilites] =
     useState<Record<number, DisponibiliteReservation>>({});
 
@@ -469,37 +379,17 @@ function ChefServiceLogistiqueContent() {
   const [erreursDisponibilites, setErreursDisponibilites] =
     useState<Record<number, string>>({});
 
-  // =======================================================
-  // VEHICULE AFFECTE
-  // =======================================================
-
   const [vehiculeAffecte, setVehiculeAffecte] =
     useState<Record<number, string>>({});
-
-  // =======================================================
-  // CHAUFFEUR AFFECTE
-  // =======================================================
 
   const [chauffeurAffecte, setChauffeurAffecte] =
     useState<Record<number, string>>({});
 
-  // =======================================================
-  // DECISIONS
-  // =======================================================
-
   const [decisionsEnCours, setDecisionsEnCours] =
     useState<Record<number, boolean>>({});
 
-  // =======================================================
-  // DEMANDE AVIS DID
-  // =======================================================
-
   const [avisDIDEnCours, setAvisDIDEnCours] =
     useState<Record<number, boolean>>({});
-
-  // =======================================================
-  // REFUS
-  // =======================================================
 
   const [reservationARefuser, setReservationARefuser] =
     useState<Reservation | null>(null);
@@ -507,9 +397,16 @@ function ChefServiceLogistiqueContent() {
   const [motifRefusSaisi, setMotifRefusSaisi] =
     useState("");
 
-  // =======================================================
-  // FILTRES
-  // =======================================================
+  const [popupOrdreMission, setPopupOrdreMission] =
+    useState<Reservation | null>(null);
+  const [destinataireOrdreMission, setDestinataireOrdreMission] = useState<{ matricule?: string | null; nom?: string | null; email?: string | null } | null>(null);
+  const [chargementDestinataireOrdreMission, setChargementDestinataireOrdreMission] = useState(false);
+
+  const [navettesPactOuvert, setNavettesPactOuvert] =
+    useState(false);
+  const [navetteRappel, setNavetteRappel] = useState<NavetteRappel | null>(null);
+  const navettesRappelRef = useRef<NavetteRappel[]>([]);
+  const rappelsDeclenchesRef = useRef(new Set<number>());
 
   const [filtreVehicule, setFiltreVehicule] =
     useState("");
@@ -517,11 +414,18 @@ function ChefServiceLogistiqueContent() {
   const [filtreStatutReservation, setFiltreStatutReservation] =
     useState("EN_ATTENTE");
 
-  // Interface : un seul ticket détaillé à la fois.
   const [ticketOuvertId, setTicketOuvertId] =
     useState<number | null>(null);
+  const [alerteUrgence, setAlerteUrgence] = useState<Reservation | null>(null);
+  const [urgenceReservation, setUrgenceReservation] = useState<Reservation | null>(null);
+  const [urgenceSousCategorie, setUrgenceSousCategorie] = useState("URGENCE_OPERATIONNELLE");
+  const [urgenceMotif, setUrgenceMotif] = useState("");
+  const [urgenceEnCours, setUrgenceEnCours] = useState(false);
+  const [inspectionArriveeEnCours, setInspectionArriveeEnCours] = useState<number | null>(null);
+  const [clotureApresAvisEnCours, setClotureApresAvisEnCours] = useState<number | null>(null);
+  const [clotureUrgenceEnCours, setClotureUrgenceEnCours] = useState<number | null>(null);
+  const [popupAttenteAvis, setPopupAttenteAvis] = useState<{ reservationId: number; immatriculation: string } | null>(null);
 
-  // Reprise du contrôle DID pour un autre véhicule du même ticket.
   const [choixAlternatifOuvert, setChoixAlternatifOuvert] =
     useState<Record<number, boolean>>({});
   const [vehiculeAlternatif, setVehiculeAlternatif] =
@@ -531,24 +435,18 @@ function ChefServiceLogistiqueContent() {
   const [relanceDidEnCours, setRelanceDidEnCours] =
     useState<Record<number, boolean>>({});
 
-  // Sous-vues accessibles depuis deux boutons dédiés, sans modifier les flux métier.
-  const [panneauGestion, setPanneauGestion] = useState<"TICKETS" | "CARBURANT" | "ENTRETIEN" | "ASSURANCE">("TICKETS");
+  const [panneauGestion, setPanneauGestion] = useState<"TICKETS" | "CARBURANT" | "ENTRETIEN" | "ASSURANCE" | "INCIDENTS">("TICKETS");
   const [demandeEntretienOuverte, setDemandeEntretienOuverte] = useState<string | null>(null);
   const [decisionEntretienEnCours, setDecisionEntretienEnCours] = useState<string | null>(null);
   const [motifsRefusEntretien, setMotifsRefusEntretien] = useState<Record<string, string>>({});
   const [actionEntretienEnCours, setActionEntretienEnCours] = useState<string | null>(null);
   const [assurances, setAssurances] = useState<Assurance[]>([]);
   const [erreurAssurances, setErreurAssurances] = useState<string | null>(null);
-
-  // =======================================================
-  // CARBURANT — CONSULTATION
-  // =======================================================
+  const [erreurChargementPrincipal, setErreurChargementPrincipal] = useState<string | null>(null);
 
   const [filtreCarburant, setFiltreCarburant] =
     useState("");
 
-  // Consultation GPS facultative : n'empêche jamais le chargement du carburant.
-  // Un refus 403 est affiché et ne déclenche aucune écriture serveur.
   useEffect(() => {
     if (panneauGestion !== "CARBURANT" || !API) return;
     const controleur = new AbortController();
@@ -581,10 +479,7 @@ function ChefServiceLogistiqueContent() {
 
   const [suivisPeriodiques, setSuivisPeriodiques] =
     useState<SuiviEntretienPeriodique[]>([]);
-
-  // =======================================================
-  // TOKEN
-  // =======================================================
+  const [erreurSuivisPeriodiques, setErreurSuivisPeriodiques] = useState<string | null>(null);
 
   const getToken = () => {
     if (typeof window === "undefined") {
@@ -594,14 +489,79 @@ function ChefServiceLogistiqueContent() {
     return localStorage.getItem("token");
   };
 
-  // =======================================================
-  // CHARGEMENT GENERAL
-  // =======================================================
+  useEffect(() => {
+    setDestinataireOrdreMission(null);
+    if (!popupOrdreMission || !API) {
+      setChargementDestinataireOrdreMission(false);
+      return;
+    }
+    const token = getToken();
+    if (!token) {
+      setChargementDestinataireOrdreMission(false);
+      return;
+    }
+    const controller = new AbortController();
+    setChargementDestinataireOrdreMission(true);
+    fetch(`${API}/reservations/${popupOrdreMission.id}/ordre-mission/destinataire`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(await response.text() || "Impossible de retrouver l'email du demandeur.");
+      return response.json() as Promise<{ matricule?: string | null; nom?: string | null; email?: string | null }>;
+    }).then(setDestinataireOrdreMission).catch((error) => {
+      if (!controller.signal.aborted) {
+        setDestinataireOrdreMission(null);
+        console.warn("Résolution email pour l'ordre de mission impossible:", error);
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setChargementDestinataireOrdreMission(false);
+    });
+    return () => controller.abort();
+  }, [API, popupOrdreMission?.id]);
+
+  const chargerChauffeursPourVehicule = useCallback(async (
+    reservationId: number,
+    vehiculeId: number,
+    dateDebut: string,
+    dateFin: string,
+    manuel = false
+  ) => {
+    if (!API) return;
+    const token = getToken();
+    if (!token) return;
+    const cle = cleChauffeursVehicule(reservationId, vehiculeId);
+    setChargementChauffeursParVehicule((ancien) => ({ ...ancien, [cle]: true }));
+    try {
+      const parametres = new URLSearchParams({ dateDebut, dateFin });
+      if (manuel) parametres.set("manuel", "true");
+      const res = await fetch(
+        `${API}/vehicules/${vehiculeId}/chauffeurs-compatibles?${parametres.toString()}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Format de réponse chauffeurs disponibles invalide.");
+      const chauffeursDisponibles = data as ChauffeurDisponible[];
+      setChauffeursParVehicule((ancien) => ({
+        ...ancien,
+        [cle]: chauffeursDisponibles,
+      }));
+    } catch (error) {
+      setChauffeursParVehicule((ancien) => ({ ...ancien, [cle]: [] }));
+      toast.error(error instanceof Error
+        ? `Impossible de charger les chauffeurs du véhicule : ${error.message}`
+        : "Impossible de charger les chauffeurs du véhicule.");
+    } finally {
+      setChargementChauffeursParVehicule((ancien) => ({ ...ancien, [cle]: false }));
+    }
+  }, [API]);
 
   const charger = useCallback(async () => {
     const token = getToken();
 
     if (!API) {
+      setErreurChargementPrincipal("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error(
         "NEXT_PUBLIC_API_URL n'est pas configurée"
       );
@@ -611,6 +571,7 @@ function ChefServiceLogistiqueContent() {
     }
 
     if (!token) {
+      setErreurChargementPrincipal("Session expirée.");
       toast.error(
         "Session expirée. Veuillez vous reconnecter."
       );
@@ -620,6 +581,7 @@ function ChefServiceLogistiqueContent() {
     }
 
     setChargement(true);
+    setErreurChargementPrincipal(null);
 
     try {
       const headers = {
@@ -652,6 +614,7 @@ function ChefServiceLogistiqueContent() {
           headers,
           cache: "no-store",
         }),
+
       ]);
 
       const erreurs = [
@@ -687,29 +650,15 @@ function ChefServiceLogistiqueContent() {
         cRes.json(),
       ]);
 
-      setVehicules(
-        Array.isArray(vehiculesData)
-          ? vehiculesData
-          : []
-      );
+      const reponsesListes = [vehiculesData, reservationsData, maintenancesData, carburantData];
+      if (!reponsesListes.every(Array.isArray)) {
+        throw new Error("Format de réponse invalide pour les données du Service Logistique.");
+      }
 
-      setReservations(
-        Array.isArray(reservationsData)
-          ? reservationsData
-          : []
-      );
-
-      setMaintenances(
-        Array.isArray(maintenancesData)
-          ? maintenancesData
-          : []
-      );
-
-      setTransactions(
-        Array.isArray(carburantData)
-          ? carburantData
-          : []
-      );
+      setVehicules(vehiculesData as Vehicule[]);
+      setReservations(reservationsData as Reservation[]);
+      setMaintenances(maintenancesData as Maintenance[]);
+      setTransactions(carburantData as TransactionCarburant[]);
 
       try {
         const suiviRes = await fetch(
@@ -720,24 +669,17 @@ function ChefServiceLogistiqueContent() {
           }
         );
 
-        if (suiviRes.ok) {
-          const suiviData = await suiviRes.json();
-
-          setSuivisPeriodiques(
-            Array.isArray(suiviData)
-              ? suiviData
-              : []
-          );
-        }
+        if (!suiviRes.ok) throw new Error(`HTTP ${suiviRes.status}`);
+        const suiviData: unknown = await suiviRes.json();
+        if (!Array.isArray(suiviData)) throw new Error("Format de réponse invalide.");
+        setSuivisPeriodiques(suiviData as SuiviEntretienPeriodique[]);
+        setErreurSuivisPeriodiques(null);
       } catch (errorSuivi) {
-        console.warn(
-          "Suivi entretien périodique indisponible :",
-          errorSuivi
-        );
+        setSuivisPeriodiques([]);
+        setErreurSuivisPeriodiques(errorSuivi instanceof Error
+          ? errorSuivi.message : "Données indisponibles.");
       }
 
-      // Les contrats d'assurance sont lus sans déclencher de notification
-      // depuis le navigateur. Le job serveur J-7 sera ajouté côté backend.
       try {
         const assuranceRes = await fetch(`${API}/assurances`, {
           headers,
@@ -762,6 +704,12 @@ function ChefServiceLogistiqueContent() {
         "Erreur chargement Chef Service Logistique :",
         error
       );
+      setVehicules([]);
+      setReservations([]);
+      setMaintenances([]);
+      setTransactions([]);
+      setErreurChargementPrincipal(error instanceof Error
+        ? error.message : "Données principales indisponibles.");
 
       toast.error(
         "Impossible de charger les données du Service Logistique"
@@ -771,17 +719,217 @@ function ChefServiceLogistiqueContent() {
     }
   }, [API]);
 
-  // =======================================================
-  // CHARGEMENT INITIAL
-  // =======================================================
-
   useEffect(() => {
     charger();
   }, [charger]);
 
-  // =======================================================
-  // DISPONIBILITES
-  // =======================================================
+  useEffect(() => {
+    if (!API) return;
+    let actif = true;
+    let chargementEnCours = false;
+
+    const chargerNavettesPourRappel = async () => {
+      if (chargementEnCours) return;
+      const token = getToken();
+      if (!token) return;
+      chargementEnCours = true;
+      try {
+        const response = await fetch(`${API}/navettes-pact`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data: unknown = await response.json();
+        if (actif && Array.isArray(data)) navettesRappelRef.current = data as NavetteRappel[];
+      } catch {
+
+      } finally {
+        chargementEnCours = false;
+      }
+    };
+
+    const verifierDepart = () => {
+      if (!actif || navetteRappel) return;
+      const maintenant = Date.now();
+      const rappelable = navettesRappelRef.current
+        .filter((navette) => ["PLANIFIEE", "EN_COURS"].includes(String(navette.statut || "").toUpperCase()))
+        .map((navette) => ({ navette, depart: new Date(navette.dateDebut).getTime() }))
+        .filter(({ navette, depart }) => {
+          if (!Number.isFinite(depart) || depart > maintenant || maintenant - depart > 15 * 60_000) return false;
+          if (rappelsDeclenchesRef.current.has(navette.id)) return false;
+          try {
+            if (localStorage.getItem(`navette-pact-rappel-vu:${navette.id}`)) return false;
+          } catch {
+
+          }
+          return true;
+        })
+        .sort((a, b) => a.depart - b.depart);
+
+      if (rappelable.length > 0) {
+        const prochaine = rappelable[0].navette;
+        rappelsDeclenchesRef.current.add(prochaine.id);
+        setNavetteRappel(prochaine);
+      }
+    };
+
+    void chargerNavettesPourRappel();
+    const intervalleChargement = window.setInterval(() => void chargerNavettesPourRappel(), 30_000);
+    const intervalleHorloge = window.setInterval(verifierDepart, 1_000);
+    const auRetourOnglet = () => {
+      if (!document.hidden) {
+        void chargerNavettesPourRappel();
+        verifierDepart();
+      }
+    };
+    document.addEventListener("visibilitychange", auRetourOnglet);
+
+    return () => {
+      actif = false;
+      window.clearInterval(intervalleChargement);
+      window.clearInterval(intervalleHorloge);
+      document.removeEventListener("visibilitychange", auRetourOnglet);
+    };
+  }, [API, navetteRappel]);
+
+  const acquitterRappelNavette = (ouvrirListe: boolean) => {
+    if (navetteRappel) {
+      try {
+        localStorage.setItem(`navette-pact-rappel-vu:${navetteRappel.id}`, "1");
+      } catch {
+
+      }
+    }
+    setNavetteRappel(null);
+    if (ouvrirListe) setNavettesPactOuvert(true);
+  };
+
+  const missionHorsDelai24h = (reservation: Reservation) => {
+    if (reservation.horsDelai24h) return true;
+    if (reservation.zoneMission !== "HORS_TOAMASINA" || !reservation.dateDebut || !reservation.dateCreation) return false;
+    const debut = new Date(reservation.dateDebut).getTime();
+    const creation = new Date(reservation.dateCreation).getTime();
+    return Number.isFinite(debut) && Number.isFinite(creation) && debut - creation < 24 * 60 * 60 * 1000;
+  };
+
+  const missionDansFenetreCloture = (reservation: Reservation) => {
+    const fin = new Date(reservation.dateFin || "").getTime();
+    return Number.isFinite(fin) && Date.now() >= fin - 24 * 60 * 60 * 1000;
+  };
+
+  useEffect(() => {
+    const mission = reservations.find((reservation) =>
+      missionHorsDelai24h(reservation)
+      && !reservation.demandeUrgente
+      && !["A_REPROGRAMMER", "REFUSEE", "CLOTUREE"].includes(String(reservation.statut || "").toUpperCase())
+    );
+    if (mission) setAlerteUrgence((ancienne) => ancienne || mission);
+  }, [reservations]);
+
+  const ouvrirFormulaireUrgence = (reservation: Reservation) => {
+    setUrgenceReservation(reservation);
+    setUrgenceMotif(reservation.motifUrgence || "");
+    setAlerteUrgence(null);
+  };
+
+  const soumettreUrgenceChef = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!urgenceReservation || !urgenceMotif.trim() || !API) {
+      toast.error("Le motif de l'urgence est obligatoire.");
+      return;
+    }
+    const token = getToken();
+    if (!token) { toast.error("Session expirée."); return; }
+    setUrgenceEnCours(true);
+    try {
+      const response = await fetch(`${API}/reservations/${urgenceReservation.id}/urgence-chef-logistique`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ sousCategorie: urgenceSousCategorie, motifUrgence: urgenceMotif.trim() }),
+      });
+      if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
+      toast.success(`TKT-${String(urgenceReservation.id).padStart(5, "0")} suspendu pour urgence.`);
+      setUrgenceReservation(null);
+      await charger();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de suspendre la mission.");
+    } finally {
+      setUrgenceEnCours(false);
+    }
+  };
+
+  const demanderInspectionArrivee = async (reservation: Reservation): Promise<boolean> => {
+    if (!API) return false;
+    const token = getToken();
+    if (!token) { toast.error("Session expirée."); return false; }
+    setInspectionArriveeEnCours(reservation.id);
+    try {
+      const response = await fetch(`${API}/reservations/${reservation.id}/demande-avis-arrivee`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
+      toast.success(`Inspection d'arrivée demandée au mécanicien DID pour TKT-${String(reservation.id).padStart(5, "0")}.`);
+      await charger();
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de demander l'inspection d'arrivée.");
+      return false;
+    } finally { setInspectionArriveeEnCours(null); }
+  };
+
+  const cloturerApresAvisDid = async (reservation: Reservation) => {
+    if (!API) return;
+    const token = getToken();
+    if (!token) { toast.error("Session expirée."); return; }
+    setClotureApresAvisEnCours(reservation.id);
+    try {
+      const response = await fetch(`${API}/reservations/${reservation.id}/cloturer-apres-avis-did`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
+      toast.success(`TKT-${String(reservation.id).padStart(5, "0")} clôturé définitivement.`);
+      await charger();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de clôturer la mission.");
+    } finally { setClotureApresAvisEnCours(null); }
+  };
+
+  const gererClicClotureMission = async (reservation: Reservation, controleArrivee: Maintenance | null) => {
+    const immat = reservation.vehicule?.immatriculation || "XXX";
+    setPopupAttenteAvis({
+      reservationId: reservation.id,
+      immatriculation: immat,
+    });
+  };
+
+  const demanderAvisFinalDepuisPopup = async () => {
+    if (!popupAttenteAvis) return;
+    const reservation = reservations.find((item) => item.id === popupAttenteAvis.reservationId);
+    if (!reservation) {
+      toast.error("Mission introuvable. Actualisez la page.");
+      return;
+    }
+    if (await demanderInspectionArrivee(reservation)) setPopupAttenteAvis(null);
+  };
+
+  const cloturerMissionUrgente = async (reservation: Reservation) => {
+    if (!API) return;
+    const token = getToken();
+    if (!token) { toast.error("Session expirée."); return; }
+    setClotureUrgenceEnCours(reservation.id);
+    try {
+      const response = await fetch(`${API}/reservations/${reservation.id}/cloturer-urgence`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
+      toast.success(`TKT-${String(reservation.id).padStart(5, "0")} clôturé après suspension d'urgence.`);
+      await charger();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de clôturer la mission suspendue.");
+    } finally { setClotureUrgenceEnCours(null); }
+  };
 
   const chargerDisponibilites = useCallback(
     async (reservationId: number) => {
@@ -851,9 +999,6 @@ function ChefServiceLogistiqueContent() {
           })
         );
 
-        // Ce GET facultatif precise POURQUOI chaque vehicule n'est
-        // pas proposable. En cas d'erreur, la liste actuelle continue
-        // de fonctionner sans attribuer une fausse cause d'indisponibilite.
         try {
           const planningRes = await fetch(
             `${API}/reservations/${reservationId}/planning-vehicules`,
@@ -886,12 +1031,6 @@ function ChefServiceLogistiqueContent() {
           });
         }
 
-
-
-        // -------------------------------------------------
-        // REVALIDATION VEHICULE
-        // -------------------------------------------------
-
         setVehiculeAffecte(
           (ancien) => {
             const selection =
@@ -919,10 +1058,6 @@ function ChefServiceLogistiqueContent() {
             return copie;
           }
         );
-
-        // -------------------------------------------------
-        // REVALIDATION CHAUFFEUR
-        // -------------------------------------------------
 
         setChauffeurAffecte(
           (ancien) => {
@@ -977,10 +1112,6 @@ function ChefServiceLogistiqueContent() {
     [API]
   );
 
-  // =======================================================
-  // VERIFICATION AUTOMATIQUE DES DEMANDES
-  // =======================================================
-
   useEffect(() => {
     reservations
       .filter((r) =>
@@ -1004,12 +1135,6 @@ function ChefServiceLogistiqueContent() {
     chargerDisponibilites,
   ]);
 
-  // =======================================================
-  // TROUVER AVIS DID D'UNE RESERVATION
-  // =======================================================
-
-  // Plusieurs contrôles peuvent appartenir au MÊME ticket.
-  // Le contrôle le plus récent fait foi ; les anciens restent dans l'historique.
   const controlesPourReservation = (reservationId: number) =>
     maintenances
       .filter((m) =>
@@ -1022,12 +1147,14 @@ function ChefServiceLogistiqueContent() {
         String(b.id).localeCompare(String(a.id))
       );
 
+  const controlesArriveePourReservation = (reservationId: number) =>
+    maintenances
+      .filter((m) => (m.reservationId ?? m.reservation?.id) === reservationId
+        && String(m.natureIntervention || "").toLowerCase().includes("contrôle visuel après mission"))
+      .sort((a, b) => String(b.dateCreation || "").localeCompare(String(a.dateCreation || "")) || String(b.id).localeCompare(String(a.id)));
+
   const maintenancePourReservation = (reservationId: number) =>
     controlesPourReservation(reservationId)[0] ?? null;
-
-  // =======================================================
-  // AVIS DID
-  // =======================================================
 
   const maintenanceAvisRecu = (
     maintenance?: Maintenance | null
@@ -1051,9 +1178,6 @@ function ChefServiceLogistiqueContent() {
     );
   };
 
-  // L'avis technique est rattache au ticket via maintenance.reservation.id.
-  // Un avis defavorable ne doit jamais etre interprete comme favorable
-  // au seul motif que ses champs ont ete remplis.
   const avisDIDDefavorable = (maintenance?: Maintenance | null) => {
     if (!maintenance) return false;
     const decision = String(
@@ -1068,7 +1192,7 @@ function ChefServiceLogistiqueContent() {
     const decision = String(
       maintenance.decisionDID || maintenance.decisiondid || ""
     ).trim().toUpperCase();
-    // Compatibilite avec les anciens dossiers ou la decision est absente.
+
     return decision === "FAVORABLE" ||
       maintenance.statut === "EN_ATTENTE_VALIDATION_N1";
   };
@@ -1086,8 +1210,8 @@ function ChefServiceLogistiqueContent() {
     }
 
     return (
+      observationsDepuisFiche(maintenance) ||
       maintenance?.avisTexte?.trim() ||
-      maintenance?.observationsMecanicien?.trim() ||
       maintenance?.diagnosticVisuel?.trim() ||
       maintenance?.decisionDID?.trim() ||
       maintenance?.decisiondid?.trim() ||
@@ -1095,10 +1219,9 @@ function ChefServiceLogistiqueContent() {
     );
   };
 
-  // Le bouton d'ouverture du choix n'émet aucune notification : l'envoi a
-  // lieu seulement après validation du véhicule et du chauffeur de remplacement.
   const relancerControleDID = async (r: Reservation) => {
     const nouveauVehicule = Number(vehiculeAlternatif[r.id]);
+    const chauffeurId = Number(chauffeurAlternatif[r.id]);
     const dispo = disponibilites[r.id];
 
     if (!API || !getToken()) {
@@ -1114,6 +1237,14 @@ function ChefServiceLogistiqueContent() {
       toast.error("Choisissez un autre véhicule disponible pour les dates du ticket.");
       return;
     }
+    const chauffeursEligibles = chauffeursParVehicule[
+      cleChauffeursVehicule(r.id, nouveauVehicule)
+    ] || [];
+    if (r.besoinChauffeur && (!Number.isInteger(chauffeurId) ||
+        !chauffeursEligibles.some((c) => c.id === chauffeurId))) {
+      toast.error("Sélectionnez un chauffeur disponible pour ce véhicule et cette période.");
+      return;
+    }
     setRelanceDidEnCours((ancien) => ({ ...ancien, [r.id]: true }));
     try {
       const res = await fetch(`${API}/reservations/${r.id}/relancer-avis-did`, {
@@ -1125,6 +1256,7 @@ function ChefServiceLogistiqueContent() {
         },
         body: JSON.stringify({
           vehiculeId: nouveauVehicule,
+          chauffeurId: r.besoinChauffeur ? chauffeurId : null,
         }),
       });
       if (!res.ok) {
@@ -1134,7 +1266,7 @@ function ChefServiceLogistiqueContent() {
       setChoixAlternatifOuvert((ancien) => ({ ...ancien, [r.id]: false }));
       setVehiculeAlternatif((ancien) => ({ ...ancien, [r.id]: "" }));
       setChauffeurAlternatif((ancien) => ({ ...ancien, [r.id]: "" }));
-      // Les anciennes disponibilités et sélections ne doivent plus être utilisées.
+
       setDisponibilites((ancien) => {
         const suivant = { ...ancien };
         delete suivant[r.id];
@@ -1152,10 +1284,6 @@ function ChefServiceLogistiqueContent() {
       setRelanceDidEnCours((ancien) => ({ ...ancien, [r.id]: false }));
     }
   };
-
-  // =======================================================
-  // DEMANDER AVIS DID
-  // =======================================================
 
   const demanderAvisDID = async (
   reservation: Reservation
@@ -1178,10 +1306,6 @@ function ChefServiceLogistiqueContent() {
     return;
   }
 
-  // =====================================================
-  // 1. VERIFIER LA DISPONIBILITE
-  // =====================================================
-
   const dispo =
     disponibilites[
       reservation.id
@@ -1195,32 +1319,12 @@ function ChefServiceLogistiqueContent() {
     return;
   }
 
-  // =====================================================
-  // 2. RECUPERER LE VEHICULE SELECTIONNE
-  // =====================================================
-
   const vehiculeSelectionne =
     vehiculeAffecte[
       reservation.id
     ];
 
-  console.log(
-    "DEBUG DEMANDE AVIS DID",
-    {
-      reservationId:
-        reservation.id,
-
-      vehiculeSelectionne,
-
-      vehiculeAffecte,
-
-      dispo,
-    }
-  );
-
-  // =====================================================
-  // 3. VERIFIER LE VEHICULE
-  // =====================================================
+  
 
   if (
     vehiculeSelectionne ===
@@ -1256,11 +1360,6 @@ function ChefServiceLogistiqueContent() {
     return;
   }
 
-  // =====================================================
-  // 4. VERIFIER QUE LE VEHICULE EST BIEN DANS
-  //    LES VEHICULES DISPONIBLES
-  // =====================================================
-
   const vehiculesDisponibles = [
     ...(
       dispo.vehiculesCorrespondants ||
@@ -1295,23 +1394,13 @@ function ChefServiceLogistiqueContent() {
     return;
   }
 
-  // Le backend choisit et enregistre le chauffeur compatible à la confirmation.
-
-  // =====================================================
-  // 6. ENVOI DE LA DEMANDE AU BACKEND
-  // =====================================================
+  const chauffeurSelectionne = chauffeurAffecte[reservation.id] || "";
+  const chauffeurId = Number(chauffeurSelectionne);
+  const chauffeursDuVehicule = chauffeursParVehicule[cleChauffeursVehicule(reservation.id, vehiculeId)] || [];
+  const chauffeurChoisi = chauffeursDuVehicule.find((chauffeur) => String(chauffeur.id) === chauffeurSelectionne);
 
   try {
-    console.log(
-      "ENVOI AVIS DID →",
-      {
-        reservationId:
-          reservation.id,
-
-        vehiculeId,
-
-      }
-    );
+    
 
     const res =
       await fetch(
@@ -1335,14 +1424,15 @@ function ChefServiceLogistiqueContent() {
             JSON.stringify({
               vehiculeId:
                 vehiculeId,
-
+              chauffeurId: reservation.besoinChauffeur && chauffeurId > 0
+                ? chauffeurId
+                : null,
+              chauffeurMatricule: reservation.besoinChauffeur
+                ? chauffeurChoisi?.matricule || null
+                : null,
             }),
         }
       );
-
-    // ===================================================
-    // 7. TRAITER LA REPONSE
-    // ===================================================
 
     if (!res.ok) {
       const message =
@@ -1377,17 +1467,9 @@ function ChefServiceLogistiqueContent() {
       );
     }
 
-    // ===================================================
-    // 8. SUCCES
-    // ===================================================
-
     toast.success(
       "Demande d'avis envoyée au mécanicien DID."
     );
-
-    // ===================================================
-    // 9. NETTOYER LES SELECTIONS LOCALES
-    // ===================================================
 
     setVehiculeAffecte(
       (ancien) => {
@@ -1431,10 +1513,6 @@ function ChefServiceLogistiqueContent() {
       }
     );
 
-    // ===================================================
-    // 10. RECHARGER LES DONNEES
-    // ===================================================
-
     await charger();
 
   } catch (
@@ -1453,10 +1531,6 @@ function ChefServiceLogistiqueContent() {
   }
 };
 
-  // =======================================================
-  // REFUS
-  // =======================================================
-
   const ouvrirRefus = (
     reservation: Reservation
   ) => {
@@ -1472,29 +1546,13 @@ function ChefServiceLogistiqueContent() {
     setMotifRefusSaisi("");
   };
 
-  // =======================================================
-  // DECISION RESERVATION
-  // =======================================================
-
   const decisionReservation =
     async (
       reservation: Reservation,
       statut: DecisionReservation,
       motifRefus?: string
     ) => {
-      console.log(
-        "1ERE VALIDATION / DECISION RESERVATION",
-        {
-          reservationId: reservation.id,
-          statutDemande: statut,
-          besoinChauffeur: reservation.besoinChauffeur,
-          vehiculeReservation: reservation.vehicule?.id ?? null,
-          chauffeurReservation: reservation.chauffeur?.id ?? null,
-          vehiculeLocal: vehiculeAffecte[reservation.id] ?? null,
-          chauffeurLocal: chauffeurAffecte[reservation.id] ?? null,
-          disponibilite: disponibilites[reservation.id] ?? null,
-        }
-      );
+      
 
       if (!API) {
         return;
@@ -1510,34 +1568,12 @@ function ChefServiceLogistiqueContent() {
         return;
       }
 
-      // ===================================================
-      // VALIDATION N1
-      // ===================================================
-
       let vehiculeIdDecision: number | null = null;
 
       if (
         statut ===
         "VALIDEE_N1"
       ) {
-        // -------------------------------------------------
-        // RG-01
-        // -------------------------------------------------
-
-        if (
-          reservation.demandeUrgente &&
-          !reservation.motifUrgence?.trim()
-        ) {
-          toast.error(
-            "Une demande urgente doit obligatoirement comporter un motif d'urgence."
-          );
-
-          return;
-        }
-
-        // -------------------------------------------------
-        // DISPONIBILITE
-        // -------------------------------------------------
 
         const dispo =
           disponibilites[
@@ -1551,10 +1587,6 @@ function ChefServiceLogistiqueContent() {
 
           return;
         }
-
-        // -------------------------------------------------
-        // VEHICULE
-        // -------------------------------------------------
 
         const vehiculeSelectionne =
           vehiculeAffecte[
@@ -1602,11 +1634,9 @@ function ChefServiceLogistiqueContent() {
           vehiculeSelectionne
         );
 
-        // Le backend conserve ou réaffecte automatiquement un chauffeur compatible.
-
-        // -------------------------------------------------
-        // AVIS DID OBLIGATOIRE
-        // -------------------------------------------------
+        const chauffeurSelectionne = reservation.besoinChauffeur
+          ? chauffeurAffecte[reservation.id] || (reservation.chauffeur?.id ? String(reservation.chauffeur.id) : "")
+          : "";
 
         const maintenanceDID =
           maintenancePourReservation(
@@ -1629,10 +1659,6 @@ function ChefServiceLogistiqueContent() {
           return;
         }
       }
-
-      // ===================================================
-      // REFUS
-      // ===================================================
 
       if (
         statut ===
@@ -1679,6 +1705,11 @@ function ChefServiceLogistiqueContent() {
           ? vehiculeIdDecision
           : null,
 
+      chauffeurId:
+        statut === "VALIDEE_N1" && reservation.besoinChauffeur
+          ? Number(chauffeurAffecte[reservation.id] || reservation.chauffeur?.id || 0)
+          : null,
+
       motifRefus:
         statut === "REFUSEE"
           ? motifRefus
@@ -1714,6 +1745,13 @@ function ChefServiceLogistiqueContent() {
           toast.success(
             "Validation N°1 enregistrée. La demande est maintenant transmise au Chef DGAL."
           );
+
+          setPopupOrdreMission({
+            ...reservation,
+
+            statut:
+              "VALIDEE_N1",
+          });
         } else {
           toast.success(
             "Demande refusée."
@@ -1793,10 +1831,6 @@ function ChefServiceLogistiqueContent() {
       }
     };
 
-  // =======================================================
-  // CONFIRMER REFUS
-  // =======================================================
-
   const confirmerRefus = async () => {
     if (!reservationARefuser) {
       return;
@@ -1819,13 +1853,9 @@ function ChefServiceLogistiqueContent() {
     );
   };
 
-  // =======================================================
-  // FILTRE RESERVATIONS
-  // =======================================================
-
   const reservationsFiltrees =
     useMemo(() => {
-      return reservations.filter(
+      return reservations.filter((r) => !releveAssistante(r)).filter(
         (r) => {
           const statutOk =
             filtreStatutReservation === "TOUS" ||
@@ -1887,30 +1917,38 @@ function ChefServiceLogistiqueContent() {
       filtreVehicule,
     ]);
 
-  // =======================================================
-  // MAINTENANCES
-  // =======================================================
-
   const maintenancesAvisRecus =
     maintenances.filter((m) =>
       maintenanceAvisRecu(m)
     );
 
-  // Uniquement les signalements des chauffeurs et les entretiens périodiques.
-  // Les avis techniques DID liés aux tickets restent consultables dans les tickets,
-  // sans être affichés une seconde fois comme demandes d'entretien.
+  const origineEntretien = (m: Maintenance) =>
+    String(m.origineDemande ?? "").trim().toUpperCase();
+
+  const libelleOrigineEntretien = (m: Maintenance) => {
+    const origine = origineEntretien(m);
+    if (origine === "MECANICIEN_DID") return "Mécanicien DID";
+    if (origine === "ASSISTANT_DIRECTION") return "Assistant de direction";
+    return "Chauffeur";
+  };
+
   const estEntretienPeriodique = (m: Maintenance): boolean =>
     String(m.natureIntervention ?? "").toUpperCase().includes("[PERIODIQUE_5000]") ||
-    ["PERIODIQUE", "ENTRETIEN_PERIODIQUE"].includes(
-      String(m.origineDemande ?? "").trim().toUpperCase()
-    );
+    ["PERIODIQUE", "ENTRETIEN_PERIODIQUE"].includes(origineEntretien(m));
 
   const demandesEntretien = maintenances
-    .filter((m) => m.origineDemande === "CHAUFFEUR" || estEntretienPeriodique(m))
+    .filter((m) =>
+      ["CHAUFFEUR", "MECANICIEN_DID", "ASSISTANT_DIRECTION"].includes(origineEntretien(m)) ||
+      estEntretienPeriodique(m)
+    )
     .sort((a, b) => String(b.dateCreation ?? "").localeCompare(String(a.dateCreation ?? "")));
 
-  // Le suivi kilométrique peut signaler un entretien périodique avant même
-  // qu'un dossier de maintenance soit ouvert : il est affiché en consultation.
+  const libelleStatutDemandeEntretien = (statut: string) => {
+    if (["ENTRETIEN_TERMINE", "CLOTUREE"].includes(statut)) return "Terminé";
+    if (["REFUSEE", "ENTRETIEN_ANNULE"].includes(statut)) return "Annulé";
+    return "En cours";
+  };
+
   const suivisPeriodiquesASurveiller = suivisPeriodiques.filter((s) => {
     const jours = joursAvantDate(dateEntretienPrevue(s));
     const procheDate = jours != null && jours <= 7;
@@ -1920,8 +1958,6 @@ function ChefServiceLogistiqueContent() {
     ) || procheDate || procheKm || s.entretienPeriodiqueOuvert === true;
   });
 
-  // Une seule police courante par véhicule : on retient la date d'échéance
-  // la plus récente pour éviter d'alerter sur une ancienne police renouvelée.
   const assurancesCourantes = new Map<number, Assurance>();
   for (const assurance of assurances) {
     const id = assurance.vehicule?.id;
@@ -1939,7 +1975,6 @@ function ChefServiceLogistiqueContent() {
     })
     .sort((a, b) => (dateAssurance(a) ?? "").localeCompare(dateAssurance(b) ?? ""));
 
-  // Chef : la décision est possible uniquement pour une demande d'entretien.
   const deciderEntretien = async (m: Maintenance, approuvee: boolean) => {
     const token = getToken();
     if (!token || !API || decisionEntretienEnCours) return;
@@ -1968,8 +2003,6 @@ function ChefServiceLogistiqueContent() {
     }
   };
 
-  // Transmission des dossiers périodiques créés automatiquement au seuil 5 000 km.
-  // Le backend doit exposer cette route et enregistrer la notification au DID.
   const transmettrePeriodiqueAuDid = async (m: Maintenance) => {
     if (!API || !getToken() || actionEntretienEnCours) return;
     setActionEntretienEnCours(m.id);
@@ -1993,8 +2026,6 @@ function ChefServiceLogistiqueContent() {
     }
   };
 
-  // La confirmation du mécanicien (ENTRETIEN_TERMINE) ne clôture pas le dossier.
-  // Seul le Chef du Service Logistique demande la clôture, contrôlée en backend.
   const cloturerEntretien = async (m: Maintenance) => {
     if (!API || !getToken() || actionEntretienEnCours || m.statut !== "ENTRETIEN_TERMINE" ||
         !m.compteRenduEntretien?.trim()) return;
@@ -2019,9 +2050,25 @@ function ChefServiceLogistiqueContent() {
     }
   };
 
-  // =======================================================
-  // KPI
-  // =======================================================
+  const annulerEntretien = async (m: Maintenance) => {
+    if (!API || !getToken() || actionEntretienEnCours) return;
+    if (!window.confirm("Annuler cette demande d'entretien ? Cette action enregistrera sa date de clôture.")) return;
+    setActionEntretienEnCours(m.id);
+    try {
+      const res = await fetch(`${API}/maintenances/${m.id}/annuler-entretien`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ motif: "Annulée par le Chef du Service Logistique." }),
+      });
+      if (!res.ok) throw new Error((await res.text().catch(() => "")) || `Erreur HTTP ${res.status}`);
+      toast.success("Demande d'entretien annulée.");
+      await charger();
+    } catch (erreur) {
+      toast.error(erreur instanceof Error ? erreur.message : "Annulation impossible.");
+    } finally {
+      setActionEntretienEnCours(null);
+    }
+  };
 
   const disponibles =
     vehicules.filter(
@@ -2045,16 +2092,6 @@ function ChefServiceLogistiqueContent() {
         r.statut ===
         "EN_ATTENTE"
     );
-
-  const reservationsUrgentes =
-    reservationsEnAttente.filter(
-      (r) =>
-        r.demandeUrgente
-    ).length;
-
-  // =======================================================
-  // CARBURANT CONSULTATION
-  // =======================================================
 
   const moisCourant =
     new Date()
@@ -2118,10 +2155,6 @@ function ChefServiceLogistiqueContent() {
       }
     );
 
-  // =======================================================
-  // EXPORT CSV
-  // =======================================================
-
   const exporterCsv = (
     nom: string,
     lignes: string[][]
@@ -2180,122 +2213,21 @@ function ChefServiceLogistiqueContent() {
     );
   };
 
-  // =======================================================
-  // EXPORT RESERVATIONS
-  // =======================================================
-
   const exporterReservations =
     () => {
       exporterCsv(
         "demandes_vehicules",
         [
-          [
-            "ID",
-            "Bénéficiaire",
-            "Matricule",
-            "Entité",
-            "Téléphone",
-            "Point de départ",
-            "Destination",
-            "Début",
-            "Fin",
-            "Motif",
-            "Passagers",
-            "Type véhicule souhaité",
-            "Chauffeur demandé",
-            "Véhicule affecté",
-            "Chauffeur affecté",
-            "Urgente",
-            "Motif urgence",
-            "Statut",
-            "Motif refus",
-            "Validation N1 par",
-            "Date validation N1",
-            "Avis DID",
-          ],
-
-          ...reservationsFiltrees.map(
-            (r) => [
-              String(r.id),
-
-              nomBeneficiaire(r),
-
-              r.demandeurMatricule ||
-                "—",
-
-              r.demandeurEntite ||
-                "—",
-
-              r.demandeurTelephone ||
-                "—",
-
-              r.pointDepart ||
-                "—",
-
-              r.destination ||
-                "—",
-
-              formaterDate(
-                r.dateDebut
-              ),
-
-              formaterDate(
-                r.dateFin
-              ),
-
-              r.motif ||
-                "",
-
-              String(
-                r.nombrePassagers ??
-                  ""
-              ),
-
-              r.typeVehiculeSouhaite ||
-                "—",
-
-              r.besoinChauffeur
-                ? "Oui"
-                : "Non",
-
-              r.vehicule
-                ?.immatriculation ||
-                "Non affecté",
-
-              r.chauffeur
-                ? nomChauffeur(
-                    r.chauffeur
-                  )
-                : "Non affecté",
-
-              r.demandeUrgente
-                ? "Oui"
-                : "Non",
-
-              r.motifUrgence ||
-                "",
-
-              r.statut,
-
-              r.motifRefus ||
-                "",
-
-              nomUtilisateur(
-                r.validationN1Par
-              ),
-
-              r.dateValidationN1
-                ? formaterDate(
-                    r.dateValidationN1
-                  )
-                : "",
-
-              avisDIDPourReservation(
-                r.id
-              ) ||
-                "En attente",
-            ]
-          ),
+          ["Ticket", "Créé le", "Bénéficiaire", "Objet", "Destination", "Véhicule", "Statut"],
+          ...reservationsFiltrees.map((r) => [
+            `TKT-${String(r.id).padStart(5, "0")}`,
+            formaterDate(r.dateCreation),
+            nomBeneficiaire(r),
+            r.motif || "—",
+            r.destination || "—",
+            r.vehicule?.immatriculation || "—",
+            r.statut || "—",
+          ]),
         ]
       );
 
@@ -2303,10 +2235,6 @@ function ChefServiceLogistiqueContent() {
         "Export des demandes généré."
       );
     };
-
-  // =======================================================
-  // EXPORT CARBURANT
-  // =======================================================
 
   const exporterCarburant =
     () => {
@@ -2352,7 +2280,6 @@ function ChefServiceLogistiqueContent() {
       );
     };
 
-  // Les données sont celles déjà consultables dans cet espace : aucun nouvel appel API.
   const preparerRapportCarburant = (): RapportSpat => ({
     titre: "ÉTAT DES OPÉRATIONS DE CARBURANT",
     sousTitre: "Consultation des dotations et consommations",
@@ -2381,7 +2308,7 @@ function ChefServiceLogistiqueContent() {
 
   const preparerRapportEntretiensRecus = (): RapportSpat => ({
     titre: "ENTRETIENS CHAUFFEURS ET PÉRIODIQUES",
-    sousTitre: "Signalements des chauffeurs et échéances d'entretien périodique",
+    sousTitre: "Demandes des chauffeurs et mécaniciens, et échéances périodiques",
     nomFichier: "spat_demandes_entretien_recues",
     orientation: "landscape",
     champsEntete: [{ libelle: "Service", valeur: "Service Logistique" }],
@@ -2399,7 +2326,9 @@ function ChefServiceLogistiqueContent() {
           ticketId == null ? `Entretien ${m.id}` : `TKT-${String(ticketId).padStart(5, "0")}`,
           m.dateCreation ? formaterDate(m.dateCreation) : "—",
           m.vehicule?.immatriculation || "—", m.demandeurEntretien || "—",
-          estEntretienPeriodique(m) ? "Entretien périodique" : "Chauffeur",
+          estEntretienPeriodique(m)
+            ? "Entretien périodique"
+            : libelleOrigineEntretien(m),
           m.natureIntervention, m.statut, m.motifRefusEntretien || "—",
         ];
       }),
@@ -2438,10 +2367,6 @@ function ChefServiceLogistiqueContent() {
     }],
   });
 
-  // =======================================================
-  // CHARGEMENT
-  // =======================================================
-
   if (chargement) {
     return (
       <div
@@ -2453,7 +2378,8 @@ function ChefServiceLogistiqueContent() {
             "#f3f4f6",
         }}
       >
-        <EnTete />
+        <EnTete afficherSignalement={false} />
+        {erreurChargementPrincipal && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Les données principales du Service Logistique ne sont pas disponibles : {erreurChargementPrincipal}. Les listes et indicateurs sont masqués jusqu’au prochain chargement réussi.</div>}
 
         <div
           style={{
@@ -2468,10 +2394,6 @@ function ChefServiceLogistiqueContent() {
     );
   }
 
-  // =======================================================
-  // RENDU
-  // =======================================================
-
   return (
     <div
       style={{
@@ -2482,7 +2404,205 @@ function ChefServiceLogistiqueContent() {
           "#f3f4f6",
       }}
     >
-      <EnTete />
+      <EnTete afficherSignalement={false} />
+      {navetteRappel && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="navette-rappel-titre"
+          style={{ position: "fixed", inset: 0, zIndex: 2200, background: "rgba(15,23,42,.48)", display: "grid", placeItems: "center", padding: 18 }}
+        >
+          <section style={{ width: "min(540px, 100%)", display: "grid", gap: 14, padding: 24, borderRadius: 16, background: "#fff", border: "2px solid #f59e0b", boxShadow: "0 24px 70px rgba(15,23,42,.32)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 44, height: 44, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 12, color: "#b45309", background: "#fffbeb" }}><Clock size={23} /></span>
+              <div>
+                <h2 id="navette-rappel-titre" style={{ margin: 0, color: "#92400e", fontSize: 20 }}>Départ de la navette PACT</h2>
+                <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>Le départ prévu est arrivé. Veuillez vérifier la prise en charge des parapheurs.</p>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8, padding: 14, borderRadius: 10, background: "#fffbeb", color: "#334155", fontSize: 14 }}>
+              <strong>{navetteRappel.motif}</strong>
+              <span>Départ : {new Date(navetteRappel.dateDebut).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" })}</span>
+              <span>Statut : {String(navetteRappel.statut || "À vérifier").replaceAll("_", " ")}</span>
+              {navetteRappel.vehicule?.immatriculation && <span>Véhicule : {navetteRappel.vehicule.immatriculation}</span>}
+              {navetteRappel.chauffeur && <span>Chauffeur : {[navetteRappel.chauffeur.prenom, navetteRappel.chauffeur.nom].filter(Boolean).join(" ") || "Affecté"}</span>}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" className="btn-spat btn-neutre" onClick={() => acquitterRappelNavette(false)}>Rappel effectué</button>
+              <button type="button" className="btn-spat btn-orange" onClick={() => acquitterRappelNavette(true)}>Voir les navettes</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {alerteUrgence && (
+        <div role="alertdialog" aria-modal="true" style={{ position: "fixed", top: 82, left: "50%", transform: "translateX(-50%)", zIndex: 1800, width: "min(620px, calc(100vw - 32px))", padding: 18, borderRadius: 12, background: "#fff7ed", border: "2px solid #f59e0b", boxShadow: "0 18px 45px rgba(15,23,42,.22)" }}>
+          <strong style={{ color: "#9a3412", fontSize: 17 }}>Contrainte de délai détectée</strong>
+          <p style={{ margin: "10px 0", color: "#431407", lineHeight: 1.5 }}>
+            La mission <b>TKT-{String(alerteUrgence.id).padStart(5, "0")}</b> commence moins de 24 heures après sa création. Une urgence motivée est nécessaire pour poursuivre.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button type="button" className="btn-spat btn-neutre" onClick={() => setAlerteUrgence(null)}>Fermer</button>
+            <button type="button" className="btn-spat btn-orange" onClick={() => { setTicketOuvertId(alerteUrgence.id); ouvrirFormulaireUrgence(alerteUrgence); }}>Urgence</button>
+          </div>
+        </div>
+      )}
+      {urgenceReservation && (
+        <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1750, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", padding: 16 }}>
+          <form onSubmit={soumettreUrgenceChef} style={{ width: "min(560px, 100%)", display: "grid", gap: 14, padding: 22, borderRadius: 14, background: "white", boxShadow: "0 18px 45px rgba(15,23,42,.25)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <h2 style={{ margin: 0, color: "#9a3412", fontSize: 19 }}>Urgence — TKT-{String(urgenceReservation.id).padStart(5, "0")}</h2>
+              <button type="button" onClick={() => setUrgenceReservation(null)} style={{ border: 0, background: "transparent", cursor: "pointer" }}><XCircle size={19} /></button>
+            </div>
+            <label style={labelStyle}>Sous-catégorie *<select required value={urgenceSousCategorie} onChange={(event) => setUrgenceSousCategorie(event.target.value)} style={inputStyle}><option value="URGENCE_OPERATIONNELLE">Urgence opérationnelle</option><option value="REUNION_IMPREVUE">Réunion imprévue</option><option value="AUTRE">Autre urgence justifiée</option></select></label>
+            <label style={labelStyle}>Motif de l&apos;urgence *<textarea required maxLength={1000} rows={5} value={urgenceMotif} onChange={(event) => setUrgenceMotif(event.target.value)} style={inputStyle} placeholder="Expliquez la raison de l'urgence" /></label>
+            <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>La mission actuelle sera suspendue et marquée « À reprogrammer ». Le véhicule concerné reste identifié dans le ticket.</p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}><button type="button" className="btn-spat btn-neutre" disabled={urgenceEnCours} onClick={() => setUrgenceReservation(null)}>Annuler</button><button type="submit" className="btn-spat btn-orange" disabled={urgenceEnCours}>{urgenceEnCours ? "Suspension..." : "Suspendre la mission"}</button></div>
+          </form>
+        </div>
+      )}
+      {popupAttenteAvis && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="popup-attente-avis-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1800,
+            padding: 16,
+          }}
+          onClick={() => setPopupAttenteAvis(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: 14,
+              padding: 24,
+              maxWidth: 520,
+              width: "100%",
+              boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
+              border: "1px solid #cbd5e1",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Clock size={22} color="#d97706" />
+                <h3 id="popup-attente-avis-title" style={{ margin: 0, fontSize: 18, color: "#1e293b", fontWeight: 700 }}>
+                  Clôture de la mission
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPopupAttenteAvis(null)}
+                aria-label="Fermer"
+                style={{ border: 0, background: "transparent", color: "#64748b", cursor: "pointer" }}
+              >
+                <X size={19} />
+              </button>
+            </div>
+            <p style={{ margin: "14px 0 20px", fontSize: 15, color: "#334155", lineHeight: 1.55 }}>
+              Avant de clôturer la mission (TKT-{String(popupAttenteAvis.reservationId).padStart(5, "0")}), veuillez demander une inspection finale au mécanicien pour le véhicule-{popupAttenteAvis.immatriculation}.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setPopupAttenteAvis(null)}
+                className="btn-spat btn-neutre"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => void demanderAvisFinalDepuisPopup()}
+                className="btn-spat btn-bleu"
+              >
+                Demander l&apos;avis final
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {navettesPactOuvert && (
+        <div
+          style={modalOverlayStyle}
+          onClick={() => setNavettesPactOuvert(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="navettes-pact-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 720,
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "#fff",
+              borderRadius: 16,
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 24px 60px rgba(15,23,42,.22)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 11,
+                padding: "18px 22px",
+                borderBottom: "1px solid #e2e8f0",
+                background: "linear-gradient(135deg, #f8fafc, #eff6ff)",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: "#dbeafe",
+                  color: "#1d4ed8",
+                }}
+              >
+                <Route size={18} />
+              </span>
+              <h2
+                id="navettes-pact-title"
+                style={{ margin: 0, fontSize: 17, color: "#0f172a" }}
+              >
+                Navettes parapheurs PACT
+              </h2>
+              <button
+                type="button"
+                onClick={() => setNavettesPactOuvert(false)}
+                aria-label="Fermer"
+                style={{
+                  marginLeft: "auto",
+                  border: 0,
+                  background: "transparent",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 22, overflowY: "auto" }}>
+              <NavettesPact onPlanifie={() => void charger()} />
+            </div>
+          </div>
+        </div>
+      )}
+      {erreurChargementPrincipal && <div role="alert" style={{ margin: "12px 24px", padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8 }}>Les données principales du Service Logistique ne sont pas disponibles : {erreurChargementPrincipal}. Les listes et indicateurs sont masqués jusqu’au prochain chargement réussi.</div>}
 
       <style>{`
         .spat-ticket-details-neutre div,
@@ -2515,9 +2635,6 @@ function ChefServiceLogistiqueContent() {
               "0 auto",
           }}
         >
-          {/* =================================================
-              HEADER
-          ================================================= */}
 
           <div
             style={
@@ -2535,27 +2652,17 @@ function ChefServiceLogistiqueContent() {
                 Chef du Service Logistique
               </h2>
 
-              
             </div>
 
             <button
               type="button"
-              onClick={charger}
-              style={
-                boutonSecondaire
-              }
+              className="btn-spat btn-bleu"
+              onClick={() => setNavettesPactOuvert(true)}
             >
-              <RefreshCw
-                size={15}
-              />
-
-              Actualiser
+              <Route size={15} /> Navettes parapheurs PACT
             </button>
-          </div>
 
-          {/* =================================================
-              KPI
-          ================================================= */}
+          </div>
 
           <div
             style={
@@ -2570,7 +2677,6 @@ function ChefServiceLogistiqueContent() {
               }
               label="Disponibilité flotte"
               valeur={`${tauxDisponibilite}%`}
-              sousTexte={`${disponibles} / ${vehicules.length} véhicules disponibles`}
             />
 
             <CarteKpi
@@ -2583,12 +2689,6 @@ function ChefServiceLogistiqueContent() {
               valeur={String(
                 reservationsEnAttente.length
               )}
-              sousTexte={`${reservationsUrgentes} urgente${
-                reservationsUrgentes >
-                1
-                  ? "s"
-                  : ""
-              }`}
             />
 
             <CarteKpi
@@ -2601,7 +2701,6 @@ function ChefServiceLogistiqueContent() {
               valeur={String(
                 maintenancesAvisRecus.length
               )}
-              sousTexte="Prêts pour validation N°1"
             />
 
             <CarteKpi
@@ -2614,12 +2713,9 @@ function ChefServiceLogistiqueContent() {
               valeur={`${formatNombre(
                 totalConsommationMois
               )} L`}
-              sousTexte="Consommation du mois"
             />
           </div>
 
-          {/* Navigation exclusive : les tickets, le carburant, les entretiens et l'assurance
-              disposent chacun de leur propre espace de lecture. */}
           <nav aria-label="Rubriques du Service Logistique" style={navigationModulesStyle}>
             <button
               type="button"
@@ -2650,6 +2746,15 @@ function ChefServiceLogistiqueContent() {
             </button>
             <button
               type="button"
+              aria-pressed={panneauGestion === "INCIDENTS"}
+              onClick={() => setPanneauGestion("INCIDENTS")}
+              style={styleOnglet(panneauGestion === "INCIDENTS", "ROUGE")}
+            >
+              <AlertTriangle size={17} />
+              Incidents à valider / planifier
+            </button>
+            <button
+              type="button"
               aria-pressed={panneauGestion === "ASSURANCE"}
               onClick={() => setPanneauGestion("ASSURANCE")}
               style={styleOnglet(panneauGestion === "ASSURANCE", "ROUGE")}
@@ -2659,10 +2764,16 @@ function ChefServiceLogistiqueContent() {
             </button>
           </nav>
 
+          {panneauGestion === "INCIDENTS" && (
+            <section style={{ ...cardStyle, marginBottom: 25 }}>
+              <SignalementsIncidentsWorkflow mode="LOGISTIQUE" />
+            </section>
+          )}
+
           {panneauGestion === "ASSURANCE" && (
             <section style={{ ...cardStyle, marginBottom: 25 }}>
               <h3 style={{ margin: "0 0 9px", color: "#111827" }}>Assurances — échéances dans 7 jours ou dépassées</h3>
-              
+
               {erreurAssurances ? (
                 <p role="alert" style={{ color: "#991b1b" }}>Assurances indisponibles : {erreurAssurances}</p>
               ) : assurancesAEcheance.length === 0 ? (
@@ -2690,11 +2801,11 @@ function ChefServiceLogistiqueContent() {
 
           {panneauGestion === "ENTRETIEN" && (
             <div>
-          {/* Entretien : uniquement signalements chauffeur et entretiens périodiques. */}
+
           <section style={{marginBottom: 26}}>
             <div style={{ ...sectionHeaderStyle, marginTop: 0, padding: "13px 16px", borderRadius: 10, background: "#ffffff" }}>
               <h3 style={{ margin: 0, color: "#1e293b", fontSize: 16 }}>
-                Entretiens demandés par les chauffeurs et entretiens périodiques ({demandesEntretien.filter(m => m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN").length} dossier(s) en attente)
+                Demandes d&apos;entretien des chauffeurs et mécaniciens, et entretiens périodiques ({demandesEntretien.filter(m => m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN").length} dossier(s) en attente)
               </h3>
               <BoutonsRapportSpat preparerRapport={preparerRapportEntretiensRecus} />
             </div>
@@ -2702,7 +2813,11 @@ function ChefServiceLogistiqueContent() {
               <h4 style={{ margin: "0 0 10px", color: "#111827", fontSize: 15 }}>
                 Suivi des entretiens périodiques (kilométrage)
               </h4>
-              {suivisPeriodiquesASurveiller.length === 0 ? (
+              {erreurSuivisPeriodiques ? (
+                <p role="alert" style={{ color: "#b91c1c", margin: 0 }}>
+                  Impossible de charger les échéances périodiques ({erreurSuivisPeriodiques}).
+                </p>
+              ) : suivisPeriodiquesASurveiller.length === 0 ? (
                 <p style={{ color: "#64748b", margin: 0 }}>
                   Aucune échéance périodique à surveiller actuellement.
                 </p>
@@ -2717,8 +2832,9 @@ function ChefServiceLogistiqueContent() {
                       <div style={{ marginTop: 5, fontSize: 13, display: "flex", flexWrap: "wrap", gap: 12 }}>
                         <span>État : {s.statut === "A_FAIRE" ? "Entretien à effectuer" : s.statut === "BIENTOT" ? "Échéance proche" : s.statut === "ENTRETIEN_OUVERT" ? "Dossier déjà ouvert" : s.statut || "—"}</span>
                         <span>Dernier kilométrage : {s.dernierKilometrageConnu != null ? `${formatNombre(s.dernierKilometrageConnu)} km` : "—"}</span>
-                        <span>Dernier entretien : {s.kilometrageDernierEntretien != null ? `${formatNombre(s.kilometrageDernierEntretien)} km` : "—"}</span>
-                        <span>Prochaine échéance : {s.prochaineEcheanceKm != null ? `${formatNombre(s.prochaineEcheanceKm)} km` : "—"}</span>
+                        <span>Compteur depuis entretien périodique : {s.kilometrageDepuisDernierEntretien != null ? `${formatNombre(s.kilometrageDepuisDernierEntretien)} / ${formatNombre(s.prochaineEcheanceKm ?? 5000)} km` : "—"}</span>
+                        <span>Compteur de cycle au dernier entretien : {s.kilometrageDernierEntretien != null ? `${formatNombre(s.kilometrageDernierEntretien)} km` : "—"}</span>
+                        <span>Prochaine échéance du cycle : {s.prochaineEcheanceKm != null ? `${formatNombre(s.prochaineEcheanceKm)} km` : "—"}</span>
                         <span>Km restants : {s.kilometresRestants != null ? `${formatNombre(s.kilometresRestants)} km` : "—"}</span>
                         <span>Date prévue : {dateEntretienPrevue(s)?.slice(0, 10) || "Non renseignée"}</span>
                         {joursAvantDate(dateEntretienPrevue(s)) != null && joursAvantDate(dateEntretienPrevue(s))! <= 7 && (
@@ -2727,11 +2843,7 @@ function ChefServiceLogistiqueContent() {
                           </strong>
                         )}
                       </div>
-                      <p style={{ color: "#64748b", fontSize: 12, margin: "7px 0 0" }}>
-                        {dateEntretienPrevue(s)
-                          ? "Échéance de date : rappel affiché à partir de J−7. La notification automatique est à réaliser côté serveur."
-                          : "Aucune date prévue enregistrée : le rappel J−7 attend ce renseignement côté serveur ; la surveillance kilométrique reste active."}
-                      </p>
+
                     </div>
                   ))}
                 </div>
@@ -2749,10 +2861,10 @@ function ChefServiceLogistiqueContent() {
                       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap"}}>
                         <div style={{display: "grid", gap: 4, color: "#111827"}}>
                           <strong>{ticketId != null ? `TKT-${String(ticketId).padStart(5,"0")}` : `Entretien ${m.vehicule?.immatriculation ?? ""}`}</strong>
-                          <span>Véhicule : {m.vehicule?.immatriculation ?? "—"} · Provenance : {estEntretienPeriodique(m) ? "Entretien périodique" : "Chauffeur"}</span>
-                          <span>État : {m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN" ? "En attente de validation" : m.statut === "ENTRETIEN_AUTORISE" ? "Demande validée — entretien à effectuer" : m.statut === "ENTRETIEN_TERMINE" ? "Travail terminé par le mécanicien — clôture du chef requise" : m.statut === "CLOTUREE" ? "Dossier clôturé" : m.statut === "REFUSEE" ? "Demande refusée" : m.statut}</span>
+                          <span>Véhicule : {m.vehicule?.immatriculation ?? "—"} · Provenance : {estEntretienPeriodique(m) ? "Entretien périodique" : libelleOrigineEntretien(m)}</span>
+                          <span>Statut : {libelleStatutDemandeEntretien(m.statut)}</span>
                         </div>
-                        <button type="button" style={{...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.BLEU, color: "white", border: "none"}}
+                        <button type="button" className="btn-spat btn-jaune"
                           onClick={() => setDemandeEntretienOuverte(ouvert ? null : m.id)}>
                           {ouvert ? "Fermer" : "Détails"}
                         </button>
@@ -2760,19 +2872,17 @@ function ChefServiceLogistiqueContent() {
                       {ouvert && (
                         <div style={{marginTop: 14, display: "grid", gap: 10, color: "#111827"}}>
                           <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 9}}>
-                            {[ ["Demandeur", m.demandeurEntretien ?? "—"], ["Origine", estEntretienPeriodique(m) ? "Entretien périodique" : "Chauffeur"], ["Ticket", ticketId != null ? `TKT-${String(ticketId).padStart(5,"0")}` : "Sans ticket"], ["Véhicule", m.vehicule?.immatriculation ?? "—"], ["Demande créée", m.dateCreation ? formaterDate(m.dateCreation) : "—"] ].map(([label,value]) =>
+                            {[ ["Demandeur", m.demandeurEntretien ?? "—"], ["Origine", estEntretienPeriodique(m) ? "Entretien périodique" : libelleOrigineEntretien(m)], ["Ticket", ticketId != null ? `TKT-${String(ticketId).padStart(5,"0")}` : "Sans ticket"], ["Véhicule", m.vehicule?.immatriculation ?? "—"], ["Date de la demande", m.dateCreation ? formaterDate(m.dateCreation) : "—"], ["Statut", libelleStatutDemandeEntretien(m.statut)], ["Date de clôture", m.dateCloture ? formaterDate(m.dateCloture) : "—"] ].map(([label,value]) =>
                               <div key={label} style={{border: "1px solid #e5e7eb", borderRadius: 8, padding: 10}}><div style={{fontSize: 11, color: "#475569"}}>{label}</div><strong>{value}</strong></div>
                             )}
                           </div>
-                          <div style={{border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, whiteSpace: "pre-wrap"}}><strong>Entretien demandé</strong><div>{m.natureIntervention}</div></div>
+                          <div style={{border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, whiteSpace: "pre-wrap"}}><strong>Entretien demandé</strong><div>{String(m.natureIntervention || "").replace(/^\s*\[SIGNALEMENT_CHAUFFEUR\]\s*/i, "") || "—"}</div></div>
                           {m.motifRefusEntretien && <div>Motif du refus : {m.motifRefusEntretien}</div>}
                           {m.compteRenduEntretien && <div style={{border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, whiteSpace: "pre-wrap"}}><strong>Retour du mécanicien — entretien terminé</strong><div>{m.compteRenduEntretien}</div><div>Mécanicien : {m.mecanicienEntretien ?? "—"}</div>{m.dateCloture && <div>Le {formaterDate(m.dateCloture)}</div>}</div>}
                           {estEntretienPeriodique(m) &&
                             ["EN_ATTENTE_AVIS_DID", "A_FAIRE"].includes(m.statut) && (
                             <div style={{ display: "grid", gap: 7 }}>
-                              <p style={{ fontSize: 12, color: "#475569", margin: 0 }}>
-                                Dossier automatique des 5 000 km : à transmettre au mécanicien DID.
-                              </p>
+
                               <button type="button" disabled={actionEntretienEnCours !== null}
                                 style={{ ...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.BLEU, color: "white", border: "none", width: "fit-content" }}
                                 onClick={() => transmettrePeriodiqueAuDid(m)}>
@@ -2782,9 +2892,7 @@ function ChefServiceLogistiqueContent() {
                           )}
                           {m.statut === "ENTRETIEN_TERMINE" && (
                             <div style={{ display: "grid", gap: 8 }}>
-                              <p style={{ fontSize: 12, color: "#475569", margin: 0 }}>
-                                Le mécanicien a déclaré le travail terminé. Vérifiez le compte rendu puis clôturez ce dossier.
-                              </p>
+
                               <button type="button"
                                 disabled={actionEntretienEnCours !== null || !m.compteRenduEntretien?.trim()}
                                 style={{ ...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.VERT, color: "white", border: "none", width: "fit-content" }}
@@ -2795,19 +2903,26 @@ function ChefServiceLogistiqueContent() {
                           )}
                           {m.statut === "EN_ATTENTE_VALIDATION_ENTRETIEN" && (
                             <div style={{display: "grid", gap: 8}}>
-                              <label htmlFor={`motif-entretien-${m.id}`}>Motif du refus (uniquement si refus)</label>
+                              <label htmlFor={`motif-entretien-${m.id}`}>Motif du refus</label>
                               <textarea id={`motif-entretien-${m.id}`} style={{...inputStyle, minHeight: 55}}
                                 value={motifsRefusEntretien[m.id] ?? ""}
                                 onChange={e => setMotifsRefusEntretien(prev => ({...prev, [m.id]: e.target.value}))} />
                               <div style={{display: "flex", flexWrap: "wrap", gap: 8}}>
                                 <button type="button" disabled={decisionEntretienEnCours !== null}
                                   style={{...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.VERT, color: "white", border: "none"}}
-                                  onClick={() => deciderEntretien(m, true)}>Valider la demande d'entretien</button>
+                                  onClick={() => deciderEntretien(m, true)}>Valider la demande d&apos;entretien</button>
                                 <button type="button" disabled={decisionEntretienEnCours !== null}
                                   style={{...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.ROUGE, color: "white", border: "none"}}
                                   onClick={() => deciderEntretien(m, false)}>Refuser</button>
                               </div>
                             </div>
+                          )}
+                          {["EN_ATTENTE_VALIDATION_ENTRETIEN", "ENTRETIEN_AUTORISE"].includes(m.statut) && (
+                            <button type="button" disabled={actionEntretienEnCours !== null}
+                              style={{ ...boutonSecondaire, backgroundColor: COULEURS_BOUTONS.ROUGE, color: "white", border: "none", width: "fit-content" }}
+                              onClick={() => annulerEntretien(m)}>
+                              {actionEntretienEnCours === m.id ? "Annulation…" : "Annuler la demande"}
+                            </button>
                           )}
                         </div>
                       )}
@@ -2822,9 +2937,6 @@ function ChefServiceLogistiqueContent() {
           )}
           {panneauGestion === "CARBURANT" && (
             <div>
-          {/* =================================================
-              CARBURANT — CONSULTATION UNIQUEMENT
-          ================================================= */}
 
           <div style={{ ...sectionHeaderStyle, marginTop: 0, background: "#ffffff", padding: "13px 16px", borderRadius: 10 }}>
             <h3 style={{ margin: 0, color: "#1e293b", fontSize: 16 }}>
@@ -2835,11 +2947,9 @@ function ChefServiceLogistiqueContent() {
               <BoutonsRapportSpat preparerRapport={preparerRapportCarburant} />
             <button
               type="button"
+              className="btn-spat btn-orange"
               onClick={
                 exporterCarburant
-              }
-              style={
-                boutonSecondaire
               }
             >
               <Download
@@ -2863,10 +2973,6 @@ function ChefServiceLogistiqueContent() {
             transactions={transactions}
             positionsGps={positionsGpsCarburant}
           />
-
-          {/* =================================================
-              FILTRE CARBURANT
-          ================================================= */}
 
           <div
             style={{
@@ -3079,9 +3185,6 @@ function ChefServiceLogistiqueContent() {
 
           {panneauGestion === "TICKETS" && (
             <>
-          {/* =================================================
-              DEMANDES
-          ================================================= */}
 
           <div
             style={
@@ -3096,11 +3199,9 @@ function ChefServiceLogistiqueContent() {
               <BoutonsRapportSpat preparerRapport={preparerRapportTickets} />
             <button
               type="button"
+                className="btn-spat btn-orange"
               onClick={
                 exporterReservations
-              }
-              style={
-                boutonSecondaire
               }
             >
               <Download
@@ -3111,10 +3212,6 @@ function ChefServiceLogistiqueContent() {
             </button>
             </div>
           </div>
-
-          {/* =================================================
-              FILTRES
-          ================================================= */}
 
           <div
             style={
@@ -3198,6 +3295,18 @@ function ChefServiceLogistiqueContent() {
                 Validées finales
               </option>
 
+              <option value="PLANIFIEE">
+                Planifiées — retour à contrôler
+              </option>
+
+              <option value="EN_COURS">
+                Missions en cours
+              </option>
+
+              <option value="A_REPROGRAMMER">
+                Missions suspendues pour urgence
+              </option>
+
               <option value="REFUSEE">
                 Refusées
               </option>
@@ -3207,10 +3316,6 @@ function ChefServiceLogistiqueContent() {
               </option>
             </select>
           </div>
-
-          {/* =================================================
-              LISTE DEMANDES
-          ================================================= */}
 
           {reservationsFiltrees.length ===
           0 ? (
@@ -3271,7 +3376,10 @@ function ChefServiceLogistiqueContent() {
                     );
 
                   const controlesDuTicket = controlesPourReservation(r.id);
-                  const maintenance = controlesDuTicket[0] ?? null;
+                  const maintenance: Maintenance | null = controlesDuTicket[0] ?? null;
+                  const controlesArrivee = controlesArriveePourReservation(r.id);
+                  const controleArrivee: Maintenance | null = controlesArrivee[0] ?? null;
+                  const dateAvisDID = maintenance?.avisDate;
                   const idsVehiculesEcartes = new Set(
                     controlesDuTicket
                       .filter((m) => avisDIDDefavorable(m) && m.vehicule?.id != null)
@@ -3281,35 +3389,45 @@ function ChefServiceLogistiqueContent() {
                   const vehiculeRemplacement = vehicules.find((v) =>
                     String(v.id) === choixRemplacement
                   ) || null;
-                  const chauffeursRemplacement = chauffeursEligiblesPourVehicule(
-                    vehiculeRemplacement,
-                    dispo?.chauffeursDisponibles || []
-                  );
+                  const chauffeursRemplacement = vehiculeRemplacement
+                    ? chauffeursParVehicule[cleChauffeursVehicule(r.id, vehiculeRemplacement.id)] || []
+                    : [];
                   const avisDefavorable = avisDIDDefavorable(maintenance);
                   const avisFavorable = avisDIDFavorable(maintenance);
-                  // L'avis du DID peut être reçu alors que le statut de la réservation
-                  // reste EN_ATTENTE_AVIS_DID jusqu'à la validation N°1.
-                  // La carte affiche l'état réel de l'avis, pas ce statut transitoire.
+                  const ticketPatrouille = r.typeDemande === "PATROUILLE" || r.modeCreation === "AGENT_SURETE";
+
                   const avisDIDRecu = maintenanceAvisRecu(maintenance);
 
-                  const vehiculesCorrespondants =
+                  const vehiculesCorrespondantsBruts =
                     dispo
                       ?.vehiculesCorrespondants ||
                     [];
 
-                  const suggestions =
+                  const suggestionsBrutes =
                     dispo
                       ?.suggestionsVehicules ||
                     [];
 
-                  // L'API des disponibilités est la référence pour la période du ticket.
-                  // Les autres véhicules restent visibles, mais non sélectionnables.
+                  const vehiculesCorrespondants = r.zoneMission === "HORS_TOAMASINA"
+                    ? vehiculesCorrespondantsBruts.filter(estVehiculeMissionHorsVille)
+                    : vehiculesCorrespondantsBruts;
+                  const suggestions = r.zoneMission === "HORS_TOAMASINA"
+                    ? suggestionsBrutes.filter(estVehiculeMissionHorsVille)
+                    : suggestionsBrutes;
+
                   const idsVehiculesProposes = new Set([
                     ...vehiculesCorrespondants,
                     ...suggestions,
                   ].map((v) => v.id));
                   const vehiculesNonProposes = dispo
-                    ? vehicules.filter((v) => !idsVehiculesProposes.has(v.id))
+                    ? vehicules.filter((v) => !idsVehiculesProposes.has(v.id)
+                      && (r.zoneMission !== "HORS_TOAMASINA" || estVehiculeMissionHorsVille(v)))
+                    : [];
+
+                  const vehiculesMissionHorsVilleManquants = r.zoneMission === "HORS_TOAMASINA"
+                      ? vehicules.filter((v) => estVehiculeMissionHorsVille(v)
+                      && !idsVehiculesProposes.has(v.id)
+                      && !vehiculesNonProposes.some((x) => x.id === v.id))
                     : [];
                   const planningDuTicket = planningVehicules[r.id] || [];
                   const etatPlanningParVehicule = new Map(
@@ -3322,15 +3440,12 @@ function ChefServiceLogistiqueContent() {
                         (r.vehicule?.id ? String(r.vehicule.id) : ""))
                     ) || r.vehicule || null;
 
-                  // Toujours partir des chauffeurs libres SUR LA PERIODE
-                  // puis appliquer le groupe documentaire, si connu.
-                  const chauffeurs = chauffeursEligiblesPourVehicule(
-                    vehiculeSelectionnePourChauffeurs,
-                    dispo?.chauffeursDisponibles || []
-                  );
-                  const groupeChauffeurs = groupePourVehicule(
-                    vehiculeSelectionnePourChauffeurs
-                  );
+                  const cleChauffeursSelectionnes = vehiculeSelectionnePourChauffeurs
+                    ? cleChauffeursVehicule(r.id, vehiculeSelectionnePourChauffeurs.id)
+                    : "";
+                  const chauffeurs = cleChauffeursSelectionnes
+                    ? chauffeursParVehicule[cleChauffeursSelectionnes] || []
+                    : [];
 
                   const aucunVehicule =
                     Boolean(
@@ -3349,12 +3464,6 @@ function ChefServiceLogistiqueContent() {
                           0
                     );
 
-                  const urgenceBloquante =
-                    Boolean(
-                      r.demandeUrgente &&
-                        !r.motifUrgence?.trim()
-                    );
-
                   const vehiculeSelectionne =
                     vehiculeAffecte[
                       r.id
@@ -3364,11 +3473,9 @@ function ChefServiceLogistiqueContent() {
                       : "");
 
                   const chauffeurSelectionneBrut =
-                    chauffeurAffecte[r.id] ||
-                    (r.chauffeur?.id ? String(r.chauffeur.id) : "");
-                  const chauffeurSelectionne = chauffeurs.some(
-                    (c) => String(c.id) === chauffeurSelectionneBrut
-                  ) ? chauffeurSelectionneBrut : "";
+                    chauffeurAffecte[r.id] || (r.chauffeur?.id ? String(r.chauffeur.id) : "");
+
+                  const chauffeurSelectionne = chauffeurSelectionneBrut;
 
                   const peutDemanderAvis =
                     r.statut ===
@@ -3379,7 +3486,6 @@ function ChefServiceLogistiqueContent() {
                     !verification &&
                     !erreur &&
                     !aucunVehicule &&
-                    !urgenceBloquante &&
                     Boolean(
                       vehiculeSelectionne
                     ) &&
@@ -3388,16 +3494,13 @@ function ChefServiceLogistiqueContent() {
                   const peutValider =
   (
     r.statut === "EN_ATTENTE" ||
-    r.statut === "EN_ATTENTE_AVIS_DID"
+    r.statut === "EN_ATTENTE_AVIS_DID" ||
+    (maintenance?.statut === "EN_ATTENTE_VALIDATION_N1")
   ) &&
-  !verification &&
-  !erreur &&
-  Boolean(dispo) &&
-  !aucunVehicule &&
-  !urgenceBloquante &&
   Boolean(vehiculeSelectionne) &&
   Boolean(avisDID) &&
   !avisDefavorable &&
+  !controleArrivee &&
   !decision &&
   !avisEnvoi;
 
@@ -3413,19 +3516,14 @@ function ChefServiceLogistiqueContent() {
                           : "#e2e8f0",
                       }}
                     >
-                      {/* =====================================
-                          TICKET COMPACT
-                          Les informations détaillées et leurs actions
-                          restent inchangées ci-dessous.
-                      ===================================== */}
+
                       <div style={ticketCompactTitleRowStyle}>
                         <strong style={ticketCompactTitleStyle}>
                           {`TKT-${String(r.id).padStart(5, "0")}`}
                         </strong>
 
-                        {/* Ne pas afficher « En attente avis DID » après réception de l'avis. */}
                         {!(r.statut === "EN_ATTENTE_AVIS_DID" && avisDIDRecu) && (
-                          <BadgeStatut statut={r.statut} />
+                          <BadgeStatut statut={r.statut} zoneMission={r.zoneMission} />
                         )}
                         {avisDefavorable && (
                           <span style={ticketAvisDefavorableBadgeStyle}>
@@ -3445,8 +3543,6 @@ function ChefServiceLogistiqueContent() {
                           )}
                       </div>
 
-                      {/* Le motif reste dans les détails : la carte compacte affiche
-                          uniquement le numéro, l'état de l'avis et la date. */}
                       <div style={ticketCompactBottomStyle}>
                         <div style={ticketCompactMetaStyle}>
                           Créé le {formaterDate(r.dateCreation)}
@@ -3460,6 +3556,7 @@ function ChefServiceLogistiqueContent() {
 
                         <button
                           type="button"
+                          className="btn-spat btn-jaune"
                           onClick={() =>
                             setTicketOuvertId(estOuvert ? null : r.id)
                           }
@@ -3472,16 +3569,12 @@ function ChefServiceLogistiqueContent() {
                         </button>
                       </div>
 
-                      {/* Le contenu préexistant n'est affiché qu'à la demande. */}
                       {estOuvert && (
                         <div
                           id={`ticket-details-${r.id}`}
                           className="spat-ticket-details-neutre"
                           style={ticketDetailsStyle}
                         >
-                      {/* =====================================
-                          DEMANDEUR
-                      ===================================== */}
 
                       <SousTitreCarte
                         texte="Informations du demandeur"
@@ -3506,16 +3599,10 @@ function ChefServiceLogistiqueContent() {
                         />
                       </div>
 
-                      {/* =====================================
-                          MISSION
-                      ===================================== */}
-
                       <SousTitreCarte
                         texte="Informations du ticket"
                       />
 
-                      {/* Même présentation compacte pour toutes les informations
-                          du ticket, y compris les passagers et observations. */}
                       <div style={informationBoitesStyle}>
                         <InfoBoite label="Objet" value={r.motif || "—"} />
                         <InfoBoite
@@ -3558,9 +3645,44 @@ function ChefServiceLogistiqueContent() {
                         )}
                       </div>
 
-                      {/* =====================================
-                          AVIS DID LIE AU TICKET
-                      ===================================== */}
+                      <div style={{ marginTop: 16 }}>
+                        {missionHorsDelai24h(r) && !["A_REPROGRAMMER", "REFUSEE", "CLOTUREE"].includes(String(r.statut || "").toUpperCase()) && (
+                          <button type="button" className="btn-spat btn-orange" onClick={() => ouvrirFormulaireUrgence(r)} style={{ marginBottom: 12 }}>
+                            <AlertTriangle size={15} /> Urgence
+                          </button>
+                        )}
+                        {String(r.statut || "").toUpperCase() === "A_REPROGRAMMER" && (
+                          <button type="button" className="btn-spat btn-vert" disabled={clotureUrgenceEnCours === r.id} onClick={() => void cloturerMissionUrgente(r)} style={{ marginBottom: 12 }}>
+                            <CheckCircle2 size={15} /> {clotureUrgenceEnCours === r.id ? "Clôture..." : "Clôturer la mission suspendue"}
+                          </button>
+                        )}
+                        {["VALIDEE_N1", "VALIDEE", "PLANIFIEE", "EN_COURS", "EN_ATTENTE_AVIS_DID"].includes(String(r.statut || "").toUpperCase()) && missionDansFenetreCloture(r) && r.vehicule && r.statut !== "CLOTUREE" && (
+                          <div style={{ marginTop: 8, marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            {avisDIDFavorable(controleArrivee) ? (
+                              <button
+                                type="button"
+                                className="btn-spat btn-vert"
+                                disabled={clotureApresAvisEnCours === r.id}
+                                onClick={() => void cloturerApresAvisDid(r)}
+                                title="Clôturer définitivement la mission avec l'avis favorable du mécanicien"
+                              >
+                                <CheckCircle2 size={15} /> {clotureApresAvisEnCours === r.id ? "Clôture..." : "Avis du mécanicien"}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-spat btn-vert"
+                                disabled={inspectionArriveeEnCours === r.id}
+                                onClick={() => void gererClicClotureMission(r, controleArrivee)}
+                                title="Clôturer la mission en attente du retour du véhicule"
+                              >
+                                <CheckCircle2 size={15} /> {inspectionArriveeEnCours === r.id ? "Transmission..." : "Clôturer la mission"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       {maintenance && (
                         <div style={{
                           marginTop: 16,
@@ -3592,10 +3714,14 @@ function ChefServiceLogistiqueContent() {
                             } />
                             <Info label="Chauffeur du ticket" value={
                               r.chauffeur ? nomChauffeur(r.chauffeur) :
-                              r.besoinChauffeur ? "Non affecté" : "Non requis"
+                              r.besoinChauffeur
+                                ? (chauffeurSelectionne
+                                  ? nomChauffeur(chauffeurs.find((c) => String(c.id) === chauffeurSelectionne) || { id: Number(chauffeurSelectionne), nom: "Chauffeur sélectionné", prenom: "" } as Chauffeur)
+                                  : "Non affecté")
+                                : "Non requis"
                             } />
                             <Info label="Diagnostic visuel" value={maintenance.diagnosticVisuel?.trim() || "En attente"} />
-                            <Info label="Observations du mécanicien" value={maintenance.observationsMecanicien?.trim() || "En attente"} />
+                            <Info label="Observations du mécanicien" value={observationsDepuisFiche(maintenance) || (avisDID ? "Aucune observation renseignée" : "En attente")} />
                             <Info label="Pièces ou actions nécessaires" value={maintenance.piecesNecessaires?.trim() || "En attente"} />
                             <Info label="Décision DID" value={
                               avisDefavorable ? "Défavorable" : avisFavorable ? "Favorable" : "En attente / non renseignée"
@@ -3613,7 +3739,7 @@ function ChefServiceLogistiqueContent() {
                               <div style={detailValueStyle}>{maintenance.avisTexte.trim()}</div>
                             </div>
                           )}
-                          {avisFavorable && ["EN_ATTENTE", "EN_ATTENTE_AVIS_DID"].includes(r.statut) && (
+                          {avisFavorable && (["EN_ATTENTE", "EN_ATTENTE_AVIS_DID"].includes(r.statut) || (maintenance && maintenance.statut === "EN_ATTENTE_VALIDATION_N1")) && (
                             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
                               <button
                                 type="button"
@@ -3630,7 +3756,7 @@ function ChefServiceLogistiqueContent() {
                               </button>
                             </div>
                           )}
-                          {avisDefavorable && ["EN_ATTENTE", "EN_ATTENTE_AVIS_DID"].includes(r.statut) && (
+                          {avisDefavorable && (["EN_ATTENTE", "EN_ATTENTE_AVIS_DID"].includes(r.statut) || (maintenance && maintenance.statut === "AVIS_DEFAVORABLE_DID")) && (
                             <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
                               <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 12 }}>
                                 <button
@@ -3665,40 +3791,67 @@ function ChefServiceLogistiqueContent() {
                                   }}
                                 >
                                   <label style={labelStyle}>Autre véhicule *</label>
-                                  <select
+                                  <SlideInSelect
+                                    label="Autre véhicule"
+                                    title="Choisir un véhicule de remplacement"
                                     value={choixRemplacement}
-                                    style={inputStyle}
-                                    disabled={!dispo || verification || Boolean(relanceDidEnCours[r.id])}
-                                    onChange={(e) => {
-                                      setVehiculeAlternatif((ancien) => ({ ...ancien, [r.id]: e.target.value }));
+                                    onChange={(value) => {
+                                      setVehiculeAlternatif((ancien) => ({ ...ancien, [r.id]: value }));
                                       setChauffeurAlternatif((ancien) => ({ ...ancien, [r.id]: "" }));
+                                      if (value) {
+                                          void chargerChauffeursPourVehicule(r.id, Number(value), r.dateDebut, r.dateFin, r.zoneMission === "HORS_TOAMASINA");
+                                      }
                                     }}
-                                  >
-                                    <option value="">Sélectionner un autre véhicule</option>
-                                    {[...vehiculesCorrespondants, ...suggestions]
+                                    disabled={!dispo || verification || Boolean(relanceDidEnCours[r.id])}
+                                    options={[
+                                      ...[...vehiculesCorrespondants, ...suggestions]
                                       .filter((v, index, liste) => liste.findIndex((x) => x.id === v.id) === index)
                                       .filter((v) => v.id !== r.vehicule?.id && !idsVehiculesEcartes.has(v.id))
-                                      .map((v) => (
-                                        <option key={v.id} value={String(v.id)}>
-                                          {libelleVehiculeDisponible(v)} — Disponible
-                                        </option>
-                                      ))}
-                                    {vehiculesNonProposes.map((v) => {
+                                      .map((v) => ({
+                                        value: String(v.id),
+                                        label: libelleVehiculeDisponible(v),
+                                        detail: "Disponible pour la période",
+                                      })),
+                                      ...vehiculesNonProposes.map((v) => {
                                       const etat = etatPlanningParVehicule.get(v.id);
                                       const motif = etat?.etat === "OCCUPE"
                                         ? "Occupé pour cette période"
                                         : "Indisponible";
-                                      return (
-                                        <option key={v.id} value={String(v.id)} disabled>
-                                          {libelleVehicule(v)} — {motif}
-                                        </option>
-                                      );
-                                    })}
-                                  </select>
+                                      return {
+                                        value: String(v.id),
+                                        label: libelleVehicule(v),
+                                        detail: motif,
+                                        disabled: true,
+                                      };
+                                    }),
+                                    ]}
+                                    placeholder="Sélectionner un autre véhicule"
+                                    loading={!dispo || verification}
+                                    emptyMessage="Aucun véhicule de remplacement disponible."
+                                  />
                                   {Boolean(r.besoinChauffeur) && choixRemplacement && (
-                                    <div style={{ ...detailBoxStyle, background: "#ffffff" }}>
-                                      <div style={detailLabelStyle}>Chauffeur</div>
-                                      <div style={detailValueStyle}>Affectation automatique à la confirmation</div>
+                                    <div>
+                                      <label style={labelStyle}>Chauffeur *</label>
+                                      <SlideInSelect
+                                        label="Chauffeur"
+                                        title="Choisir un chauffeur de remplacement"
+                                        value={chauffeurAlternatif[r.id] || ""}
+                                        onChange={(value) => setChauffeurAlternatif((ancien) => ({ ...ancien, [r.id]: value }))}
+                                        options={chauffeursRemplacement.map((chauffeur, index) => ({
+                                          value: String(chauffeur.id),
+                                          label: nomChauffeur(chauffeur),
+                                          detail: [
+                                            index === 0 ? "Affectation véhicule · prioritaire" : null,
+                                            chauffeur.affectationService,
+                                            chauffeur.matricule,
+                                            chauffeur.statut,
+                                          ].filter(Boolean).join(" · "),
+                                        }))}
+                                        placeholder={!vehiculeRemplacement ? "Choisissez d'abord un véhicule" : "Sélectionner un chauffeur"}
+                                        disabled={!vehiculeRemplacement || !dispo || verification || Boolean(relanceDidEnCours[r.id])}
+                                        loading={Boolean(vehiculeRemplacement && (chargementChauffeursParVehicule[cleChauffeursVehicule(r.id, vehiculeRemplacement.id)] || !dispo || verification))}
+                                        emptyMessage={!vehiculeRemplacement ? "Sélectionnez d'abord un véhicule." : "Aucun chauffeur disponible pour cette période."}
+                                      />
                                     </div>
                                   )}
                                   <button
@@ -3717,7 +3870,10 @@ function ChefServiceLogistiqueContent() {
                                       color: "#ffffff",
                                     }}
                                     disabled={verification || Boolean(relanceDidEnCours[r.id]) ||
-                                      !choixRemplacement}
+                                      !choixRemplacement ||
+                                      (Boolean(r.besoinChauffeur) && !chauffeursRemplacement.some(
+                                        (c) => String(c.id) === chauffeurAlternatif[r.id]
+                                      ))}
                                     onClick={() => relancerControleDID(r)}
                                   >
                                     <Send size={15} />
@@ -3744,10 +3900,6 @@ function ChefServiceLogistiqueContent() {
                               )}
                         </div>
                       )}
-
-                      {/* =====================================
-                          DISPONIBILITES
-                      ===================================== */}
 
                       {!maintenance && [
                         "EN_ATTENTE",
@@ -3874,40 +4026,6 @@ function ChefServiceLogistiqueContent() {
                           {!verification &&
                             dispo && (
                               <>
-                                {/* VEHICULE DEMANDE */}
-
-                                {!dispo.typeSouhaiteDisponible && (
-                                  <div
-                                    style={
-                                      warningAvailabilityStyle
-                                    }
-                                  >
-                                    <strong>
-                                      ⚠ Le véhicule/type demandé est indisponible
-                                    </strong>
-
-                                  </div>
-                                )}
-
-                                {/* CHAUFFEUR */}
-
-                                {r.besoinChauffeur &&
-                                  !dispo.chauffeurDisponible && (
-                                  <div
-                                    style={
-                                      errorBoxStyle
-                                    }
-                                  >
-                                    <strong>
-                                      ⚠ Aucun chauffeur disponible
-                                    </strong>
-
-                                  </div>
-                                )}
-
-                                {/* =================================
-                                    CHOIX
-                                ================================= */}
 
                                 <div
                                   style={
@@ -3923,13 +4041,12 @@ function ChefServiceLogistiqueContent() {
                                       Véhicule proposé
                                     </label>
 
-                                    <select
-                                      value={vehiculeAffecte[r.id] ?? ""}
-                                      onChange={(e) => {
-                                        const valeur = e.target.value;
-                                        // Vérification supplémentaire côté interface :
-                                        // un véhicule absent de la liste disponible ne peut
-                                        // pas être choisi, même par manipulation du DOM.
+                                    <SlideInSelect
+                                      label="Véhicule proposé"
+                                      title="Choisir un véhicule disponible"
+                                      value={vehiculeSelectionne}
+                                      onChange={(valeur) => {
+
                                         if (
                                           valeur &&
                                           !idsVehiculesProposes.has(Number(valeur))
@@ -3944,81 +4061,79 @@ function ChefServiceLogistiqueContent() {
                                           ...ancien,
                                           [r.id]: valeur,
                                         }));
-                                        // Une nouvelle sélection de véhicule invalide
-                                        // l'éventuelle sélection antérieure du chauffeur.
+
                                         setChauffeurAffecte((ancien) => ({
                                           ...ancien,
                                           [r.id]: "",
                                         }));
+                                        if (valeur) {
+                                          void chargerChauffeursPourVehicule(r.id, Number(valeur), r.dateDebut, r.dateFin, r.zoneMission === "HORS_TOAMASINA");
+                                        }
                                       }}
                                       disabled={
                                         r.statut === "EN_ATTENTE_AVIS_DID" ||
                                         !dispo || verification || decision || avisEnvoi
                                       }
-                                      style={inputStyle}
-                                    >
-                                      <option value="">
-                                        {!dispo
-                                          ? "Vérification des disponibilités..."
-                                          : "Sélectionner un véhicule"}
-                                      </option>
-
-                                      {vehiculesCorrespondants.length > 0 && (
-                                        <optgroup label="Type demandé — disponibles">
-                                          {vehiculesCorrespondants.map((v) => (
-                                            <option key={v.id} value={String(v.id)}>
-                                              {libelleVehiculeDisponible(v)} — Disponible
-                                            </option>
-                                          ))}
-                                        </optgroup>
-                                      )}
-
-                                      {suggestions.length > 0 && (
-                                        <optgroup label="Suggestions — autres véhicules disponibles">
-                                          {suggestions
-                                            .filter((v) => !vehiculesCorrespondants.some((x) => x.id === v.id))
-                                            .map((v) => (
-                                              <option key={v.id} value={String(v.id)}>
-                                                {libelleVehiculeDisponible(v)} — Disponible
-                                              </option>
-                                            ))}
-                                        </optgroup>
-                                      )}
-
-                                      {vehiculesNonProposes.length > 0 && (
-                                        <optgroup label="Véhicules non disponibles pour la période du ticket">
-                                          {vehiculesNonProposes.map((v) => {
-                                            const etat = etatPlanningParVehicule.get(v.id);
-                                            const raison = etat?.etat === "OCCUPE"
-                                              ? "Occupé — déjà réservé sur les dates de ce ticket"
-                                              : etat?.etat === "INDISPONIBLE_TECHNIQUE"
-                                                ? `Indisponible — statut : ${v.statut || "non renseigné"}`
-                                                : "Indisponible — motif non précisé";
-                                            return (
-                                              <option key={v.id} value={String(v.id)} disabled>
-                                                {libelleVehicule(v)} — {raison}
-                                              </option>
-                                            );
-                                          })}
-                                        </optgroup>
-                                      )}
-                                    </select>
+                                      options={[
+                                        ...vehiculesCorrespondants.filter((v) => !ticketPatrouille || /1205\s*TC[AA]?/i.test(v.immatriculation || "") || String(v.categorie || "").toUpperCase().includes("PATROUILLE")).map((v) => ({
+                                          value: String(v.id),
+                                          label: libelleVehiculeDisponible(v),
+                                          detail: "Type demandé · Disponible",
+                                        })),
+                                        ...suggestions.filter((v) => !ticketPatrouille || /1205\s*TC[AA]?/i.test(v.immatriculation || "") || String(v.categorie || "").toUpperCase().includes("PATROUILLE"))
+                                          .filter((v) => !vehiculesCorrespondants.some((x) => x.id === v.id))
+                                          .map((v) => ({
+                                            value: String(v.id),
+                                            label: libelleVehiculeDisponible(v),
+                                            detail: "Autre véhicule · Disponible",
+                                          })),
+                                        ...[...vehiculesNonProposes, ...vehiculesMissionHorsVilleManquants].filter((v) => !ticketPatrouille || /1205\s*TC[AA]?/i.test(v.immatriculation || "") || String(v.categorie || "").toUpperCase().includes("PATROUILLE")).map((v) => {
+                                          const etat = etatPlanningParVehicule.get(v.id);
+                                          const raison = etat?.etat === "OCCUPE"
+                                            ? "Occupé sur la période du ticket"
+                                            : etat?.etat === "INDISPONIBLE_TECHNIQUE"
+                                              ? `Indisponible · statut : ${v.statut || "non renseigné"}`
+                                              : "Indisponible pour cette période";
+                                          return {
+                                            value: String(v.id),
+                                            label: libelleVehicule(v),
+                                            detail: raison,
+                                            disabled: true,
+                                          };
+                                        }),
+                                      ]}
+                                      placeholder={!dispo ? "Vérification des disponibilités..." : "Sélectionner un véhicule"}
+                                      loading={!dispo || verification}
+                                      emptyMessage="Aucun véhicule disponible pour la période de ce ticket."
+                                    />
                                   </div>
 
-                                  {r.besoinChauffeur && vehiculeSelectionne && (
-                                    <div style={{ ...detailBoxStyle, background: "#ffffff" }}>
-                                      <div style={detailLabelStyle}>Chauffeur</div>
-                                      <div style={detailValueStyle}>
-                                        Affectation automatique
-                                      </div>
+                                  {r.besoinChauffeur && (
+                                    <div>
+                                      <label style={labelStyle}>Chauffeur affecté</label>
+                                      <SlideInSelect
+                                        label="Chauffeur affecté"
+                                        title="Choisir un chauffeur disponible"
+                                        value={chauffeurSelectionne}
+                                        onChange={(valeur) => setChauffeurAffecte((ancien) => ({ ...ancien, [r.id]: valeur }))}
+                                        options={chauffeurs.map((chauffeur, index) => ({
+                                          value: String(chauffeur.id),
+                                          label: nomChauffeur(chauffeur),
+                                          detail: [
+                                            index === 0 ? "Affectation véhicule · prioritaire" : null,
+                                            chauffeur.affectationService,
+                                            chauffeur.matricule,
+                                            chauffeur.statut,
+                                          ].filter(Boolean).join(" · "),
+                                        }))}
+                                        placeholder={!vehiculeSelectionne ? "Choisissez d'abord un véhicule" : "Sélectionner un chauffeur"}
+                                        disabled={!vehiculeSelectionne || r.statut === "EN_ATTENTE_AVIS_DID" || !dispo || verification || decision || avisEnvoi}
+                                        loading={Boolean(vehiculeSelectionne && (chargementChauffeursParVehicule[cleChauffeursSelectionnes] || !dispo || verification))}
+                                        emptyMessage={!vehiculeSelectionne ? "Sélectionnez d'abord un véhicule." : "Aucun chauffeur disponible pour cette période."}
+                                      />
                                     </div>
                                   )}
                                 </div>
-
-
-                                {/* =================================
-                                    AVIS DID
-                                ================================= */}
 
                                 {!avisDID ? (
                                   <div
@@ -4110,7 +4225,7 @@ function ChefServiceLogistiqueContent() {
                                       {avisDID}
                                     </div>
 
-                                    {maintenance?.avisDate && (
+                                    {dateAvisDID && (
                                       <div
                                         style={{
                                           marginTop:
@@ -4125,16 +4240,12 @@ function ChefServiceLogistiqueContent() {
                                       >
                                         Avis enregistré le{" "}
                                         {formaterDate(
-                                          maintenance.avisDate
+                                          dateAvisDID
                                         )}
                                       </div>
                                     )}
                                   </div>
                                 )}
-
-                                {/* =================================
-                                    ACTIONS
-                                ================================= */}
 
                                 <div
                                   style={
@@ -4207,10 +4318,6 @@ function ChefServiceLogistiqueContent() {
                         </div>
                       )}
 
-                      {/* =====================================
-                          VALIDATION N1
-                      ===================================== */}
-
                       {(r.statut ===
                         "VALIDEE_N1" ||
                         r.statut ===
@@ -4240,7 +4347,6 @@ function ChefServiceLogistiqueContent() {
 
                             Validation N°1 enregistrée
                           </div>
-
 
                           <div
                             style={
@@ -4294,10 +4400,6 @@ function ChefServiceLogistiqueContent() {
                         </div>
                       )}
 
-                      {/* =====================================
-                          REFUS
-                      ===================================== */}
-
                       {r.statut ===
                         "REFUSEE" && (
                         <div
@@ -4332,9 +4434,9 @@ function ChefServiceLogistiqueContent() {
                                 9,
                             }}
                           >
-                            <strong>
+                            <span>
                               Motif :
-                            </strong>{" "}
+                            </span>{" "}
                             {r.motifRefus ||
                               "—"}
                           </div>
@@ -4375,17 +4477,93 @@ function ChefServiceLogistiqueContent() {
             </div>
           )}
 
-          {/* Les avis DID restent dans les détails des tickets ci-dessus.
-              Les entretiens chauffeurs et périodiques sont dans le panneau dédié. */}
-
             </>
           )}
         </div>
       </div>
 
-      {/* ===================================================
-          MODALE REFUS
-      =================================================== */}
+      {popupOrdreMission && (
+        <div style={modalOverlayStyle}>
+          <div style={modalStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                marginBottom: 8,
+              }}
+            >
+              <Mail size={20} style={{ color: "#1d4ed8" }} />
+              <h3 style={{ margin: 0, fontSize: 17, color: "#111827" }}>
+                Transmettre l&apos;ordre de mission
+              </h3>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 4,
+                padding: 12,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                marginBottom: 6,
+              }}
+            >
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                Destinataire
+              </span>
+              <strong
+                style={{
+                  fontSize: 14,
+                  color: "#0f172a",
+                  wordBreak: "break-all",
+                }}
+              >
+
+              </strong>
+              {(destinataireOrdreMission?.nom || popupOrdreMission.demandeurNom || popupOrdreMission.demandeur) && (
+                <span style={{ fontSize: 12, color: "#64748b" }}>
+                  {destinataireOrdreMission?.nom || [popupOrdreMission.demandeurPrenom, popupOrdreMission.demandeurNom].filter(Boolean).join(" ") || nomUtilisateur(popupOrdreMission.demandeur!)}
+                  {(destinataireOrdreMission?.matricule || popupOrdreMission.demandeurMatricule) && ` · Matricule ${destinataireOrdreMission?.matricule || popupOrdreMission.demandeurMatricule}`}
+                </span>
+              )}
+            </div>
+
+            <OrdreMissionActions
+              mission={popupOrdreMission}
+              afficherTelechargement={true}
+              destinataireEmail={destinataireOrdreMission?.email || null}
+              onEnvoye={() => setPopupOrdreMission(null)}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: 14,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPopupOrdreMission(null)}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  color: "#334155",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {reservationARefuser && (
         <div
@@ -4551,13 +4729,6 @@ function ChefServiceLogistiqueContent() {
   );
 }
 
-
-
-// =========================================================
-// NORMES DE CARBURANT : CONSULTATION, VEHICULES GPS
-// Reprend les mêmes 9 références et la même règle de calcul indicative
-// que la rubrique Carburant de l'Agent Flotte (classeur SPAT transmis).
-// =========================================================
 const NORMES_CARBURANT_GPS: Record<string, { min: number; max: number; categorie: string }> = {
   "1205TCA": { min: 8.5, max: 13.5, categorie: "Voiture" },
   "1218TCA": { min: 8.5, max: 13.5, categorie: "Voiture" },
@@ -4611,13 +4782,20 @@ function NormesCarburantGpsConsultation({ vehicules, transactions, positionsGps,
   erreurGps: string | null;
 }) {
   const lignes = useMemo(() => {
+    const operationsParVehicule = new Map<number, TransactionCarburant[]>();
+    transactions.forEach((operation) => {
+      const vehiculeId = operation.vehicule?.id;
+      if (vehiculeId == null) return;
+      const operations = operationsParVehicule.get(vehiculeId) ?? [];
+      operations.push(operation);
+      operationsParVehicule.set(vehiculeId, operations);
+    });
     const pointsGps = new Map<number, PositionGpsCarburant>();
     positionsGps.forEach((point) => {
       if (point.vehiculeId != null) pointsGps.set(Number(point.vehiculeId), point);
     });
     return vehicules
-      // Les 9 plaques du document sont connues comme équipées GPS ;
-      // le dixième est ajouté à partir des données GPS ou de l'équipement déclaré.
+
       .filter((v) => v.gpsEquipe === true || v.gpsDeviceId != null ||
         pointsGps.has(v.id) || Boolean(NORMES_CARBURANT_GPS[normaliserPlaqueCarburant(v.immatriculation)]))
       .slice()
@@ -4626,7 +4804,7 @@ function NormesCarburantGpsConsultation({ vehicules, transactions, positionsGps,
         const norme = NORMES_CARBURANT_GPS[normaliserPlaqueCarburant(vehicule.immatriculation)] ?? null;
         const gps = pointsGps.get(vehicule.id) ?? null;
         const releve = gps?.odometreKm == null ? NaN : Number(gps.odometreKm);
-        const operations = transactions.filter((t) => t.vehicule?.id === vehicule.id);
+        const operations = operationsParVehicule.get(vehicule.id) ?? [];
         return {
           vehicule, norme, gps,
           kmGps: Number.isFinite(releve) && releve >= 0 ? releve : null,
@@ -4651,7 +4829,7 @@ function NormesCarburantGpsConsultation({ vehicules, transactions, positionsGps,
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
         <div>
           <h3 style={{ margin: 0, color: "#1e293b", fontSize: 16 }}>Normes de consommation — véhicules équipés GPS</h3>
-          
+
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12, fontWeight: 700 }}>
           <span style={{ background: "#f1f5f9", color: "#334155", padding: "7px 9px", borderRadius: 7 }}>Véhicules identifiés : {lignes.length}</span>
@@ -4660,9 +4838,9 @@ function NormesCarburantGpsConsultation({ vehicules, transactions, positionsGps,
         </div>
       </div>
       {erreurGps && <p role="status" style={{ color: "#991b1b", background: "#fef2f2", padding: 10, borderRadius: 7, fontSize: 12 }}>
-        {erreurGps} Les 9 références du document restent consultables, mais la liste GPS complète et les compteurs actuels ne peuvent pas être confirmés.
+        {erreurGps} Les positions et compteurs GPS ne sont pas à jour.
       </p>}
-      
+
       {lignes.length === 0 ? (
         <p style={{ color: "#64748b", fontSize: 12 }}>Aucun véhicule du référentiel trouvé dans le parc accessible à ce rôle.</p>
       ) : (
@@ -4696,28 +4874,32 @@ function NormesCarburantGpsConsultation({ vehicules, transactions, positionsGps,
           </table>
         </div>
       )}
-      
+
     </section>
   );
 }
 
-// =========================================================
-// CONSULTATION DES CONSOMMATIONS SANS GPS : données déjà enregistrées.
-// Aucune saisie ou modification n'est accessible depuis cette section.
-// =========================================================
 function SuiviCarburantSansGpsConsultation({ vehicules, transactions, positionsGps }: {
   vehicules: Vehicule[];
   transactions: TransactionCarburant[];
   positionsGps: PositionGpsCarburant[];
 }) {
   const lignes = useMemo(() => {
+    const operationsParVehicule = new Map<number, TransactionCarburant[]>();
+    transactions.forEach((operation) => {
+      const vehiculeId = operation.vehicule?.id;
+      if (vehiculeId == null) return;
+      const operations = operationsParVehicule.get(vehiculeId) ?? [];
+      operations.push(operation);
+      operationsParVehicule.set(vehiculeId, operations);
+    });
     const idsGps = new Set(positionsGps.map((point) => point.vehiculeId));
     return vehicules
       .filter((v) => v.gpsEquipe !== true && v.gpsDeviceId == null && !idsGps.has(v.id))
       .slice()
       .sort((a, b) => a.immatriculation.localeCompare(b.immatriculation, "fr", { numeric: true }))
       .map((vehicule) => {
-        const operations = transactions.filter((t) => t.vehicule?.id === vehicule.id);
+        const operations = operationsParVehicule.get(vehicule.id) ?? [];
         const points = operations.flatMap((t) => {
           const jour = jourCarburant(t.dateOperation);
           const km = t.kilometrage == null ? NaN : Number(t.kilometrage);
@@ -4739,7 +4921,7 @@ function SuiviCarburantSansGpsConsultation({ vehicules, transactions, positionsG
   return (
     <section aria-label="Suivi carburant sans GPS en consultation" style={{ ...cardStyle, marginBottom: 18 }}>
       <h3 style={{ margin: 0, fontSize: 16, color: "#1e293b" }}>Consommation(véhicules sans GPS)</h3>
-      
+
       {lignes.length === 0 ? (
         <p style={{ color: "#64748b", fontSize: 12 }}>Aucun véhicule sans GPS identifié dans le parc chargé.</p>
       ) : (
@@ -4765,16 +4947,10 @@ function SuiviCarburantSansGpsConsultation({ vehicules, transactions, positionsG
           </table>
         </div>
       )}
-      <p style={{ color: "#64748b", fontSize: 11, margin: "9px 0 0" }}>
-        Consultation uniquement. Une comparaison fiable requiert la même période pour les litres réellement consommés et les relevés kilométriques.
-      </p>
+
     </section>
   );
 }
-
-// =========================================================
-// KPI
-// =========================================================
 
 function CarteKpi({
   icone,
@@ -4853,10 +5029,6 @@ function CarteKpi({
   );
 }
 
-// =========================================================
-// SECTION
-// =========================================================
-
 function SectionTitre({
   titre,
 }: {
@@ -4879,10 +5051,6 @@ function SectionTitre({
     </h3>
   );
 }
-
-// =========================================================
-// SOUS TITRE
-// =========================================================
 
 function SousTitreCarte({
   texte,
@@ -4919,10 +5087,6 @@ function SousTitreCarte({
   );
 }
 
-// =========================================================
-// BLOC VIDE
-// =========================================================
-
 function BlocVide({
   texte,
 }: {
@@ -4951,7 +5115,6 @@ function BlocVide({
   );
 }
 
-// Carte compacte commune aux informations du demandeur et du ticket.
 function InfoBoite({
   label,
   value,
@@ -4966,10 +5129,6 @@ function InfoBoite({
     </div>
   );
 }
-
-// =========================================================
-// INFO
-// =========================================================
 
 function Info({
   label,
@@ -5030,10 +5189,6 @@ function Info({
   );
 }
 
-// =========================================================
-// INFO AVIS DID
-// =========================================================
-
 function InfoAvisDID({
   label,
   value,
@@ -5064,10 +5219,6 @@ function InfoAvisDID({
     </div>
   );
 }
-
-// =========================================================
-// TRACE
-// =========================================================
 
 function TraceInfo({
   label,
@@ -5111,14 +5262,12 @@ function TraceInfo({
   );
 }
 
-// =========================================================
-// BADGE
-// =========================================================
-
 function BadgeStatut({
   statut,
+  zoneMission,
 }: {
   statut: string;
+  zoneMission?: string | null;
 }) {
   const map: Record<
     string,
@@ -5149,19 +5298,19 @@ function BadgeStatut({
     EN_ATTENTE: {
       bg: "#f1f5f9",
       color: "#475569",
-      label: "En attente",
+      label: zoneMission === "HORS_TOAMASINA" ? "Prévue" : "En attente",
     },
 
     VALIDEE_N1: {
       bg: "#dcfce7",
       color: "#166534",
-      label: "Validée N°1",
+      label: zoneMission === "HORS_TOAMASINA" ? "Planifiée" : "Validée N°1",
     },
 
     VALIDEE: {
       bg: "#dcfce7",
       color: "#166534",
-      label: "Validée",
+      label: zoneMission === "HORS_TOAMASINA" ? "Planifiée" : "Validée",
     },
 
     REFUSEE: {
@@ -5173,7 +5322,7 @@ function BadgeStatut({
     EN_ATTENTE_AVIS_DID: {
       bg: "#fef3c7",
       color: "#92400e",
-      label: "En attente avis DID",
+      label: zoneMission === "HORS_TOAMASINA" ? "Prévue — avis DID" : "En attente avis DID",
     },
 
     EN_ATTENTE_VALIDATION_N1: {
@@ -5238,10 +5387,6 @@ function BadgeStatut({
   );
 }
 
-// =========================================================
-// NOM BENEFICIAIRE
-// =========================================================
-
 function nomBeneficiaire(
   r: Reservation
 ) {
@@ -5258,10 +5403,6 @@ function nomBeneficiaire(
     r.demandeur
   );
 }
-
-// =========================================================
-// UTILISATEUR
-// =========================================================
 
 function nomUtilisateur(
   utilisateur?:
@@ -5292,10 +5433,6 @@ function nomUtilisateur(
   );
 }
 
-// =========================================================
-// CHAUFFEUR
-// =========================================================
-
 function nomChauffeur(
   chauffeur:
     | Chauffeur
@@ -5325,10 +5462,6 @@ function libelleChauffeur(
     ? `${nom} — ${chauffeur.matricule}`
     : nom;
 }
-
-// =========================================================
-// VEHICULE
-// =========================================================
 
 function libelleVehicule(
   vehicule: Vehicule
@@ -5384,10 +5517,6 @@ function libelleVehiculeDisponible(
     : vehicule.immatriculation;
 }
 
-// =========================================================
-// TYPE VEHICULE
-// =========================================================
-
 function formaterTypeVehicule(
   type?: string | null
 ) {
@@ -5417,10 +5546,6 @@ function formaterTypeVehicule(
     type
   );
 }
-
-// =========================================================
-// DATES
-// =========================================================
 
 function formaterDate(
   date?: string | null
@@ -5480,10 +5605,6 @@ function formaterDateCourte(
   );
 }
 
-// =========================================================
-// NOMBRE
-// =========================================================
-
 function formatNombre(
   nombre: number
 ) {
@@ -5498,13 +5619,9 @@ function formatNombre(
   );
 }
 
-// =========================================================
-// STYLES
-// =========================================================
-
 const COULEURS_BOUTONS = {
-  ROUGE: "#dc2626",
-  BLEU: "#2563eb",
+  ROUGE: "#bc1019",
+  BLEU: "#1d4ed8",
   VERT: "#15803d",
 } as const;
 
@@ -5611,10 +5728,6 @@ const cardStyle:
     16,
 };
 
-// =========================================================
-// TICKETS COMPACTS — PRESENTATION UNIQUEMENT
-// =========================================================
-
 const ticketCompactCardStyle: CSSProperties = {
   background: "#ffffff",
   border: "1px solid #e2e8f0",
@@ -5710,7 +5823,6 @@ const filtersStyle:
     "wrap",
 };
 
-// Grille de cartes compactes, responsive et identique dans les deux sections.
 const informationBoitesStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 205px), 1fr))",
@@ -6102,7 +6214,6 @@ const maintenanceChauffeurSelectStyle: CSSProperties = {
   outline: "none",
 };
 
-
 const boutonPremiereValidation: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -6186,22 +6297,23 @@ const boutonSecondaire:
   gap: 7,
 
   padding:
-    "7px 10px",
+    "9px 14px",
 
-  border:
-    "1px solid #2563eb",
+  border: "none",
 
-  borderRadius: 8,
+  borderRadius: 10,
 
-  background: "#2563eb",
+  background: "#1d4ed8",
 
   color: "#ffffff",
 
-  fontSize: 12,
+  fontSize: 13,
 
-  fontWeight: 600,
+  fontWeight: 700,
 
   cursor: "pointer",
+
+  transition: "all 150ms ease",
 };
 
 function boutonPrimaire(
@@ -6220,20 +6332,20 @@ function boutonPrimaire(
     gap: 7,
 
     padding:
-      "7px 10px",
+      "9px 14px",
 
     border: "none",
 
-    borderRadius: 8,
+    borderRadius: 10,
 
     background:
-      "#dc2626",
+      "#bc1019",
 
     color: "white",
 
     fontSize: 13,
 
-    fontWeight: 600,
+    fontWeight: 700,
 
     cursor:
       disabled
@@ -6242,6 +6354,8 @@ function boutonPrimaire(
 
     opacity:
       disabled ? 0.5 : 1,
+
+    transition: "all 150ms ease",
   };
 }
 
@@ -6421,7 +6535,7 @@ const modalStyle:
   boxShadow:
     "0 20px 45px rgba(15, 23, 42, 0.18)",
 };
-// Etats de l'avis DID visibles directement sur la carte du ticket.
+
 const ticketAvisDefavorableBadgeStyle: CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 5,
   border: "1px solid #fecaca", background: "#fff1f2", color: "#b91c1c",

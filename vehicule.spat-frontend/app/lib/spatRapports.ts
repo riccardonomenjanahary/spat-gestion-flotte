@@ -1,9 +1,4 @@
-/**
- * Générateur commun des rapports imprimables / PDF de SPAT.
- * Ce fichier n'appelle aucune API : chaque page lui fournit uniquement les
- * données que l'acteur est déjà autorisé à consulter.
- * Logo : /public/logo.png, identique à celui de EnTete.tsx.
- */
+
 
 export type ChampRapport = { libelle: string; valeur: string | number | null | undefined };
 export type SectionTableauRapport = {
@@ -57,16 +52,9 @@ function documentImpression(rapport: RapportSpat, date: string): string {
       : `<tr><td colspan="${s.colonnes.length}" class="vide">Aucune donnée pour cette rubrique.</td></tr>`;
     return `<section><h2>${safe(s.titre)}</h2><table><thead><tr>${entetes}</tr></thead><tbody>${contenu}</tbody></table></section>`;
   }).join("");
-  const signaturesDefaut: Array<{ fonction: string; nom?: string }> = [
-    { fonction: "1. Le Demandeur / Agent" },
-    { fonction: "2. Le Chauffeur" },
-    { fonction: "3. Chef Service Logistique" },
-    { fonction: "4. Direction DFP / DG" }
-  ];
-  const listeSignatures = (rapport.signatures && rapport.signatures.length > 0) ? rapport.signatures : signaturesDefaut;
-  const signatures = `<div class="signatures">${listeSignatures.map((s) =>
+  const signatures = rapport.signatures?.length ? `<div class="signatures">${rapport.signatures.map((s) =>
     `<div class="sig-card"><strong>${safe(s.fonction)}</strong><div class="signature-nom">${s.nom ? safe(s.nom) : ""}</div><div class="sig-space"><small>Date : ____/____/202__</small><br/><small>Signature &amp; Cachet</small></div></div>`
-  ).join("")}</div>`;
+  ).join("")}</div>` : "";
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"/>
   <title>${safe(rapport.titre)} - SPAT</title>
   <style>
@@ -113,7 +101,6 @@ function documentImpression(rapport: RapportSpat, date: string): string {
   </div></body></html>`;
 }
 
-/** Imprime uniquement le rapport dans un iframe isolé, jamais l'interface Next.js. */
 export async function imprimerRapportSpat(rapport: RapportSpat): Promise<void> {
   if (typeof window === "undefined") return;
   const iframe = document.createElement("iframe");
@@ -135,7 +122,7 @@ export async function imprimerRapportSpat(rapport: RapportSpat): Promise<void> {
           fenetre.addEventListener("afterprint", nettoyer, { once: true });
           fenetre.focus();
           fenetre.print();
-          // Certains navigateurs ne déclenchent pas afterprint pour les iframes.
+
           window.setTimeout(nettoyer, 60000);
         } catch (erreur) { iframe.remove(); reject(erreur); }
       };
@@ -163,10 +150,9 @@ async function chargerLogo(): Promise<string | null> {
   } catch { return null; }
 }
 
-/** Téléchargement PDF véritable et direct, sans déclencher la boîte d'impression. */
 export async function telechargerRapportPdfSpat(rapport: RapportSpat): Promise<void> {
   if (typeof window === "undefined") return;
-  // Import à la demande : pas de dépendance PDF chargée lors de la navigation.
+
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"), import("jspdf-autotable"),
   ]);
@@ -244,31 +230,24 @@ export async function telechargerRapportPdfSpat(rapport: RapportSpat): Promise<v
     y = (pdf as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
     y += 7;
   }
-  const signaturesAExporter = (rapport.signatures && rapport.signatures.length > 0)
-    ? rapport.signatures
-    : [
-        { fonction: "1. Le Demandeur / Agent" },
-        { fonction: "2. Le Chauffeur" },
-        { fonction: "3. Chef Service Logistique" },
-        { fonction: "4. Visa Direction (DFP / DG)" }
-      ];
-
-  if (y + 35 > hauteur - 22) ajouterPage();
-  const colonnes = signaturesAExporter.length;
-  signaturesAExporter.forEach((signature, index) => {
-    const colWidth = (largeur - marge * 2) / colonnes;
-    const x = marge + index * colWidth;
-    pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
-    pdf.text(signature.fonction, x, y, { maxWidth: colWidth - 4 });
-    if (signature.nom) {
-      pdf.setFont("helvetica", "normal"); pdf.text(signature.nom, x, y + 10, { maxWidth: colWidth - 4 });
-    }
-    pdf.setDrawColor(140, 140, 140);
-    pdf.line(x, y + 18, x + Math.min(55, colWidth - 6), y + 18);
-    pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.5);
-    pdf.text("Date : ____/____/202__", x, y + 23);
-    pdf.text("Signature & Cachet", x, y + 28);
-  });
+  if (rapport.signatures?.length) {
+    if (y + 35 > hauteur - 22) ajouterPage();
+    const colonnes = rapport.signatures.length;
+    rapport.signatures.forEach((signature, index) => {
+      const colWidth = (largeur - marge * 2) / colonnes;
+      const x = marge + index * colWidth;
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+      pdf.text(signature.fonction, x, y, { maxWidth: colWidth - 4 });
+      if (signature.nom) {
+        pdf.setFont("helvetica", "normal"); pdf.text(signature.nom, x, y + 10, { maxWidth: colWidth - 4 });
+      }
+      pdf.setDrawColor(140, 140, 140);
+      pdf.line(x, y + 18, x + Math.min(55, colWidth - 6), y + 18);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.5);
+      pdf.text("Date : ____/____/202__", x, y + 23);
+      pdf.text("Signature & Cachet", x, y + 28);
+    });
+  }
   const pages = pdf.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     pdf.setPage(page);

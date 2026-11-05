@@ -8,6 +8,9 @@ import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ChauffeurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.AssuranceRepository;
+import com.vehicule.Spat.vehicule.spat_backend.repository.MaintenanceRepository;
+import com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance;
 
 import org.springframework.stereotype.Service;
 
@@ -24,12 +27,16 @@ public class DisponibiliteReservationService {
     private final ReservationRepository reservationRepository;
     private final VehiculeRepository vehiculeRepository;
     private final ChauffeurRepository chauffeurRepository;
+    private final AssuranceRepository assuranceRepository;
+    private final MaintenanceRepository maintenanceRepository;
 
 
     public DisponibiliteReservationService(
             ReservationRepository reservationRepository,
             VehiculeRepository vehiculeRepository,
-            ChauffeurRepository chauffeurRepository
+            ChauffeurRepository chauffeurRepository,
+            AssuranceRepository assuranceRepository,
+            MaintenanceRepository maintenanceRepository
     ) {
 
         this.reservationRepository =
@@ -40,6 +47,8 @@ public class DisponibiliteReservationService {
 
         this.chauffeurRepository =
                 chauffeurRepository;
+        this.assuranceRepository = assuranceRepository;
+        this.maintenanceRepository = maintenanceRepository;
     }
 
 
@@ -286,7 +295,8 @@ public class DisponibiliteReservationService {
         List<Map<String, Object>> resultat = new ArrayList<>();
 
         for (Vehicule vehicule : vehiculeRepository.findAll()) {
-            boolean eligible = vehiculeEligiblePourPlanning(vehicule);
+            boolean eligible = vehiculeEligiblePourPlanning(vehicule)
+                    && documentsValidesPourPeriode(vehicule, reservation.getDateDebut(), reservation.getDateFin());
             boolean occupeParAutreTicket = eligible
                     && reservationRepository.existeChevauchementVehicule(
                     vehicule.getId(),
@@ -300,7 +310,7 @@ public class DisponibiliteReservationService {
 
             if (!eligible) {
                 etat = "INDISPONIBLE_TECHNIQUE";
-                raison = "Vehicule indisponible (statut : "
+                raison = "Vehicule indisponible (documents, entretien ou statut : "
                         + (vehicule.getStatut() == null
                         ? "non renseigne" : vehicule.getStatut()) + ")";
             } else if (occupeParAutreTicket) {
@@ -314,6 +324,7 @@ public class DisponibiliteReservationService {
             Map<String, Object> ligne = new LinkedHashMap<>();
             ligne.put("id", vehicule.getId());
             ligne.put("immatriculation", vehicule.getImmatriculation());
+            ligne.put("categorie", vehicule.getCategorie());
             ligne.put("etat", etat);
             ligne.put("disponible", eligible && !occupeParAutreTicket);
             ligne.put("raison", raison);
@@ -359,7 +370,7 @@ public class DisponibiliteReservationService {
 
         if (!vehiculeEligiblePourPlanning(
                 vehicule
-        )) {
+        ) || !documentsValidesPourPeriode(vehicule, dateDebut, dateFin)) {
 
             return false;
         }
@@ -376,6 +387,62 @@ public class DisponibiliteReservationService {
 
 
         return !chevauchement;
+    }
+
+    /**
+     * Retourne la première cause opérationnelle expliquant pourquoi un
+     * véhicule ne peut pas être réservé sur une période donnée. Cette
+     * information est destinée au message de contrainte affiché à l'Assistant
+     * de direction ; elle ne remplace pas le contrôle de disponibilité.
+     */
+    public String expliquerIndisponibilitePourPeriode(
+            Vehicule vehicule,
+            LocalDateTime dateDebut,
+            LocalDateTime dateFin,
+            Long reservationAExclure
+    ) {
+        if (vehicule == null) return "véhicule introuvable";
+        String statut = vehicule.getStatut() == null ? "non renseigné"
+                : vehicule.getStatut().trim().toUpperCase(Locale.ROOT);
+        if (!List.of("DISPONIBLE", "EN_MISSION", "SUR_PLACE", "EN_DEPLACEMENT").contains(statut)) {
+            if ("REQUISITIONNE".equals(statut)) {
+                return "véhicule réquisitionné par le DGAL";
+            }
+            return "statut opérationnel : " + statut;
+        }
+        if (maintenanceRepository.existsByVehiculeIdAndOrigineDemandeIsNotNullAndStatutIn(
+                vehicule.getId(), List.of(StatutMaintenance.ENTRETIEN_AUTORISE,
+                        StatutMaintenance.EN_ATTENTE_VALIDATION_ENTRETIEN,
+                        StatutMaintenance.ENTRETIEN_TERMINE,
+                        StatutMaintenance.EN_COURS, StatutMaintenance.PLANIFIEE))) {
+            return "entretien/maintenance en cours : véhicule indisponible jusqu'à confirmation du Chef Logistique";
+        }
+        if (vehicule.getDateExpirationVisiteTechnique() == null) {
+            return "statut disponible, mais date de visite technique non renseignée";
+        }
+        if (dateFin != null && vehicule.getDateExpirationVisiteTechnique().isBefore(dateFin.toLocalDate())) {
+            return "statut disponible, mais visite technique expirée avant la fin de la mission";
+        }
+        boolean assuranceValide = assuranceRepository.findByVehiculeIdOrderByDateExpirationDesc(vehicule.getId())
+                .stream()
+                .anyMatch(a -> a.getDateExpiration() != null
+                        && (a.getDateDebut() == null || !a.getDateDebut().isAfter(dateDebut.toLocalDate()))
+                        && !a.getDateExpiration().isBefore(dateFin.toLocalDate()));
+        if (!assuranceValide) {
+            return "statut disponible, mais assurance absente ou non valide pour la période";
+        }
+        if (reservationRepository.existeChevauchementVehicule(
+                vehicule.getId(), reservationAExclure, dateDebut, dateFin)) {
+            return reservationRepository.trouverChevauchementsVehicule(
+                            vehicule.getId(), reservationAExclure, dateDebut, dateFin)
+                    .stream()
+                    .findFirst()
+                    .map(reservation -> reservation.getDateFin() == null
+                            ? "déjà réservé sur cette période"
+                            : "déjà réservé : indisponible jusqu'au " + reservation.getDateFin().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm")))
+                    .orElse("déjà réservé sur cette période");
+        }
+        return "indisponibilité à vérifier dans le planning";
     }
 
 
@@ -414,7 +481,9 @@ public class DisponibiliteReservationService {
 
         if (!chauffeurEligiblePourPlanning(
                 chauffeur
-        )) {
+        ) || chauffeur.getNumeroPermis() == null || chauffeur.getNumeroPermis().isBlank()
+                || chauffeur.getDateExpirationPermis() == null
+                || chauffeur.getDateExpirationPermis().isBefore(dateFin.toLocalDate())) {
 
             return false;
         }
@@ -465,11 +534,26 @@ public class DisponibiliteReservationService {
          * planifié pour une période future si les créneaux
          * ne se chevauchent pas.
          */
-        return !statut.equals("MAINTENANCE")
-                && !statut.equals("EN_MAINTENANCE")
-                && !statut.equals("HORS_SERVICE")
-                && !statut.equals("TRANSFERE")
-                && !statut.equals("REFORME");
+        return List.of("DISPONIBLE", "EN_MISSION", "SUR_PLACE", "EN_DEPLACEMENT")
+                .contains(statut)
+                && !maintenanceRepository.existsByVehiculeIdAndOrigineDemandeIsNotNullAndStatutIn(
+                        vehicule.getId(), List.of(StatutMaintenance.ENTRETIEN_AUTORISE,
+                                StatutMaintenance.EN_ATTENTE_VALIDATION_ENTRETIEN,
+                                StatutMaintenance.ENTRETIEN_TERMINE,
+                                StatutMaintenance.EN_COURS, StatutMaintenance.PLANIFIEE));
+    }
+
+    private boolean documentsValidesPourPeriode(Vehicule vehicule,
+                                                LocalDateTime debut, LocalDateTime fin) {
+        if (!periodeValide(debut, fin)
+                || vehicule.getDateExpirationVisiteTechnique() == null
+                || vehicule.getDateExpirationVisiteTechnique().isBefore(fin.toLocalDate())) {
+            return false;
+        }
+        return assuranceRepository.findByVehiculeIdOrderByDateExpirationDesc(vehicule.getId())
+                .stream().anyMatch(a -> a.getDateExpiration() != null
+                        && (a.getDateDebut() == null || !a.getDateDebut().isAfter(debut.toLocalDate()))
+                        && !a.getDateExpiration().isBefore(fin.toLocalDate()));
     }
 
 

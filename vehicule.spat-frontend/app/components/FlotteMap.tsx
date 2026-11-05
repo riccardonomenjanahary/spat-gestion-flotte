@@ -6,10 +6,6 @@ import L from "leaflet";
 
 import "leaflet/dist/leaflet.css";
 
-// =========================================================
-// TYPES — mêmes contrats que le composant existant
-// =========================================================
-
 export interface GpsPosition {
   vehiculeId: number;
   immatriculation: string;
@@ -47,10 +43,6 @@ interface FlotteMapProps {
 const ANTANANARIVO: [number, number] = [-18.8792, 47.5079];
 const GPS_STALE_AFTER_SECONDS = 5 * 60;
 
-// 21 = vue encore plus rapprochée sur le véhicule sélectionné.
-// Les tuiles OSM natives s’arrêtent au niveau 19 : au-delà, Leaflet agrandit
-// la carte sans améliorer la précision réelle des coordonnées GPS.
-// Le zoom manuel est conservé lors des actualisations GPS toutes les 5 secondes.
 const ZOOM_VEHICULE = 21;
 const ZOOM_MAX_GROUPE = 17;
 
@@ -116,9 +108,6 @@ function creerIcone(position: GpsPosition) {
   });
 }
 
-// Une nouvelle sélection recadre la carte au niveau de la rue.
-// Les actualisations GPS (toutes les 5 s) déplacent les marqueurs,
-// mais ne réinitialisent PLUS le zoom manuel de l'utilisateur.
 function AjusterVue({ positions }: { positions: GpsPosition[] }) {
   const map = useMap();
   const derniereSelection = useRef<string | null>(null);
@@ -168,7 +157,6 @@ export default function FlotteMap({
   const positionsFinales = useMemo<GpsPosition[]>(() => {
     if (positions.length > 0) return positions;
 
-    // Maintien de la compatibilité avec les pages utilisant « vehicules ».
     return vehicules.map((vehicule) => ({
       vehiculeId: vehicule.id,
       gpsDeviceId: vehicule.id,
@@ -246,15 +234,15 @@ export default function FlotteMap({
                   </div>
                 )}
                 <div style={{ marginTop: 8 }}>
-                  <strong>État GPS :</strong> {etatGps(position)}
+                  <span>État GPS :</span> {etatGps(position)}
                 </div>
-                <div><strong>Vitesse :</strong> {Math.round(position.vitesse ?? 0)} km/h</div>
-                <div><strong>Kilométrage :</strong> {formatterKm(position.odometreKm)}</div>
+                <div><span>Vitesse :</span> {Math.round(position.vitesse ?? 0)} km/h</div>
+                <div><span>Kilométrage :</span> {formatterKm(position.odometreKm)}</div>
                 {position.dateGps && (
-                  <div><strong>Dernière position :</strong> {position.dateGps}</div>
+                  <div><span>Dernière position :</span> {position.dateGps}</div>
                 )}
-                <div><strong>Latitude :</strong> {position.latitude.toFixed(6)}</div>
-                <div><strong>Longitude :</strong> {position.longitude.toFixed(6)}</div>
+                <div><span>Latitude :</span> {position.latitude.toFixed(6)}</div>
+                <div><span>Longitude :</span> {position.longitude.toFixed(6)}</div>
               </div>
             </Popup>
           </Marker>

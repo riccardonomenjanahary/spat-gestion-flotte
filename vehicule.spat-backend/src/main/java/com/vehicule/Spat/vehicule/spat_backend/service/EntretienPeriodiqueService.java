@@ -10,6 +10,8 @@ import jakarta.persistence.PersistenceContext;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -35,18 +37,23 @@ public class EntretienPeriodiqueService {
     private final MaintenanceService
             maintenanceService;
 
+        private final NotificationService notificationService;
+
     @PersistenceContext
     private EntityManager entityManager;
 
     public EntretienPeriodiqueService(
             SuiviEntretienPeriodiqueRepository suiviRepository,
-            MaintenanceService maintenanceService
+            MaintenanceService maintenanceService,
+            NotificationService notificationService
     ) {
         this.suiviRepository =
                 suiviRepository;
 
         this.maintenanceService =
                 maintenanceService;
+
+        this.notificationService = notificationService;
     }
 
     // =========================================================
@@ -121,17 +128,18 @@ public class EntretienPeriodiqueService {
             );
 
             suivi.setKilometrageDernierEntretien(
-                    kilometrage
+                    0.0
             );
 
             suivi.setProchaineEcheanceKm(
-                    kilometrage
-                            + INTERVALLE_KM
+                    INTERVALLE_KM
             );
 
             suivi.setDernierKilometrageConnu(
                     kilometrage
             );
+
+            suivi.setKilometrageBaseCycle(kilometrage);
 
             suivi.setEntretienPeriodiqueOuvert(
                     false
@@ -161,6 +169,14 @@ public class EntretienPeriodiqueService {
                 kilometrage
         );
 
+        // Compatibilité des suivis créés avant l'introduction du compteur de cycle.
+        if (suivi.getKilometrageBaseCycle() == null) {
+            Double baseHistorique = suivi.getKilometrageDernierEntretien();
+            suivi.setKilometrageBaseCycle(baseHistorique == null ? kilometrage : baseHistorique);
+            suivi.setKilometrageDernierEntretien(0.0);
+            suivi.setProchaineEcheanceKm(INTERVALLE_KM);
+        }
+
         // Vérifie d'abord si un dossier périodique précédent a été clôturé.
         synchroniserCloture(
                 suivi
@@ -168,20 +184,14 @@ public class EntretienPeriodiqueService {
 
         if (suivi.getProchaineEcheanceKm() == null) {
 
-            Double base =
-                    suivi.getKilometrageDernierEntretien() != null
-                            ? suivi.getKilometrageDernierEntretien()
-                            : kilometrage;
-
-            suivi.setKilometrageDernierEntretien(
-                    base
-            );
-
             suivi.setProchaineEcheanceKm(
-                    base
-                            + INTERVALLE_KM
+                    INTERVALLE_KM
             );
         }
+
+        double baseCycle = suivi.getKilometrageBaseCycle() == null
+                ? kilometrage : suivi.getKilometrageBaseCycle();
+        double kilometrageCycle = Math.max(0, kilometrage - baseCycle);
 
         boolean entretienOuvert =
                 Boolean.TRUE.equals(
@@ -189,12 +199,12 @@ public class EntretienPeriodiqueService {
                 );
 
         if (!entretienOuvert
-                && kilometrage
+                && kilometrageCycle
                 >= suivi.getProchaineEcheanceKm()) {
 
             creerDossierPeriodique(
-                    suivi,
-                    kilometrage
+                                suivi,
+                                        kilometrage
             );
         }
 
@@ -243,12 +253,13 @@ public class EntretienPeriodiqueService {
         );
 
         suivi.setKilometrageDernierEntretien(
-                kilometrageDernierEntretien
+                0.0
         );
 
+        suivi.setKilometrageBaseCycle(kilometrageDernierEntretien);
+
         suivi.setProchaineEcheanceKm(
-                kilometrageDernierEntretien
-                        + INTERVALLE_KM
+                INTERVALLE_KM
         );
 
         if (suivi.getDernierKilometrageConnu() == null
@@ -293,56 +304,33 @@ public class EntretienPeriodiqueService {
             return;
         }
 
-        boolean toujoursActif =
-                existeDossierPeriodiqueActif(
-                        suivi
-                                .getVehicule()
-                                .getId()
-                );
+        List<Maintenance> dossiers = entityManager.createQuery(
+                        "SELECT m FROM Maintenance m WHERE m.vehicule.id = :vehiculeId AND m.natureIntervention LIKE :prefixe",
+                        Maintenance.class)
+                .setParameter("vehiculeId", suivi.getVehicule().getId())
+                .setParameter("prefixe", PREFIXE_PERIODIQUE + "%")
+                .getResultList();
+        boolean toujoursActif = dossiers.stream().anyMatch(maintenance ->
+                !"CLOTUREE".equalsIgnoreCase(String.valueOf(maintenance.getStatut())));
 
         if (toujoursActif) {
             return;
         }
 
-        /*
-         * Le dossier a été clôturé par le circuit normal
-         * Maintenance -> DID -> Chef Service Logistique.
-         *
-         * Le compteur de départ du nouveau cycle est le
-         * kilométrage qui avait déclenché le dossier.
-         */
-        Double nouvelleReference =
-                suivi.getKilometrageDeclenchement();
-
-        if (nouvelleReference == null) {
-
-            nouvelleReference =
-                    suivi.getDernierKilometrageConnu();
-        }
-
-        if (nouvelleReference != null) {
-
-            suivi.setKilometrageDernierEntretien(
-                    nouvelleReference
-            );
-
-            suivi.setProchaineEcheanceKm(
-                    nouvelleReference
-                            + INTERVALLE_KM
-            );
-        }
-
-        suivi.setEntretienPeriodiqueOuvert(
-                false
-        );
-
-        suivi.setKilometrageDeclenchement(
-                null
-        );
-
-        suivi.setDateDeclenchement(
-                null
-        );
+                boolean clotureDepuisDeclenchement = suivi.getDateDeclenchement() != null
+                                && dossiers.stream().anyMatch(maintenance ->
+                                                "CLOTUREE".equalsIgnoreCase(String.valueOf(maintenance.getStatut()))
+                                                                && maintenance.getDateCreation() != null
+                                                                && !maintenance.getDateCreation().isBefore(suivi.getDateDeclenchement()));
+                if (clotureDepuisDeclenchement) {
+                        reinitialiserCycle(suivi);
+                } else {
+                        // Une annulation ou un refus n'est pas un entretien réalisé :
+                        // conserver le compteur et rendre l'échéance disponible à nouveau.
+                        suivi.setEntretienPeriodiqueOuvert(false);
+                        suivi.setKilometrageDeclenchement(null);
+                        suivi.setDateDeclenchement(null);
+                }
     }
 
     // =========================================================
@@ -386,6 +374,8 @@ public class EntretienPeriodiqueService {
                 maintenance
         );
 
+        notifierEntretienPeriodique(suivi, kilometrage);
+
         suivi.setEntretienPeriodiqueOuvert(
                 true
         );
@@ -398,6 +388,96 @@ public class EntretienPeriodiqueService {
                 LocalDateTime.now()
         );
     }
+
+        /** Réinitialise uniquement le compteur du cycle périodique; l'odomètre absolu et les dossiers restent intacts. */
+        @Transactional
+        public void reinitialiserCycleDepuisMaintenance(java.util.UUID maintenanceId) {
+                Maintenance maintenance = entityManager.find(Maintenance.class, maintenanceId);
+                if (maintenance == null || !estPeriodique(maintenance)) return;
+                SuiviEntretienPeriodique suivi = suiviRepository.findByVehiculeId(maintenance.getVehicule().getId()).orElse(null);
+                if (suivi != null) reinitialiserCycle(suivi);
+        }
+
+        @Transactional
+        public Maintenance transmettrePeriodiqueAuDid(java.util.UUID maintenanceId) {
+                Maintenance maintenance = entityManager.find(Maintenance.class, maintenanceId);
+                if (maintenance == null || !estPeriodique(maintenance))
+                        throw new IllegalArgumentException("Dossier d'entretien périodique introuvable.");
+                if (maintenance.getStatut() != com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance.EN_ATTENTE_AVIS_DID)
+                        throw new IllegalStateException("Ce dossier périodique a déjà été transmis.");
+                maintenance.setStatut(com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance.ENTRETIEN_AUTORISE);
+                Maintenance sauvegardee = entityManager.merge(maintenance);
+                try {
+                        notificationService.creerPourRole("MECANICIEN_DID", "ENTRETIEN_PERIODIQUE", "IMPORTANT",
+                                        "Entretien périodique à effectuer — " + maintenance.getVehicule().getImmatriculation(),
+                                        maintenance.getNatureIntervention() + ". Le Chef du Service Logistique vous demande de réaliser l'entretien.",
+                                        "/mecanicien-did", null, null, maintenance.getVehicule().getId(), false);
+                } catch (Exception e) {
+                        System.err.println("Dossier périodique transmis, notification DID impossible : " + e.getMessage());
+                }
+                return sauvegardee;
+        }
+
+        public boolean estPeriodique(Maintenance maintenance) {
+                return maintenance != null && maintenance.getNatureIntervention() != null
+                                && maintenance.getNatureIntervention().startsWith(PREFIXE_PERIODIQUE);
+        }
+
+        private void reinitialiserCycle(SuiviEntretienPeriodique suivi) {
+                if (suivi.getDernierKilometrageConnu() != null) {
+                        suivi.setKilometrageBaseCycle(suivi.getDernierKilometrageConnu());
+                }
+                suivi.setKilometrageDernierEntretien(0.0);
+                suivi.setProchaineEcheanceKm(INTERVALLE_KM);
+                suivi.setEntretienPeriodiqueOuvert(false);
+                suivi.setKilometrageDeclenchement(null);
+                suivi.setDateDeclenchement(null);
+                suiviRepository.save(suivi);
+        }
+
+        private void notifierEntretienPeriodique(
+                        SuiviEntretienPeriodique suivi,
+                        Double kilometrage
+        ) {
+                Vehicule vehicule = suivi.getVehicule();
+                String immatriculation = vehicule == null || vehicule.getImmatriculation() == null
+                                ? "véhicule non identifié" : vehicule.getImmatriculation();
+                String titre = "Entretien périodique requis — " + immatriculation;
+                String message = "Le véhicule " + immatriculation + " a atteint "
+                                + formaterKm(kilometrage) + " km. Le seuil d'entretien périodique de "
+                                + formaterKm(suivi.getProchaineEcheanceKm()) + " km est atteint. "
+                                + "Un dossier de maintenance a été créé pour traitement.";
+                Long vehiculeId = vehicule == null ? null : vehicule.getId();
+
+                Runnable notifier = () -> {
+                        notifierRoleEntretien("MECANICIEN_DID", titre, message, vehiculeId, "/mecanicien-did");
+                        notifierRoleEntretien("CHEF_SERVICE_LOGISTIQUE", titre, message, vehiculeId, "/chef-service-logistique");
+                };
+
+                if (TransactionSynchronizationManager.isActualTransactionActive()
+                                && TransactionSynchronizationManager.isSynchronizationActive()) {
+                        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                        notifier.run();
+                                }
+                        });
+                } else {
+                        notifier.run();
+                }
+        }
+
+        private void notifierRoleEntretien(String role, String titre, String message,
+                                                                           Long vehiculeId, String lien) {
+                try {
+                        notificationService.creerPourRoleIsole(
+                                        role, "ENTRETIEN_PERIODIQUE", "IMPORTANT", titre, message,
+                                        lien, null, null, vehiculeId, false);
+                } catch (Exception e) {
+                        System.err.println("Entretien périodique enregistré, notification impossible pour "
+                                        + role + " : " + e.getMessage());
+                }
+        }
 
     // =========================================================
     // DETECTION D'UN DOSSIER PERIODIQUE ACTIF
@@ -477,6 +557,18 @@ public class EntretienPeriodiqueService {
                 .toList();
     }
 
+    /** Charge les relations LAZY et construit la réponse dans la même
+     * transaction, afin d'éviter une LazyInitializationException au contrôleur. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listerResumes() {
+        return suiviRepository.findAll().stream()
+                .sorted(Comparator.comparing(
+                        suivi -> suivi.getVehicule() == null ? null : suivi.getVehicule().getImmatriculation(),
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .map(this::resume)
+                .toList();
+    }
+
     public Map<String, Object> resume(
             SuiviEntretienPeriodique suivi
     ) {
@@ -523,10 +615,16 @@ public class EntretienPeriodiqueService {
         Double prochaine =
                 suivi.getProchaineEcheanceKm();
 
+        Double baseCycle = suivi.getKilometrageBaseCycle() != null
+                ? suivi.getKilometrageBaseCycle()
+                : suivi.getKilometrageDernierEntretien();
+        Double kilometrageCycle = actuel == null ? null
+                : baseCycle == null ? 0.0 : Math.max(0.0, actuel - baseCycle);
+
         Double restant =
                 actuel != null
                         && prochaine != null
-                        ? prochaine - actuel
+                        ? prochaine - (kilometrageCycle == null ? 0 : kilometrageCycle)
                         : null;
 
         String statut;
@@ -584,6 +682,9 @@ public class EntretienPeriodiqueService {
                 "dernierKilometrageConnu",
                 actuel
         );
+
+        result.put("kilometrageBaseCycle", baseCycle);
+        result.put("kilometrageDepuisDernierEntretien", kilometrageCycle);
 
         result.put(
                 "kilometresRestants",

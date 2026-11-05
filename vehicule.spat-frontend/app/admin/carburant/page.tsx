@@ -1,17 +1,17 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, FormEvent, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import EnTete from "@/components/EnTete";
+import JustificatifsSection from "@/components/JustificatifsSection";
+import { FileText } from "lucide-react";
 
 interface Vehicule {
-  id: number;
   immatriculation: string;
   modeleType?: string | null;
   categorie?: string | null;
-  statut?: string | null;
 }
 
 interface TransactionCarburant {
@@ -31,53 +31,15 @@ interface TransactionCarburant {
   dateCreation?: string | null;
 }
 
-const IconTrash = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-  </svg>
-);
-
-function dateLocaleInput() {
-  const maintenant = new Date();
-  const decalage = maintenant.getTimezoneOffset() * 60_000;
-  return new Date(maintenant.getTime() - decalage).toISOString().slice(0, 10);
-}
-
 export default function CarburantPage() {
   const router = useRouter();
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   const [transactions, setTransactions] = useState<TransactionCarburant[]>([]);
-  const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [chargement, setChargement] = useState(true);
-  const [role, setRole] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
-  const [formOuvert, setFormOuvert] = useState(false);
-  const [envoi, setEnvoi] = useState(false);
-
-  const [vehiculeId, setVehiculeId] = useState("");
-  const [type, setType] = useState<"DOTATION" | "CONSOMMATION">("CONSOMMATION");
-  const [quantiteLitres, setQuantiteLitres] = useState("");
-  const [dateOperation, setDateOperation] = useState(dateLocaleInput());
-  const [prixUnitaire, setPrixUnitaire] = useState("");
-  const [kilometrage, setKilometrage] = useState("");
-  const [station, setStation] = useState("");
-  const [mission, setMission] = useState("");
-  const [justificatif, setJustificatif] = useState("");
-  const [observation, setObservation] = useState("");
-
-  useEffect(() => {
-    setRole(localStorage.getItem("role"));
-  }, []);
-
-  const peutGerer =
-    role === "ADMIN" ||
-    role === "SUPER_ADMIN" ||
-    role === "CHEF_SERVICE_LOGISTIQUE" ||
-    role === "AGENT_FLOTTE";
+  const [transactionRecu, setTransactionRecu] = useState<TransactionCarburant | null>(null);
 
   const getToken = () => {
     if (typeof window === "undefined") return null;
@@ -98,6 +60,7 @@ export default function CarburantPage() {
 
   const chargerDonnees = async () => {
     if (!API) {
+      setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
       toast.error("NEXT_PUBLIC_API_URL n'est pas configurée.");
       setChargement(false);
       return;
@@ -106,45 +69,36 @@ export default function CarburantPage() {
     const token = getToken();
     if (!token) {
       router.replace("/login");
+      setErreurChargement("Session indisponible.");
       return;
     }
 
     setChargement(true);
+    setErreurChargement(null);
 
     try {
-      const [carburantRes, vehiculesRes] = await Promise.all([
-        fetch(`${API}/carburant`, {
+      const carburantRes = await fetch(`${API}/carburant`, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
           cache: "no-store",
-        }),
-        fetch(`${API}/vehicules`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          cache: "no-store",
-        }),
-      ]);
+        });
 
-      if (carburantRes.status === 401 || vehiculesRes.status === 401) {
+      if (carburantRes.status === 401) {
         toast.error("Votre session a expiré.");
         router.replace("/login");
         return;
       }
 
       if (!carburantRes.ok) throw new Error(await lireErreur(carburantRes));
-      if (!vehiculesRes.ok) throw new Error(await lireErreur(vehiculesRes));
-
-      const carburantData = await carburantRes.json();
-      const vehiculesData = await vehiculesRes.json();
-
-      setTransactions(Array.isArray(carburantData) ? carburantData : []);
-      setVehicules(Array.isArray(vehiculesData) ? vehiculesData : []);
+      const carburantData: unknown = await carburantRes.json();
+      if (!Array.isArray(carburantData)) throw new Error("Format de réponse carburant invalide.");
+      setTransactions(carburantData as TransactionCarburant[]);
     } catch (error) {
       console.error("Erreur chargement carburant :", error);
+      setTransactions([]);
+      setErreurChargement(error instanceof Error ? error.message : "Impossible de charger les données carburant.");
       toast.error(
         error instanceof Error
           ? error.message
@@ -207,161 +161,6 @@ export default function CarburantPage() {
     });
   }, [transactions, recherche]);
 
-  const resetFormulaire = () => {
-    setVehiculeId("");
-    setType("CONSOMMATION");
-    setQuantiteLitres("");
-    setDateOperation(dateLocaleInput());
-    setPrixUnitaire("");
-    setKilometrage("");
-    setStation("");
-    setMission("");
-    setJustificatif("");
-    setObservation("");
-  };
-
-  const ouvrirCreation = () => {
-    if (!peutGerer) return;
-    resetFormulaire();
-    setFormOuvert(true);
-  };
-
-  const fermerFormulaire = () => {
-    setFormOuvert(false);
-    resetFormulaire();
-  };
-
-  const handleSoumettre = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!peutGerer) return;
-
-    if (!API) {
-      toast.error("API non configurée.");
-      return;
-    }
-
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    if (!vehiculeId || !quantiteLitres || !dateOperation) {
-      toast.error("Véhicule, quantité et date sont obligatoires.");
-      return;
-    }
-
-    const quantite = Number(quantiteLitres);
-    if (!Number.isFinite(quantite) || quantite <= 0) {
-      toast.error("La quantité doit être supérieure à 0 litre.");
-      return;
-    }
-
-    const prix = prixUnitaire ? Number(prixUnitaire) : null;
-    if (prix !== null && (!Number.isFinite(prix) || prix < 0)) {
-      toast.error("Le prix unitaire est invalide.");
-      return;
-    }
-
-    const km = kilometrage ? Number(kilometrage) : null;
-    if (km !== null && (!Number.isFinite(km) || km < 0)) {
-      toast.error("Le kilométrage est invalide.");
-      return;
-    }
-
-    const montantTotal = prix !== null ? quantite * prix : null;
-
-    setEnvoi(true);
-
-    try {
-      const res = await fetch(`${API}/carburant`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          vehiculeId: Number(vehiculeId),
-          type,
-          quantiteLitres: quantite,
-          dateOperation,
-          prixUnitaire: prix,
-          montantTotal,
-          kilometrage: km,
-          station: station.trim() || null,
-          mission: mission.trim() || null,
-          justificatif: justificatif.trim() || null,
-          observation: observation.trim() || null,
-        }),
-      });
-
-      if (!res.ok) {
-        toast.error(await lireErreur(res));
-        return;
-      }
-
-      toast.success(
-        type === "DOTATION"
-          ? "Dotation enregistrée avec succès."
-          : "Consommation enregistrée avec succès."
-      );
-
-      fermerFormulaire();
-      await chargerDonnees();
-    } catch (error) {
-      console.error("Erreur création carburant :", error);
-      toast.error("Impossible de contacter le serveur.");
-    } finally {
-      setEnvoi(false);
-    }
-  };
-
-  const handleSupprimer = async (id: string) => {
-    if (!peutGerer) return;
-
-    if (!window.confirm("Voulez-vous vraiment supprimer cette opération carburant ?")) {
-      return;
-    }
-
-    if (!API) return;
-
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API}/carburant/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        toast.error(await lireErreur(res));
-        return;
-      }
-
-      toast.success("Opération carburant supprimée.");
-      await chargerDonnees();
-    } catch (error) {
-      console.error("Erreur suppression carburant :", error);
-      toast.error("Impossible de contacter le serveur.");
-    }
-  };
-
-  const montantCalcule =
-    quantiteLitres !== "" &&
-    prixUnitaire !== "" &&
-    Number(quantiteLitres) > 0 &&
-    Number(prixUnitaire) >= 0
-      ? Number(quantiteLitres) * Number(prixUnitaire)
-      : null;
-
   return (
     <>
       <style jsx global>{`
@@ -382,15 +181,9 @@ export default function CarburantPage() {
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 16px;
         }
-        .carburant-form-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
-        }
         .carburant-row:hover { background-color: #f8fafc; }
         @media (max-width: 900px) {
           .carburant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .carburant-form-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 600px) {
           .carburant-grid { grid-template-columns: 1fr; }
@@ -407,28 +200,19 @@ export default function CarburantPage() {
                 ← Retour
               </button>
               <h2 style={titreStyle}>Suivi carburant & consommation</h2>
-              
+
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" onClick={chargerDonnees} disabled={chargement} style={secondaireButton}>
-                Actualiser
-              </button>
-
-              {peutGerer && (
-                <button type="button" onClick={ouvrirCreation} style={primaryButton}>
-                  + Ajouter une opération
-                </button>
-              )}
-            </div>
           </header>
 
           <section className="carburant-grid" style={{ marginBottom: 24 }}>
-            <StatCard titre="Dotations" valeur={`${formatNombre(stats.dotation)} L`} />
-            <StatCard titre="Consommation" valeur={`${formatNombre(stats.consommation)} L`} />
-            <StatCard titre="Solde théorique" valeur={`${formatNombre(stats.solde)} L`} />
-            <StatCard titre="Montant total" valeur={formatMontant(stats.depenses)} />
+            <StatCard titre="Dotations" valeur={erreurChargement ? "—" : `${formatNombre(stats.dotation)} L`} />
+            <StatCard titre="Consommation" valeur={erreurChargement ? "—" : `${formatNombre(stats.consommation)} L`} />
+            <StatCard titre="Solde théorique" valeur={erreurChargement ? "—" : `${formatNombre(stats.solde)} L`} />
+            <StatCard titre="Montant total" valeur={erreurChargement ? "—" : formatMontant(stats.depenses)} />
           </section>
+
+          {erreurChargement && <p role="alert" style={{ color: "#b91c1c", margin: "0 0 16px" }}>Données carburant indisponibles : {erreurChargement}</p>}
 
           <div style={barreRechercheStyle}>
             <input
@@ -455,18 +239,20 @@ export default function CarburantPage() {
                     <th style={thStyle}>Station / Mission</th>
                     <th style={thStyle}>Justificatif</th>
                     <th style={thStyle}>Agent</th>
-                    {peutGerer && <th style={thStyle}>Actions</th>}
+                    <th style={thStyle}>Reçu</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {chargement ? (
                     <tr>
-                      <td colSpan={peutGerer ? 11 : 10} style={emptyStyle}>Chargement...</td>
+                      <td colSpan={11} style={emptyStyle}>Chargement...</td>
                     </tr>
+                  ) : erreurChargement ? (
+                    <tr><td colSpan={11} style={emptyStyle}>Impossible de confirmer la liste des opérations.</td></tr>
                   ) : transactionsFiltres.length === 0 ? (
                     <tr>
-                      <td colSpan={peutGerer ? 11 : 10} style={emptyStyle}>Aucune opération carburant.</td>
+                      <td colSpan={11} style={emptyStyle}>Aucune opération carburant.</td>
                     </tr>
                   ) : (
                     transactionsFiltres.map((item) => (
@@ -503,19 +289,27 @@ export default function CarburantPage() {
                           {item.observation && <div style={secondaryTextStyle}>{item.observation}</div>}
                         </td>
                         <td style={tdStyle}>{item.agentEmail || "—"}</td>
-                        {peutGerer && (
-                          <td style={tdStyle}>
-                            <button
-                              type="button"
-                              onClick={() => handleSupprimer(item.id)}
-                              style={deleteButtonStyle}
-                              aria-label={`Supprimer l'opération ${item.id}`}
-                              title="Supprimer"
-                            >
-                              <IconTrash />
-                            </button>
-                          </td>
-                        )}
+                        <td style={tdStyle}>
+                          <button
+                            type="button"
+                            onClick={() => setTransactionRecu(item)}
+                            title="Déposer / consulter le reçu"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "5px 9px",
+                              borderRadius: 6,
+                              border: "1px solid #cbd5e1",
+                              background: "#fff",
+                              color: "#334155",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FileText size={13} /> Reçu
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -524,106 +318,80 @@ export default function CarburantPage() {
             </div>
           </section>
         </div>
-      </main>
 
-      {formOuvert && peutGerer && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <div style={modalHeaderStyle}>
-              <div>
-                <h3 style={modalTitleStyle}>Ajouter une opération carburant</h3>
-                <p style={modalSubtitleStyle}>
-                  Les données saisies sont enregistrées directement dans le module carburant.
-                </p>
-              </div>
-              <button type="button" onClick={fermerFormulaire} style={closeButtonStyle}>×</button>
-            </div>
-
-            <form onSubmit={handleSoumettre}>
-              <div className="carburant-form-grid">
-                <Champ label="Véhicule *">
-                  <select value={vehiculeId} onChange={(e) => setVehiculeId(e.target.value)} style={inputStyle} required>
-                    <option value="">Sélectionner un véhicule</option>
-                    {vehicules.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.immatriculation}{v.modeleType ? ` — ${v.modeleType}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </Champ>
-
-                <Champ label="Type *">
-                  <select value={type} onChange={(e) => setType(e.target.value as "DOTATION" | "CONSOMMATION")} style={inputStyle} required>
-                    <option value="CONSOMMATION">Consommation</option>
-                    <option value="DOTATION">Dotation</option>
-                  </select>
-                </Champ>
-
-                <Champ label="Quantité (L) *">
-                  <input type="number" min="0.1" step="0.1" value={quantiteLitres} onChange={(e) => setQuantiteLitres(e.target.value)} style={inputStyle} required />
-                </Champ>
-
-                <Champ label="Date de l'opération *">
-                  <input type="date" value={dateOperation} onChange={(e) => setDateOperation(e.target.value)} style={inputStyle} required />
-                </Champ>
-
-                <Champ label="Prix unitaire (Ar/L)">
-                  <input type="number" min="0" step="1" value={prixUnitaire} onChange={(e) => setPrixUnitaire(e.target.value)} style={inputStyle} />
-                </Champ>
-
-                <Champ label="Montant calculé">
-                  <div style={readOnlyStyle}>
-                    {montantCalcule != null ? formatMontant(montantCalcule) : "—"}
-                  </div>
-                </Champ>
-
-                <Champ label="Kilométrage">
-                  <input type="number" min="0" step="1" value={kilometrage} onChange={(e) => setKilometrage(e.target.value)} style={inputStyle} />
-                </Champ>
-
-                <Champ label="Station">
-                  <input value={station} onChange={(e) => setStation(e.target.value)} style={inputStyle} placeholder="Station-service" />
-                </Champ>
-
-                <Champ label="Mission">
-                  <input value={mission} onChange={(e) => setMission(e.target.value)} style={inputStyle} placeholder="Référence ou objet de mission" />
-                </Champ>
-
-                <Champ label="Justificatif">
-                  <input value={justificatif} onChange={(e) => setJustificatif(e.target.value)} style={inputStyle} placeholder="Ticket, facture, référence..." />
-                </Champ>
-
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Champ label="Observation">
-                    <textarea
-                      value={observation}
-                      onChange={(e) => setObservation(e.target.value)}
-                      style={{ ...inputStyle, minHeight: 90, resize: "vertical", fontFamily: "inherit" }}
-                    />
-                  </Champ>
+        {transactionRecu && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.45)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20,
+            }}
+            onClick={() => setTransactionRecu(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 560,
+                maxHeight: "85vh",
+                overflowY: "auto",
+                backgroundColor: "white",
+                borderRadius: 12,
+                boxShadow: "0 8px 24px rgba(15,23,42,.15)",
+                padding: 20,
+              }}
+            >
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 12,
+                marginBottom: 14,
+              }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, color: "#111827" }}>
+                    Reçu de la transaction
+                  </h3>
+                  <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>
+                    {transactionRecu.vehicule?.immatriculation || "Véhicule inconnu"} —{" "}
+                    {formatDate(transactionRecu.dateOperation)} —{" "}
+                    {formatNombre(transactionRecu.quantiteLitres)} L
+                  </p>
                 </div>
-              </div>
 
-              <div style={modalActionsStyle}>
-                <button type="button" onClick={fermerFormulaire} style={secondaireButton}>Annuler</button>
-                <button type="submit" disabled={envoi} style={{ ...primaryButton, opacity: envoi ? 0.65 : 1 }}>
-                  {envoi ? "Enregistrement..." : "Enregistrer"}
+                <button
+                  type="button"
+                  onClick={() => setTransactionRecu(null)}
+                  style={{
+                    border: 0,
+                    background: "transparent",
+                    fontSize: 22,
+                    lineHeight: 1,
+                    color: "#64748b",
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
-function Champ({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label style={{ display: "block" }}>
-      <span style={labelStyle}>{label}</span>
-      {children}
-    </label>
+              <JustificatifsSection
+                cible={{ kind: "transaction", id: transactionRecu.id }}
+                typesAutorises={["RECU_CARBURANT", "AUTRE"]}
+                typeParDefaut="RECU_CARBURANT"
+                titre="Reçus et pièces"
+              />
+            </div>
+          </div>
+        )}
+      </main>
+
+    </>
   );
 }
 
@@ -716,12 +484,6 @@ const titreStyle: CSSProperties = {
   fontSize: 26,
 };
 
-const sousTitreStyle: CSSProperties = {
-  margin: "5px 0 0",
-  color: "#64748b",
-  fontSize: 13,
-};
-
 const statCardStyle: CSSProperties = {
   backgroundColor: "#ffffff",
   border: "1px solid #e2e8f0",
@@ -799,122 +561,5 @@ const emptyStyle: CSSProperties = {
   textAlign: "center",
   color: "#64748b",
   fontSize: 13,
-};
-
-const primaryButton: CSSProperties = {
-  padding: "10px 16px",
-  border: "1px solid #dc2626",
-  borderRadius: 8,
-  backgroundColor: "#dc2626",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaireButton: CSSProperties = {
-  padding: "10px 14px",
-  border: "1px solid #2563eb",
-  borderRadius: 8,
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const deleteButtonStyle: CSSProperties = {
-  width: 34,
-  height: 34,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  border: "1px solid #fecaca",
-  borderRadius: 8,
-  backgroundColor: "#fef2f2",
-  color: "#dc2626",
-  cursor: "pointer",
-};
-
-const overlayStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 1000,
-  padding: 20,
-  backgroundColor: "rgba(15,23,42,0.65)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  overflowY: "auto",
-};
-
-const modalStyle: CSSProperties = {
-  width: "100%",
-  maxWidth: 800,
-  maxHeight: "92vh",
-  overflowY: "auto",
-  padding: 26,
-  borderRadius: 12,
-  backgroundColor: "#ffffff",
-  boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-};
-
-const modalHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 15,
-  marginBottom: 20,
-};
-
-const modalTitleStyle: CSSProperties = {
-  margin: 0,
-  color: "#111827",
-  fontSize: 21,
-};
-
-const modalSubtitleStyle: CSSProperties = {
-  margin: "5px 0 0",
-  color: "#64748b",
-  fontSize: 12,
-};
-
-const closeButtonStyle: CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: "#64748b",
-  cursor: "pointer",
-  fontSize: 24,
-};
-
-const labelStyle: CSSProperties = {
-  display: "block",
-  marginBottom: 6,
-  color: "#374151",
-  fontSize: 12,
-  fontWeight: 700,
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  padding: "10px 11px",
-  border: "1px solid #94a3b8",
-  borderRadius: 8,
-  backgroundColor: "#ffffff",
-  color: "#111827",
-  fontSize: 13,
-};
-
-const readOnlyStyle: CSSProperties = {
-  ...inputStyle,
-  minHeight: 39,
-  backgroundColor: "#f8fafc",
-  color: "#475569",
-};
-
-const modalActionsStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 20,
 };
 

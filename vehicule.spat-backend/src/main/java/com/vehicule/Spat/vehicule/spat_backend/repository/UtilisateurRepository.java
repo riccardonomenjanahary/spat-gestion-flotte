@@ -8,9 +8,13 @@ import java.util.Optional;
 
 public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> {
 
+    List<Utilisateur> findByRole(String role);
+
     Optional<Utilisateur> findByMatricule(String matricule);
 
     Optional<Utilisateur> findByEmail(String email);
+
+    Optional<Utilisateur> findByEmailIgnoreCase(String email);
 
     // Utilisateurs visibles dans l'application :
     // exclut les comptes techniques ADMIN et SUPER_ADMIN

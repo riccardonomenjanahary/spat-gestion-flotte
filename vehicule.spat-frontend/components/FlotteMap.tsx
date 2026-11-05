@@ -10,12 +10,10 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { chercherLieuGps, type LieuGps } from "@/app/lib/gpsLocation";
 
 import "leaflet/dist/leaflet.css";
-
-// =========================================================
-// TYPES : contrat GPS et compatibilité avec les anciennes pages
-// =========================================================
 
 export interface GpsPosition {
   vehiculeId: number;
@@ -33,6 +31,11 @@ export interface GpsPosition {
   odometreKm?: number | null;
   distanceTotale?: number | null;
   derniereReceptionSpat?: number | null;
+  routeNationale?: string | null;
+  distanceRouteMetres?: number | null;
+  quartier?: string | null;
+  voie?: string | null;
+  commune?: string | null;
 }
 
 interface VehiculePositionLegacy {
@@ -49,20 +52,22 @@ interface FlotteMapProps {
   vehicules?: VehiculePositionLegacy[];
   height?: number | string;
   showHeader?: boolean;
+  emptyMessage?: string;
+  showFullscreenControl?: boolean;
+  focusZoom?: number;
+  maxZoom?: number;
+  showMapWhenEmpty?: boolean;
+  emptyCenter?: [number, number];
+  afficherLieu?: boolean;
 }
 
 const ANTANANARIVO: [number, number] = [-18.8792, 47.5079];
 const GPS_STALE_AFTER_SECONDS = 5 * 60;
-// Ne pas démarrer à 22 : les images satellite utilisées ici ne contiennent
-// pas de détails natifs à ce niveau. L'utilisateur peut zoomer jusqu'à 19.
+
 const ZOOM_VEHICULE = 18;
 const ZOOM_MAXIMAL = 19;
-const ZOOM_NATIF_SATELLITE = 19;
+const ZOOM_NATIF_SATELLITE = 17;
 const ZOOM_NATIF_PLAN = 19;
-
-// =========================================================
-// VALIDATION ET AFFICHAGE GPS
-// =========================================================
 
 function positionValide(
   position: GpsPosition
@@ -137,11 +142,7 @@ function creerIcone(position: GpsPosition) {
   });
 }
 
-// =========================================================
-// CENTRAGE INITIAL ET SUIVI DU VÉHICULE EN MOUVEMENT
-// =========================================================
-
-function AjusterVue({ positions }: { positions: GpsPosition[] }) {
+function AjusterVue({ positions, focusZoom }: { positions: GpsPosition[]; focusZoom: number }) {
   const map = useMap();
   const vehiculeSuivi = useRef<string | null>(null);
   const dernierePosition = useRef<[number, number] | null>(null);
@@ -166,7 +167,7 @@ function AjusterVue({ positions }: { positions: GpsPosition[] }) {
         vehiculeSuivi.current = identifiant;
         dernierePosition.current = nouvellesCoordonnees;
         map.stop();
-        map.setView(nouvellesCoordonnees, ZOOM_VEHICULE, {
+        map.setView(nouvellesCoordonnees, focusZoom, {
           animate: false,
         });
         return;
@@ -181,7 +182,7 @@ function AjusterVue({ positions }: { positions: GpsPosition[] }) {
 
       dernierePosition.current = nouvellesCoordonnees;
       map.stop();
-      // panTo conserve le zoom choisi manuellement lors de chaque relevé GPS.
+
       map.panTo(nouvellesCoordonnees, {
         animate: true,
         duration: 0.6,
@@ -190,8 +191,6 @@ function AjusterVue({ positions }: { positions: GpsPosition[] }) {
       return;
     }
 
-    // Pour les pages qui montrent plusieurs véhicules, conserver le cadrage
-    // global et ne pas le réinitialiser à chaque polling GPS.
     const identifiants = positionsValides
       .map((p) => `${p.vehiculeId}-${p.gpsDeviceId}`)
       .sort()
@@ -207,22 +206,19 @@ function AjusterVue({ positions }: { positions: GpsPosition[] }) {
     map.stop();
     map.fitBounds(bounds, {
       padding: [30, 30],
-      maxZoom: ZOOM_VEHICULE,
+      maxZoom: focusZoom,
       animate: false,
     });
-  }, [map, positionsValides]);
+  }, [map, positionsValides, focusZoom]);
 
   return null;
 }
 
-// =========================================================
-// AFFICHAGE FIABLE APRÈS CHANGEMENT DE TAILLE DU PANNEAU
-// =========================================================
 function SynchroniserDimensionsCarte() {
   const map = useMap();
 
   useEffect(() => {
-    // React Leaflet doit recalculer la taille réelle du panneau Agent Flotte.
+
     map.invalidateSize({ pan: false });
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
@@ -235,25 +231,52 @@ function SynchroniserDimensionsCarte() {
   return null;
 }
 
-// =========================================================
-// CHOIX DU FOND : accessible à droite (la liste GPS couvre la gauche).
-// =========================================================
 type FondCarte = "satellite" | "plan";
 
 function ChoixFondCarte({
   fond,
   changerFond,
   satelliteIndisponible,
+  showFullscreenControl,
 }: {
   fond: FondCarte;
   changerFond: (fond: FondCarte) => void;
   satelliteIndisponible: boolean;
+  showFullscreenControl: boolean;
 }) {
   const conteneur = useRef<HTMLDivElement>(null);
+  const map = useMap();
+  const [pleinEcran, setPleinEcran] = useState(false);
+  const [erreurPleinEcran, setErreurPleinEcran] = useState("");
 
   useEffect(() => {
     if (conteneur.current) L.DomEvent.disableClickPropagation(conteneur.current);
   }, []);
+
+  useEffect(() => {
+    const suivrePleinEcran = () => {
+      setPleinEcran(document.fullscreenElement === map.getContainer());
+      window.setTimeout(() => map.invalidateSize({ pan: false }), 80);
+    };
+    document.addEventListener("fullscreenchange", suivrePleinEcran);
+    return () => document.removeEventListener("fullscreenchange", suivrePleinEcran);
+  }, [map]);
+
+  const basculerPleinEcran = async () => {
+    setErreurPleinEcran("");
+    try {
+      const conteneurCarte = map.getContainer();
+      if (document.fullscreenElement === conteneurCarte) {
+        await document.exitFullscreen();
+      } else if (conteneurCarte.requestFullscreen) {
+        await conteneurCarte.requestFullscreen();
+      } else {
+        setErreurPleinEcran("Le mode plein écran n'est pas pris en charge par ce navigateur.");
+      }
+    } catch {
+      setErreurPleinEcran("Impossible d'ouvrir la carte en plein écran.");
+    }
+  };
 
   return (
     <div
@@ -297,23 +320,89 @@ function ChoixFondCarte({
           Réessayez « Satellite » lorsque la connexion est rétablie.
         </div>
       )}
+      {showFullscreenControl && (
+        <button
+          type="button"
+          onClick={basculerPleinEcran}
+          aria-label={pleinEcran ? "Quitter le plein écran" : "Afficher la carte en plein écran"}
+          title={pleinEcran ? "Quitter le plein écran (Échap)" : "Afficher la carte en plein écran"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 7,
+            padding: "8px 10px", borderRadius: 6,
+            border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b",
+            cursor: "pointer", fontSize: 12, fontWeight: 700,
+            boxShadow: "0 1px 8px rgba(0,0,0,.12)",
+          }}
+        >
+          {pleinEcran ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          {pleinEcran ? "Quitter le plein écran" : "Plein écran"}
+        </button>
+      )}
+      {erreurPleinEcran && (
+        <div role="status" style={{
+          padding: "7px 9px", borderRadius: 6, background: "#fff",
+          border: "1px solid #fca5a5", color: "#991b1b", fontSize: 11,
+        }}>
+          {erreurPleinEcran}
+        </div>
+      )}
     </div>
   );
 }
-
-// =========================================================
-// COMPOSANT CARTE : SATELLITE PAR DÉFAUT, PLAN DISPONIBLE
-// =========================================================
 
 export default function FlotteMap({
   positions = [],
   vehicules = [],
   height = 310,
   showHeader = false,
+  showFullscreenControl = false,
+  focusZoom = ZOOM_VEHICULE,
+  maxZoom = ZOOM_MAXIMAL,
+  emptyMessage = "Aucune coordonnée GPS exploitable pour ce véhicule.",
+  showMapWhenEmpty = false,
+  emptyCenter = ANTANANARIVO,
+  afficherLieu = false,
 }: FlotteMapProps) {
+  const [isClient, setIsClient] = useState(false);
   const [fond, setFond] = useState<FondCarte>("satellite");
   const [satelliteIndisponible, setSatelliteIndisponible] = useState(false);
   const erreursTuilesSatellite = useRef(0);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  const [lieuxGps, setLieuxGps] = useState<Record<number, LieuGps>>({});
+  const [lieuGpsNonDisponible, setLieuGpsNonDisponible] = useState<Record<number, boolean>>({});
+  const positionsGpsValides = useMemo(() => positions.filter(positionValide), [positions]);
+  const clePositionsGps = positionsGpsValides
+    .map((position) => `${position.vehiculeId}:${position.latitude.toFixed(4)},${position.longitude.toFixed(4)}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!afficherLieu) return;
+    const positionsAvecCoordonnees = positionsGpsValides
+      .filter((position) => !lieuxGps[position.vehiculeId] && !lieuGpsNonDisponible[position.vehiculeId]);
+    if (positionsAvecCoordonnees.length === 0) return;
+
+    const controller = new AbortController();
+    void (async () => {
+      for (const position of positionsAvecCoordonnees) {
+        try {
+          const lieu = await chercherLieuGps(position.latitude, position.longitude, controller.signal);
+          if (controller.signal.aborted) return;
+          setLieuxGps((actuels) => ({ ...actuels, [position.vehiculeId]: lieu }));
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          setLieuGpsNonDisponible((actuels) => ({ ...actuels, [position.vehiculeId]: true }));
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            console.warn("Localisation textuelle GPS indisponible:", error);
+          }
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [afficherLieu, clePositionsGps, lieuxGps, lieuGpsNonDisponible]);
 
   const changerFond = (nouveauFond: FondCarte) => {
     erreursTuilesSatellite.current = 0;
@@ -323,7 +412,7 @@ export default function FlotteMap({
 
   const signalerEchecSatellite = () => {
     erreursTuilesSatellite.current += 1;
-    // Évite de passer au plan pour une tuile isolée momentanément absente.
+
     if (erreursTuilesSatellite.current >= 3) {
       setSatelliteIndisponible(true);
       setFond("plan");
@@ -350,7 +439,31 @@ export default function FlotteMap({
     [positionsFinales]
   );
 
-  if (positionsValides.length === 0) {
+  if (!isClient) {
+    return (
+      <div
+        style={{
+          height,
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px dashed #cbd5e1",
+          borderRadius: 10,
+          backgroundColor: "#f8fafc",
+          color: "#94a3b8",
+          fontSize: 12,
+          textAlign: "center",
+          padding: 20,
+          boxSizing: "border-box",
+        }}
+      >
+        Chargement de la carte...
+      </div>
+    );
+  }
+
+  if (positionsValides.length === 0 && !showMapWhenEmpty) {
     return (
       <div
         style={{
@@ -369,7 +482,7 @@ export default function FlotteMap({
           boxSizing: "border-box",
         }}
       >
-        Aucune coordonnée GPS exploitable pour ce véhicule.
+        {emptyMessage}
       </div>
     );
   }
@@ -377,6 +490,7 @@ export default function FlotteMap({
   return (
     <div
       style={{
+        position: "relative",
         width: "100%",
         height,
         display: "flex",
@@ -399,10 +513,10 @@ export default function FlotteMap({
       )}
 
       <MapContainer
-        center={ANTANANARIVO}
+        center={emptyCenter}
         zoom={12}
         minZoom={3}
-        maxZoom={ZOOM_MAXIMAL}
+        maxZoom={maxZoom}
         zoomControl={false}
         scrollWheelZoom={true}
         doubleClickZoom={true}
@@ -416,13 +530,14 @@ export default function FlotteMap({
           backgroundColor: "#e5e7eb",
         }}
       >
-        {/* + / − sont à DROITE : à gauche ils étaient masqués par la liste GPS. */}
+
         <ZoomControl position="topright" />
         <SynchroniserDimensionsCarte />
         <ChoixFondCarte
           fond={fond}
           changerFond={changerFond}
           satelliteIndisponible={satelliteIndisponible}
+          showFullscreenControl={showFullscreenControl}
         />
 
         {fond === "satellite" ? (
@@ -431,7 +546,7 @@ export default function FlotteMap({
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             attribution='Imagery &copy; <a href="https://www.esri.com/">Esri</a> — Esri, Maxar, Earthstar Geographics, and the GIS User Community'
             maxNativeZoom={ZOOM_NATIF_SATELLITE}
-            maxZoom={ZOOM_MAXIMAL}
+            maxZoom={maxZoom}
             keepBuffer={4}
             eventHandlers={{ tileerror: signalerEchecSatellite }}
           />
@@ -441,12 +556,12 @@ export default function FlotteMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             maxNativeZoom={ZOOM_NATIF_PLAN}
-            maxZoom={ZOOM_MAXIMAL}
+            maxZoom={maxZoom}
             keepBuffer={4}
           />
         )}
 
-        <AjusterVue positions={positionsValides} />
+        <AjusterVue positions={positionsValides} focusZoom={focusZoom} />
 
         {positionsValides.map((position) => (
           <Marker
@@ -465,32 +580,76 @@ export default function FlotteMap({
                   </div>
                 )}
                 <div style={{ marginTop: 8 }}>
-                  <strong>État GPS :</strong> {etatGps(position)}
+                  <span>État GPS :</span> {etatGps(position)}
                 </div>
                 <div>
-                  <strong>Vitesse :</strong>{" "}
+                  <span>Vitesse :</span>{" "}
                   {Math.round(position.vitesse ?? 0)} km/h
                 </div>
                 <div>
-                  <strong>Kilométrage :</strong>{" "}
+                  <span>Kilométrage :</span>{" "}
                   {formatterKm(position.odometreKm)}
                 </div>
                 {position.dateGps && (
                   <div>
-                    <strong>Dernière position :</strong> {position.dateGps}
+                    <span>Dernière position :</span> {position.dateGps}
                   </div>
                 )}
                 <div>
-                  <strong>Latitude :</strong> {position.latitude.toFixed(6)}
+                  <span>Latitude :</span> {position.latitude.toFixed(6)}
                 </div>
                 <div>
-                  <strong>Longitude :</strong> {position.longitude.toFixed(6)}
+                  <span>Longitude :</span> {position.longitude.toFixed(6)}
                 </div>
+                {(position.quartier || lieuxGps[position.vehiculeId]?.quartier) && (
+                  <div>
+                    <span>Quartier :</span> {position.quartier || lieuxGps[position.vehiculeId]?.quartier}
+                  </div>
+                )}
+                {(position.routeNationale || position.voie || lieuxGps[position.vehiculeId]?.route) && (
+                  <div>
+                    <strong>{position.routeNationale || /\bRN\s*[-.]?\s*\d/i.test(lieuxGps[position.vehiculeId]?.route || "") ? "Route nationale :" : "Voie :"}</strong>{" "}
+                    {position.routeNationale || position.voie || lieuxGps[position.vehiculeId]?.route}
+                    {position.distanceRouteMetres != null && ` · à ${position.distanceRouteMetres} m`}
+                  </div>
+                )}
+                {(position.commune || lieuxGps[position.vehiculeId]?.commune) && (
+                  <div>
+                    <span>Commune :</span> {position.commune || lieuxGps[position.vehiculeId]?.commune}
+                  </div>
+                )}
+                {afficherLieu && !lieuxGps[position.vehiculeId] && !position.quartier && !position.routeNationale && !position.voie && (
+                  <div style={{ color: "#64748b", marginTop: 6 }}>
+                    {lieuGpsNonDisponible[position.vehiculeId] ? "Lieu détaillé indisponible." : "Recherche du quartier et de la voie…"}
+                  </div>
+                )}
               </div>
             </Popup>
           </Marker>
         ))}
       </MapContainer>
+      {positionsValides.length === 0 && showMapWhenEmpty && (
+        <div
+          role="status"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 1200,
+            maxWidth: "calc(100% - 24px)",
+            padding: "9px 12px",
+            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            background: "rgba(255,255,255,.94)",
+            color: "#475569",
+            fontSize: 12,
+            boxShadow: "0 2px 8px rgba(15,23,42,.12)",
+            pointerEvents: "none",
+          }}
+        >
+          {emptyMessage}
+        </div>
+      )}
     </div>
   );
 }
