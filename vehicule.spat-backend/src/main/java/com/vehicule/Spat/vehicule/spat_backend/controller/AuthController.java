@@ -1,6 +1,7 @@
 package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.config.JwtUtil;
+import com.vehicule.Spat.vehicule.spat_backend.config.Roles;
 import com.vehicule.Spat.vehicule.spat_backend.dto.LoginRequest;
 import com.vehicule.Spat.vehicule.spat_backend.dto.LoginResponse;
 import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
@@ -82,6 +83,11 @@ public class AuthController {
             return ResponseEntity.status(403).body(
                     Map.of("message", "Les comptes chauffeur ne sont plus disponibles dans l'application.")
             );
+        }
+
+        if (Roles.estRoleMasque(role)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "L'espace Chef de direction est temporairement indisponible. Les missions hors ville sont gérées par le Service Logistique."));
         }
 
         String token = jwtUtil.genererToken(

@@ -29,9 +29,9 @@ Les accès effectifs dépendent du rôle attribué au compte. Les rôles ci-dess
 |---|---|
 | `SUPER_ADMIN` | Administration générale, comptes et habilitations. |
 | `ADMIN` | Gestion des référentiels et des modules d’administration (véhicules, fiches conducteurs, utilisateurs, affectations, maintenance, carburant, rapports et statistiques selon les droits configurés). |
-| `CHEF_DIRECTION` | Création et suivi des demandes de mission hors ville de sa direction. Les missions hors ville utilisent uniquement des voitures ; aucune option moto n'est proposée. |
-| `ASSISTANT_DIRECTION` | Gestion des missions en ville (voiture ou moto selon disponibilité) ; peut aussi soumettre une demande hors ville (voiture uniquement). Selon la configuration de la direction, consulte le calendrier partagé et son véhicule affecté. |
-| `CHEF_SERVICE_LOGISTIQUE` | Traitement des demandes hors ville, vérification de disponibilité, affectation manuelle d’un véhicule et d’un chauffeur, première validation et suivi du parc. |
+| `CHEF_DIRECTION` | Compte et espace masqués, ainsi que l'intérim Chef de direction. Les comptes et la page sont conservés pour une réactivation future. |
+| `ASSISTANT_DIRECTION` | Gestion des missions en ville (voiture ou moto selon disponibilité). La création hors ville est masquée. Selon la configuration de la direction, consulte le calendrier partagé et son véhicule affecté. |
+| `CHEF_SERVICE_LOGISTIQUE` | Création et traitement des missions hors ville, vérification de disponibilité, affectation manuelle d’un véhicule et d’un chauffeur, première validation et suivi du parc. |
 | `MECANICIEN_DID` | Contrôles visuels demandés avant mission, avis technique, ainsi que signalement et suivi des entretiens dans son périmètre. |
 | `CHEF_DGAL` | Seconde validation des missions transmises après la première validation. |
 | Données conducteur | Les conducteurs sont des fiches d'affectation gérées par la Logistique. Aucun compte ni espace de connexion conducteur n'est ouvert. |
@@ -45,8 +45,8 @@ L’accès aux pages est également contrôlé côté API. Masquer une page dans
 ### 3.1 Zones et véhicules
 
 - Une mission est qualifiée comme **en ville (Toamasina)** ou **hors ville**.
-- Le Chef de direction gère les demandes hors ville uniquement.
-- L’Assistant de direction gère les missions en ville et peut aussi créer une demande hors ville.
+- Le compte Chef de direction est masqué. Le Chef du Service Logistique crée désormais les missions hors ville.
+- L’Assistant de direction planifie uniquement les missions en ville. Son parcours de création hors ville est conservé mais masqué pour une éventuelle réactivation.
 - Les missions en ville peuvent utiliser une voiture ou une moto, selon les règles et ressources configurées.
 - Une mission hors ville est affectée à une voiture. Une moto ne doit pas être proposée ni affectée.
 - Pour une demande hors ville, le Chef du Service Logistique choisit le véhicule et le chauffeur. Le demandeur ne présélectionne pas ces ressources dans le circuit normal.
@@ -56,9 +56,9 @@ L’accès aux pages est également contrôlé côté API. Masquer une page dans
 
 Le circuit fonctionnel est le suivant :
 
-1. Le Chef de direction ou l’Assistant de direction saisit la demande, sa zone, son motif et sa période.
-2. La demande est transmise au Chef du Service Logistique.
-3. Le Chef du Service Logistique vérifie la disponibilité, choisit manuellement une voiture et un chauffeur compatibles, puis envoie la voiture au mécanicien DID.
+1. Le Chef du Service Logistique clique sur **Nouvelle mission**, à côté de **Navettes parapheurs PACT**, et saisit le bénéficiaire, son entité, le motif, la destination, la durée, les dates, le forfaitaire et les passagers.
+2. Il sélectionne le véhicule et le chauffeur dans la section **Choisir le véhicule** du formulaire. Le ticket créé apparaît dans les tickets à traiter avec les ressources choisies, après vérification de leur disponibilité par le serveur.
+3. La création envoie automatiquement la demande d’inspection visuelle au mécanicien DID et place le ticket en attente de son avis. Un popup confirme l’envoi avec l’immatriculation choisie ; aucun envoi manuel supplémentaire n’est nécessaire.
 4. Le mécanicien réalise l’inspection visuelle et consigne son avis.
 5. Après un avis favorable, le Chef du Service Logistique effectue la première validation (N°1).
 6. Le Chef DGAL effectue la seconde validation (N°2).
@@ -86,8 +86,8 @@ Le délai de dépôt, le caractère tardif et l’urgence opérationnelle sont d
 | Module / espace | Utilité |
 |---|---|
 | Connexion | Authentification par matricule et mot de passe, puis redirection selon le rôle. |
-| Chef de direction | Création et suivi des missions hors ville de la direction. |
-| Assistant de direction | Calendrier et gestion des missions en ville, ainsi que saisie de demandes hors ville. |
+| Chef de direction | Espace masqué, conservé pour une réactivation future. |
+| Assistant de direction | Calendrier et gestion des missions en ville. |
 | Chef de Service Logistique | Disponibilités, affectations, contrôles DID, validations de niveau 1, urgences et suivi des demandes. |
 | Chef DGAL | Suivi et validation de niveau 2. |
 | Fiches conducteurs | Données d'affectation et de permis consultées par la Logistique ; aucun espace de connexion. |
@@ -111,44 +111,32 @@ Dans les formulaires équipés du sélecteur du personnel, saisir une partie du 
 
 #### Création et traitement d'une mission
 
-**Chef de direction**
+**Chef du Service Logistique — création hors ville**
 
-1. Ouvrir le calendrier et cliquer sur **Nouvelle mission**.
+1. Dans l'espace Logistique, cliquer sur **Nouvelle mission**, à côté de **Navettes parapheurs PACT**.
 2. Renseigner le bénéficiaire (nom et prénom), la direction/département/service, le motif et la période de mission hors ville.
 3. Le type de véhicule est automatiquement défini comme "Voiture" et la zone comme "Hors ville de Toamasina". Ces champs ne sont pas modifiables.
-4. Renseigner le lieu de placement (destination), le nombre de jours, les dates de départ et retour, ainsi que le point de départ.
+4. Renseigner le lieu de placement (destination), le nombre de jours, les dates de départ et retour et le forfaitaire. Le point de départ est fixé à SPAT Toamasina.
 5. Ajouter les informations sur les passagers (nombre et liste).
-6. Enregistrer la demande et suivre son statut dans le calendrier.
+6. Dans **Choisir le véhicule**, sélectionner une voiture et un chauffeur disponibles, puis créer le ticket. L’inspection visuelle est demandée automatiquement ; le popup confirme l’envoi avec l’immatriculation. Attendre le retour du mécanicien avant de poursuivre les validations habituelles.
 
 **Assistant de direction**
 
 1. Cliquer sur **Nouvelle mission**.
-2. **Étape 1 - Choix du véhicule et de la zone** :
-   - Choisir d'abord la zone : "Dans la ville de Toamasina" ou "Hors ville de Toamasina"
-   - Choisir ensuite le moyen matériel :
-     * Si zone = "Dans la ville" → Moto ou Voiture disponibles
-     * Si zone = "Hors ville" → Voiture uniquement (moto désactivée)
-3. **Étape 2 - Formulaire adapté selon la zone** :
-   
-   **a) Mission EN VILLE** (formulaire rapide) :
+2. **Étape 1 - Choix du véhicule** :
+   - La zone est fixée à "Dans la ville de Toamasina".
+   - Choisir le moyen matériel : Moto ou Voiture.
+3. **Étape 2 - Mission en ville** (formulaire rapide) :
    - Date du jour (automatique)
    - Moyen matériel (affiché en lecture seule)
    - Prénom (si moto) ou Nom (si voiture)
    - Heure de départ
    - Objet de la mission
    
-   **b) Mission HORS VILLE** (formulaire complet) :
-   - Bénéficiaire : Nom et Prénom
-   - Direction / Département / Service
-   - Objet de la mission
-   - Lieu de placement et nombre de jours
-   - Dates de départ et retour
-   - Point de départ et destination
-   - Nombre de passagers et liste des passagers
+   Le formulaire hors ville est masqué. Son code est conservé pour une réactivation future via `MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES` dans `app/assistant-direction/page.tsx`.
    
 4. **Suivi et clôture** :
    - Pour une mission en ville : suivre dans le calendrier, puis au retour renseigner la date/heure de retour, ajouter un incident si nécessaire et cliquer sur **Clôturer**
-   - Pour une mission hors ville : la demande suit le circuit de validation décrit en section 3.2
 
 **Service Logistique, mécanicien DID et Chef DGAL**
 

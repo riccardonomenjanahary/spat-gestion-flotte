@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import RoleGuard from "@/components/RoleGuard";
+import CreationMissionHorsVille from "@/components/CreationMissionHorsVille";
 import EnTete from "@/components/EnTete";
 import SignalementsIncidentsWorkflow from "@/components/SignalementsIncidentsWorkflow";
 import NavettesPact from "@/components/NavettesPact";
@@ -341,6 +342,8 @@ export default function ChefServiceLogistiquePage() {
 
 function ChefServiceLogistiqueContent() {
   const API = process.env.NEXT_PUBLIC_API_URL;
+  const [creationMissionOuverte, setCreationMissionOuverte] = useState(false);
+  const [inspectionCreationEnvoyee, setInspectionCreationEnvoyee] = useState<string | null>(null);
 
   const [vehicules, setVehicules] =
     useState<Vehicule[]>([]);
@@ -416,11 +419,6 @@ function ChefServiceLogistiqueContent() {
 
   const [ticketOuvertId, setTicketOuvertId] =
     useState<number | null>(null);
-  const [alerteUrgence, setAlerteUrgence] = useState<Reservation | null>(null);
-  const [urgenceReservation, setUrgenceReservation] = useState<Reservation | null>(null);
-  const [urgenceSousCategorie, setUrgenceSousCategorie] = useState("URGENCE_OPERATIONNELLE");
-  const [urgenceMotif, setUrgenceMotif] = useState("");
-  const [urgenceEnCours, setUrgenceEnCours] = useState(false);
   const [inspectionArriveeEnCours, setInspectionArriveeEnCours] = useState<number | null>(null);
   const [clotureApresAvisEnCours, setClotureApresAvisEnCours] = useState<number | null>(null);
   const [clotureUrgenceEnCours, setClotureUrgenceEnCours] = useState<number | null>(null);
@@ -815,47 +813,6 @@ function ChefServiceLogistiqueContent() {
   const missionDansFenetreCloture = (reservation: Reservation) => {
     const fin = new Date(reservation.dateFin || "").getTime();
     return Number.isFinite(fin) && Date.now() >= fin - 24 * 60 * 60 * 1000;
-  };
-
-  useEffect(() => {
-    const mission = reservations.find((reservation) =>
-      missionHorsDelai24h(reservation)
-      && !reservation.demandeUrgente
-      && !["A_REPROGRAMMER", "REFUSEE", "CLOTUREE"].includes(String(reservation.statut || "").toUpperCase())
-    );
-    if (mission) setAlerteUrgence((ancienne) => ancienne || mission);
-  }, [reservations]);
-
-  const ouvrirFormulaireUrgence = (reservation: Reservation) => {
-    setUrgenceReservation(reservation);
-    setUrgenceMotif(reservation.motifUrgence || "");
-    setAlerteUrgence(null);
-  };
-
-  const soumettreUrgenceChef = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!urgenceReservation || !urgenceMotif.trim() || !API) {
-      toast.error("Le motif de l'urgence est obligatoire.");
-      return;
-    }
-    const token = getToken();
-    if (!token) { toast.error("Session expirée."); return; }
-    setUrgenceEnCours(true);
-    try {
-      const response = await fetch(`${API}/reservations/${urgenceReservation.id}/urgence-chef-logistique`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ sousCategorie: urgenceSousCategorie, motifUrgence: urgenceMotif.trim() }),
-      });
-      if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
-      toast.success(`TKT-${String(urgenceReservation.id).padStart(5, "0")} suspendu pour urgence.`);
-      setUrgenceReservation(null);
-      await charger();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Impossible de suspendre la mission.");
-    } finally {
-      setUrgenceEnCours(false);
-    }
   };
 
   const demanderInspectionArrivee = async (reservation: Reservation): Promise<boolean> => {
@@ -2434,32 +2391,6 @@ function ChefServiceLogistiqueContent() {
           </section>
         </div>
       )}
-      {alerteUrgence && (
-        <div role="alertdialog" aria-modal="true" style={{ position: "fixed", top: 82, left: "50%", transform: "translateX(-50%)", zIndex: 1800, width: "min(620px, calc(100vw - 32px))", padding: 18, borderRadius: 12, background: "#fff7ed", border: "2px solid #f59e0b", boxShadow: "0 18px 45px rgba(15,23,42,.22)" }}>
-          <strong style={{ color: "#9a3412", fontSize: 17 }}>Contrainte de délai détectée</strong>
-          <p style={{ margin: "10px 0", color: "#431407", lineHeight: 1.5 }}>
-            La mission <b>TKT-{String(alerteUrgence.id).padStart(5, "0")}</b> commence moins de 24 heures après sa création. Une urgence motivée est nécessaire pour poursuivre.
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button type="button" className="btn-spat btn-neutre" onClick={() => setAlerteUrgence(null)}>Fermer</button>
-            <button type="button" className="btn-spat btn-orange" onClick={() => { setTicketOuvertId(alerteUrgence.id); ouvrirFormulaireUrgence(alerteUrgence); }}>Urgence</button>
-          </div>
-        </div>
-      )}
-      {urgenceReservation && (
-        <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 1750, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", padding: 16 }}>
-          <form onSubmit={soumettreUrgenceChef} style={{ width: "min(560px, 100%)", display: "grid", gap: 14, padding: 22, borderRadius: 14, background: "white", boxShadow: "0 18px 45px rgba(15,23,42,.25)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0, color: "#9a3412", fontSize: 19 }}>Urgence — TKT-{String(urgenceReservation.id).padStart(5, "0")}</h2>
-              <button type="button" onClick={() => setUrgenceReservation(null)} style={{ border: 0, background: "transparent", cursor: "pointer" }}><XCircle size={19} /></button>
-            </div>
-            <label style={labelStyle}>Sous-catégorie *<select required value={urgenceSousCategorie} onChange={(event) => setUrgenceSousCategorie(event.target.value)} style={inputStyle}><option value="URGENCE_OPERATIONNELLE">Urgence opérationnelle</option><option value="REUNION_IMPREVUE">Réunion imprévue</option><option value="AUTRE">Autre urgence justifiée</option></select></label>
-            <label style={labelStyle}>Motif de l&apos;urgence *<textarea required maxLength={1000} rows={5} value={urgenceMotif} onChange={(event) => setUrgenceMotif(event.target.value)} style={inputStyle} placeholder="Expliquez la raison de l'urgence" /></label>
-            <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>La mission actuelle sera suspendue et marquée « À reprogrammer ». Le véhicule concerné reste identifié dans le ticket.</p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}><button type="button" className="btn-spat btn-neutre" disabled={urgenceEnCours} onClick={() => setUrgenceReservation(null)}>Annuler</button><button type="submit" className="btn-spat btn-orange" disabled={urgenceEnCours}>{urgenceEnCours ? "Suspension..." : "Suspendre la mission"}</button></div>
-          </form>
-        </div>
-      )}
       {popupAttenteAvis && (
         <div
           role="dialog"
@@ -2527,6 +2458,32 @@ function ChefServiceLogistiqueContent() {
           </div>
         </div>
       )}
+      {inspectionCreationEnvoyee && (
+        <div style={modalOverlayStyle}>
+          <div role="dialog" aria-modal="true" aria-labelledby="inspection-creation-titre" style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 520 }}>
+            <h2 id="inspection-creation-titre" style={{ marginTop: 0, fontSize: 20 }}>Demande d’inspection envoyée</h2>
+            <p style={{ lineHeight: 1.6 }}>Demande d’inspection visuelle de la voiture {inspectionCreationEnvoyee} envoyée, en attente du retour du mécanicien pour valider.</p>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" autoFocus className="btn-spat btn-bleu" onClick={() => setInspectionCreationEnvoyee(null)}>Compris</button>
+            </div>
+          </div>
+        </div>
+      )}
+          {creationMissionOuverte && <CreationMissionHorsVille
+            choisirRessources
+            onClose={() => setCreationMissionOuverte(false)}
+            onCreated={async (mission) => {
+              setPanneauGestion("TICKETS");
+              setFiltreVehicule("");
+              setFiltreStatutReservation("EN_ATTENTE");
+              if (mission) setTicketOuvertId(mission.id);
+              if (mission?.statut === "EN_ATTENTE_AVIS_DID") {
+                setInspectionCreationEnvoyee(mission.vehicule?.immatriculation || "sélectionnée");
+              }
+              await charger();
+            }}
+          />}
+
       {navettesPactOuvert && (
         <div
           style={modalOverlayStyle}
@@ -2654,6 +2611,10 @@ function ChefServiceLogistiqueContent() {
 
             </div>
 
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" className="btn-spat btn-bleu" onClick={() => setCreationMissionOuverte(true)}>
+              Nouvelle mission
+            </button>
             <button
               type="button"
               className="btn-spat btn-bleu"
@@ -2661,6 +2622,7 @@ function ChefServiceLogistiqueContent() {
             >
               <Route size={15} /> Navettes parapheurs PACT
             </button>
+            </div>
 
           </div>
 
@@ -3192,7 +3154,7 @@ function ChefServiceLogistiqueContent() {
             }
           >
             <SectionTitre
-              titre="Tickets reçus du Chef de Direction"
+              titre="Missions hors ville et tickets à traiter"
             />
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3316,6 +3278,8 @@ function ChefServiceLogistiqueContent() {
               </option>
             </select>
           </div>
+
+
 
           {reservationsFiltrees.length ===
           0 ? (
@@ -3647,9 +3611,9 @@ function ChefServiceLogistiqueContent() {
 
                       <div style={{ marginTop: 16 }}>
                         {missionHorsDelai24h(r) && !["A_REPROGRAMMER", "REFUSEE", "CLOTUREE"].includes(String(r.statut || "").toUpperCase()) && (
-                          <button type="button" className="btn-spat btn-orange" onClick={() => ouvrirFormulaireUrgence(r)} style={{ marginBottom: 12 }}>
-                            <AlertTriangle size={15} /> Urgence
-                          </button>
+                          <p style={{ color: "#92400e", fontSize: 13 }}>
+                            Si le déplacement est urgent, transmettez le besoin au Chef DGAL pour réquisition.
+                          </p>
                         )}
                         {String(r.statut || "").toUpperCase() === "A_REPROGRAMMER" && (
                           <button type="button" className="btn-spat btn-vert" disabled={clotureUrgenceEnCours === r.id} onClick={() => void cloturerMissionUrgente(r)} style={{ marginBottom: 12 }}>
@@ -3955,7 +3919,7 @@ function ChefServiceLogistiqueContent() {
                                 size={16}
                               />
 
-                              Choisir le véhicule
+                              {r.zoneMission === "HORS_TOAMASINA" ? "Inspection avant départ" : "Choisir le véhicule"}
                             </div>
 
                             <button
@@ -4027,6 +3991,7 @@ function ChefServiceLogistiqueContent() {
                             dispo && (
                               <>
 
+                                {r.zoneMission !== "HORS_TOAMASINA" && (
                                 <div
                                   style={
                                     affectationGridStyle
@@ -4134,8 +4099,9 @@ function ChefServiceLogistiqueContent() {
                                     </div>
                                   )}
                                 </div>
+                                )}
 
-                                {!avisDID ? (
+                                {!avisDID ? (r.zoneMission !== "HORS_TOAMASINA" &&
                                   <div
                                     style={{
                                       marginTop:

@@ -4,7 +4,10 @@ import com.vehicule.Spat.vehicule.spat_backend.model.*;
 import com.vehicule.Spat.vehicule.spat_backend.repository.*;
 import com.vehicule.Spat.vehicule.spat_backend.service.NotificationService;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -69,12 +72,13 @@ public class RequisitionController {
      * Seul le Chef DGAL est autorisé.
      */
     @PostMapping
+    @Transactional
     public ResponseEntity<?> creerRequisition(@RequestBody Map<String, Object> body) {
         try {
             if (!(body.get("motif") instanceof String motif) || motif.isBlank())
                 return ResponseEntity.badRequest().body(Map.of("erreur", "Le motif de réquisition est obligatoire."));
             Long vehiculeId = Long.parseLong(body.get("vehiculeId").toString());
-            Vehicule vehicule = vehiculeRepository.findById(vehiculeId)
+            Vehicule vehicule = vehiculeRepository.findByIdForUpdate(vehiculeId)
                     .orElseThrow(() -> new RuntimeException("Véhicule introuvable"));
                 boolean vehiculeMission = CategorieVehicule.estVehiculeMission(vehicule.getCategorie())
                     && VEHICULES_DE_MISSION.contains(normaliserImmatriculation(vehicule.getImmatriculation()));
@@ -83,6 +87,9 @@ public class RequisitionController {
                 return ResponseEntity.badRequest().body(Map.of(
                     "erreur", "Vérifiez votre choix : sélectionnez l'un des deux véhicules de mission ou choisissez explicitement « Autres véhicules »."
                 ));
+            }
+            if (!"DISPONIBLE".equals(vehicule.getStatut())) {
+                return ResponseEntity.status(409).body(Map.of("erreur", "Ce véhicule est indisponible pour une réquisition."));
             }
             if (!(body.get("dateDebut") instanceof String dateDebutBrut) || dateDebutBrut.isBlank())
                 return ResponseEntity.badRequest().body(Map.of("erreur", "La date de début est obligatoire."));
@@ -219,10 +226,8 @@ public class RequisitionController {
             Requisition saved = requisitionRepository.save(requisition);
             return ResponseEntity.ok(saved);
 
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(
-                    Map.of("erreur", e.getMessage())
-            );
+        } catch (IllegalArgumentException | java.time.DateTimeException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Données de réquisition invalides.", e);
         }
     }
 
@@ -260,55 +265,33 @@ public class RequisitionController {
         return normalisee.matches("0?161[45]WWA") ? normalisee.replaceFirst("^0", "") : normalisee;
     }
 
-    /**
-     * Terminer une réquisition et libérer le véhicule.
-     */
     @PutMapping("/{id}/terminer")
+    @Transactional
     public ResponseEntity<?> terminerRequisition(@PathVariable Long id) {
-        try {
-            Requisition requisition = requisitionRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Réquisition introuvable"));
-
-            requisition.setStatut("TERMINEE");
-            requisition.setDateFin(LocalDateTime.now());
-
-            // Remettre le véhicule en DISPONIBLE
-            Vehicule vehicule = requisition.getVehicule();
-            vehicule.setStatut("DISPONIBLE");
-            vehiculeRepository.save(vehicule);
-
-            requisitionRepository.save(requisition);
-            return ResponseEntity.ok(requisition);
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(
-                    Map.of("erreur", e.getMessage())
-            );
-        }
+        return finaliserRequisition(id, "TERMINEE");
     }
 
-    /**
-     * Annuler une réquisition.
-     */
     @PutMapping("/{id}/annuler")
+    @Transactional
     public ResponseEntity<?> annulerRequisition(@PathVariable Long id) {
-        try {
-            Requisition requisition = requisitionRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Réquisition introuvable"));
+        return finaliserRequisition(id, "ANNULEE");
+    }
 
-            requisition.setStatut("ANNULEE");
+    private ResponseEntity<?> finaliserRequisition(Long id, String statutFinal) {
+        Requisition requisition = requisitionRepository.findByIdForUpdate(id).orElse(null);
+        if (requisition == null) return ResponseEntity.notFound().build();
+        if (!"ACTIVE".equals(requisition.getStatut())) {
+            return ResponseEntity.status(409).body(Map.of("erreur", "Cette réquisition est déjà terminée ou annulée."));
+        }
 
-            Vehicule vehicule = requisition.getVehicule();
+        Vehicule vehicule = vehiculeRepository.findByIdForUpdate(requisition.getVehicule().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Véhicule introuvable."));
+        requisition.setStatut(statutFinal);
+        if ("TERMINEE".equals(statutFinal)) requisition.setDateFin(LocalDateTime.now());
+        if ("REQUISITIONNE".equals(vehicule.getStatut())) {
             vehicule.setStatut("DISPONIBLE");
             vehiculeRepository.save(vehicule);
-
-            requisitionRepository.save(requisition);
-            return ResponseEntity.ok(requisition);
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(
-                    Map.of("erreur", e.getMessage())
-            );
         }
+        return ResponseEntity.ok(requisitionRepository.save(requisition));
     }
 }

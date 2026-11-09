@@ -14,6 +14,7 @@ public class CreateMissionAssistantDirectionRequest {
     private String entite;
     private String motif;
     private LocalTime heureDepart;
+    private boolean departImmediat;
     private Integer dureeEstimeeMinutes;
     private String motifUrgence;
     private String observations;
@@ -77,6 +78,14 @@ public class CreateMissionAssistantDirectionRequest {
 
     public void setMotif(String motif) {
         this.motif = motif;
+    }
+
+    public boolean isDepartImmediat() {
+        return departImmediat;
+    }
+
+    public void setDepartImmediat(boolean departImmediat) {
+        this.departImmediat = departImmediat;
     }
 
     public LocalTime getHeureDepart() {

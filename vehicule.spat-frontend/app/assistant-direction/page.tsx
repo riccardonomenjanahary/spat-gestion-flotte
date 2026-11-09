@@ -52,6 +52,9 @@ type TypeDemande = "PLANIFIEE" | "TARDIVE" | "URGENTE";
 type Mobilisabilite = "FLEXIBLE" | "VERROUILLEE";
 
 type ZoneMission = "VILLE_TOAMASINA" | "HORS_TOAMASINA";
+// Réactiver cet indicateur pour restaurer le parcours hors ville de l'assistant.
+const MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES = false;
+const ZONE_CREATION_INITIALE: ZoneMission | "" = MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES ? "" : "VILLE_TOAMASINA";
 type PopupMission = { type: "retard" | "disponible" | "horaire" | "contrainte"; titre: string; description: string; missionId?: number };
 
 function getToken() {
@@ -165,6 +168,7 @@ interface FormulaireReservation {
 
   dateDebut: string;
   dateFin: string;
+  departImmediat: boolean;
   dureeEstimeeMinutes: string;
 
   motif: string;
@@ -197,6 +201,7 @@ const formulaireInitial: FormulaireReservation = {
 
   dateDebut: "",
   dateFin: "",
+  departImmediat: true,
   dureeEstimeeMinutes: "",
 
   motif: "",
@@ -238,6 +243,7 @@ function AssistantDirectionContent() {
   const [vehiculesDirection, setVehiculesDirection] = useState<VehiculeResume[]>([]);
   const [disponibilitesVehicules, setDisponibilitesVehicules] = useState<Record<number, DisponibiliteVehicule>>({});
   const [directionId, setDirectionId] = useState<number | null>(null);
+  const [directionManquante, setDirectionManquante] = useState(false);
 
   const [chargement, setChargement] = useState(true);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
@@ -249,7 +255,7 @@ function AssistantDirectionContent() {
   const [panneEntretien, setPanneEntretien] = useState("");
   const [panneEntretienAutre, setPanneEntretienAutre] = useState("");
   const [envoiEntretien, setEnvoiEntretien] = useState(false);
-  const [zoneInitiale, setZoneInitiale] = useState<ZoneMission | "">("");
+  const [zoneInitiale, setZoneInitiale] = useState<ZoneMission | "">(ZONE_CREATION_INITIALE);
   const [typeVehiculeInitial, setTypeVehiculeInitial] = useState<"MOTO" | "VOITURE" | "">("");
   const [envoi, setEnvoi] = useState(false);
   const [missionEnEdition, setMissionEnEdition] = useState<Reservation | null>(null);
@@ -326,8 +332,8 @@ function AssistantDirectionContent() {
   }, [directionId, instantCalendrier, popupMission, reservations]);
 
   useEffect(() => {
-    if (!modalOuverte || formulaire.zoneMission !== "VILLE_TOAMASINA" || !formulaire.dateDebut || !formulaire.dureeEstimeeMinutes || !API) return;
-    const debut = new Date(formulaire.dateDebut);
+    if (!modalOuverte || formulaire.zoneMission !== "VILLE_TOAMASINA" || !formulaire.dureeEstimeeMinutes || !API) return;
+    const debut = !missionEnEdition && formulaire.departImmediat ? new Date() : new Date(formulaire.dateDebut);
     const minutes = Number(formulaire.dureeEstimeeMinutes);
     if (!Number.isFinite(debut.getTime()) || !Number.isFinite(minutes) || minutes <= 0) return;
     const fin = new Date(debut.getTime() + minutes * 60_000);
@@ -346,7 +352,7 @@ function AssistantDirectionContent() {
       setDisponibilitesVehicules(map);
     }).catch(() => undefined);
     return () => controller.abort();
-  }, [API, formulaire.dateDebut, formulaire.dureeEstimeeMinutes, formulaire.zoneMission, modalOuverte]);
+  }, [API, formulaire.dateDebut, formulaire.departImmediat, formulaire.dureeEstimeeMinutes, formulaire.zoneMission, missionEnEdition, modalOuverte]);
 
   const chargerDonnees = async () => {
     const token = getToken();
@@ -423,6 +429,7 @@ function AssistantDirectionContent() {
       if (vehiculeDirectionRes?.ok) {
         const donneesVehicule = await vehiculeDirectionRes.json();
         setDirectionId(typeof donneesVehicule?.directionId === "number" ? donneesVehicule.directionId : null);
+        setDirectionManquante(donneesVehicule?.directionId === null);
         setVehiculeDirection(donneesVehicule?.vehicule?.id ? donneesVehicule.vehicule as VehiculeResume : null);
         setVehiculesDirection([
           ...(Array.isArray(donneesVehicule?.vehiculesVoiture) ? donneesVehicule.vehiculesVoiture : []),
@@ -430,6 +437,7 @@ function AssistantDirectionContent() {
         ] as VehiculeResume[]);
       } else {
         setDirectionId(null);
+        setDirectionManquante(false);
         setVehiculeDirection(null);
         setVehiculesDirection([]);
         toast.error("Le véhicule affecté à votre direction n'a pas pu être chargé depuis l'API.");
@@ -496,7 +504,7 @@ function AssistantDirectionContent() {
 
   const ouvrirChoixInitial = () => {
     setMissionEnEdition(null);
-    setZoneInitiale("");
+    setZoneInitiale(ZONE_CREATION_INITIALE);
     setTypeVehiculeInitial("");
     setChoixInitialOuvert(true);
   };
@@ -532,20 +540,14 @@ function AssistantDirectionContent() {
   };
 
   const ouvrirModal = (zoneMission: ZoneMission, typeVehicule: "MOTO" | "VOITURE") => {
+    if (!MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES && zoneMission !== "VILLE_TOAMASINA") return;
     setMissionEnEdition(null);
-    const departParDefaut = new Date();
-    if (zoneMission === "VILLE_TOAMASINA") {
-
-      departParDefaut.setSeconds(0, 0);
-    } else {
-      departParDefaut.setHours(typeVehicule === "MOTO" ? Math.max(departParDefaut.getHours() + 1, 8) : 9, 0, 0, 0);
-    }
+    setDisponibilitesVehicules({});
     setFormulaire({
       ...formulaireInitial,
       zoneMission,
       typeVehiculeCreation: typeVehicule,
       typeVehiculeSouhaite: typeVehicule,
-      dateDebut: zoneMission === "VILLE_TOAMASINA" ? dateHeureLocale(departParDefaut) : "",
     });
     setModalOuverte(true);
   };
@@ -748,6 +750,11 @@ function AssistantDirectionContent() {
 
     if (!token) {
       router.replace("/login");
+      return;
+    }
+
+    if (!missionEnEdition && !MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES && formulaire.zoneMission !== "VILLE_TOAMASINA") {
+      toast.error("Seules les missions en ville sont disponibles dans cet espace.");
       return;
     }
 
@@ -966,7 +973,7 @@ function AssistantDirectionContent() {
           setPopupMission({
             type: "contrainte",
             titre: "Planification impossible",
-            description: `Cause : ${detail || "véhicule indisponible, réservation en conflit ou document non conforme."}`,
+            description: detail || "Le serveur a signalé un conflit sans en préciser la cause (HTTP 409).",
           });
         } else {
           toast.error(detail || "Impossible d'enregistrer la mission");
@@ -1025,10 +1032,8 @@ function AssistantDirectionContent() {
     const motif = formulaire.motif === "Autres activités"
       ? formulaire.motifAutre.trim()
       : formulaire.motif.trim();
-    const heureDepartSelectionnee = formulaire.dateDebut.split("T")[1]?.slice(0, 5);
-    const debut = heureDepartSelectionnee
-      ? new Date(formulaire.dateDebut)
-      : new Date(Number.NaN);
+    const { departImmediat } = formulaire;
+    const debut = departImmediat ? new Date() : new Date(formulaire.dateDebut);
     if (!nom || !prenom) {
       toast.error("Sélectionnez le demandeur dans le personnel.");
       return;
@@ -1037,13 +1042,13 @@ function AssistantDirectionContent() {
       toast.error("L'objet de la mission est obligatoire.");
       return;
     }
-    if (!heureDepartSelectionnee || Number.isNaN(debut.getTime())) {
+    if (Number.isNaN(debut.getTime())) {
       toast.error("Veuillez renseigner une date et une heure de départ valides.");
       return;
     }
     const debutMinuteCourante = new Date();
     debutMinuteCourante.setSeconds(0, 0);
-    if (debut < debutMinuteCourante) {
+    if (!departImmediat && debut < debutMinuteCourante) {
       setPopupMission({
         type: "contrainte",
         titre: "Heure de départ invalide",
@@ -1101,8 +1106,8 @@ function AssistantDirectionContent() {
           matricule: formulaire.demandeurMatricule.trim() || null,
           entite: formulaire.demandeurEntite.trim() || null,
           motif,
-          heureDepart: heureDepartSelectionnee,
-          dateDebut: formulaire.dateDebut,
+          departImmediat,
+          dateDebut: departImmediat ? null : formulaire.dateDebut,
           destination: formulaire.destination.trim(),
           motifUrgence: null,
           observations: formulaire.observations.trim() || null,
@@ -1117,11 +1122,15 @@ function AssistantDirectionContent() {
       }
       if (!res.ok) {
         const detail = causeLisible(await lireErreur(res));
-        setPopupMission({
-          type: "contrainte",
-          titre: "Planification impossible",
-          description: `Cause : ${detail || "véhicule indisponible, réservation en conflit ou document non conforme."}`,
-        });
+        if (res.status === 409) {
+          setPopupMission({
+            type: "contrainte",
+            titre: "Planification impossible",
+            description: detail || "Le serveur a signalé un conflit sans en préciser la cause (HTTP 409).",
+          });
+        } else {
+          toast.error(detail || `La demande n’a pas été enregistrée (HTTP ${res.status}).`);
+        }
         return;
       }
       const creee = await res.json() as Reservation;
@@ -1131,7 +1140,8 @@ function AssistantDirectionContent() {
         dateFin: creee.dateFin || dateHeureLocale(new Date(debut.getTime() + dureeEstimeeMinutes * 60_000)),
       };
       setReservations((precedentes) => fusionnerReservations(precedentes, [missionAvecEstimation]));
-      setDateCalendrier(new Date(debut.getFullYear(), debut.getMonth(), 1));
+      const departEnregistre = new Date(creee.dateDebut || debut);
+      setDateCalendrier(new Date(departEnregistre.getFullYear(), departEnregistre.getMonth(), 1));
       toast.success(creee?.id ? `TKT-${String(creee.id).padStart(5, "0")} créée.` : "Mission créée.");
       setModalOuverte(false);
       setFormulaire(formulaireInitial);
@@ -1610,6 +1620,11 @@ function AssistantDirectionContent() {
 
           </div>
 
+          {directionManquante && (
+            <p role="alert" style={{ color: "#92400e", margin: "0 0 16px" }}>
+              Votre compte Assistant de direction doit être rattaché à une direction par un administrateur avant de créer une mission.
+            </p>
+          )}
           <section aria-label="Calendrier des missions de la direction" style={{ ...rechercheCardStyle, marginBottom: 24 }}>
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1620,6 +1635,7 @@ function AssistantDirectionContent() {
                   data-default-primary="true"
                   onClick={() => modalOuverte || choixInitialOuvert ? fermerModal() : ouvrirChoixInitial()}
                   aria-expanded={modalOuverte || choixInitialOuvert}
+                  disabled={directionManquante}
                 >
                   <Plus size={18} />
                   Nouvelle mission
@@ -1756,7 +1772,7 @@ function AssistantDirectionContent() {
       >
         <div style={{ display: "grid", gap: 18 }}>
           <Champ label="Zone de mission" obligatoire>
-            <select
+            {MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES ? <select
               autoFocus
               value={zoneInitiale}
               onChange={(event) => {
@@ -1769,10 +1785,11 @@ function AssistantDirectionContent() {
               <option value="">Sélectionner la zone</option>
               <option value="VILLE_TOAMASINA">Dans la ville de Toamasina</option>
               <option value="HORS_TOAMASINA">Hors ville de Toamasina</option>
-            </select>
+            </select> : <div style={readOnlyStyle}>Dans la ville de Toamasina</div>}
           </Champ>
           {zoneInitiale !== "HORS_TOAMASINA" && <Champ label="Type de véhicule" obligatoire>
             <select
+              autoFocus={!MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES}
               value={typeVehiculeInitial}
               disabled={!zoneInitiale}
               onChange={(event) => setTypeVehiculeInitial(event.target.value as "MOTO" | "VOITURE" | "")}
@@ -1930,15 +1947,27 @@ function AssistantDirectionContent() {
                       <input value={formulaire.motifAutre} onChange={(event) => modifierChamp("motifAutre", event.target.value)} required maxLength={255} style={inputStyle} placeholder="Décrivez l'activité" />
                     </Champ>
                   )}
-                  <Champ label="Date et heure de départ" obligatoire>
-                    <input
-                      type="datetime-local"
-                      value={formulaire.dateDebut}
-                      onChange={(event) => modifierChamp("dateDebut", event.target.value)}
-                      required
+                  <Champ label="Départ" obligatoire>
+                    <select
+                      value={formulaire.departImmediat ? "immediat" : "planifie"}
+                      onChange={(event) => modifierChamp("departImmediat", event.target.value === "immediat")}
                       style={inputStyle}
-                    />
+                    >
+                      <option value="immediat">Immédiat, à l’enregistrement</option>
+                      <option value="planifie">Choisir une date et une heure</option>
+                    </select>
                   </Champ>
+                  {!formulaire.departImmediat && (
+                    <Champ label="Date et heure de départ" obligatoire>
+                      <input
+                        type="datetime-local"
+                        value={formulaire.dateDebut}
+                        onChange={(event) => modifierChamp("dateDebut", event.target.value)}
+                        required
+                        style={inputStyle}
+                      />
+                    </Champ>
+                  )}
                   <Champ label="Destination" obligatoire>
                     <input value={formulaire.destination} onChange={(e) => modifierChamp("destination", e.target.value)} required style={inputStyle} />
                   </Champ>
@@ -2461,7 +2490,7 @@ function AssistantDirectionContent() {
         />
       )}
 
-      <NotificationsVehiculesPartages />
+      {directionId !== null && <NotificationsVehiculesPartages />}
     </>
   );
 }
@@ -2880,23 +2909,18 @@ function causeLisible(message: string) {
 }
 
 async function lireErreur(res: Response) {
+  const texte = (await res.text().catch(() => "")).trim();
+  const contentType = res.headers.get("content-type") || "";
+  if (!texte || contentType.includes("text/html")) return "";
+  if (!contentType.includes("json")) return texte;
+
   try {
-    const contentType = res.headers.get("content-type");
-
-    if (contentType?.includes("application/json")) {
-      const data = await res.json();
-
-      if (typeof data === "string") {
-        return data;
-      }
-
-      return data?.cause || data?.message || data?.detail || data?.erreur || data?.error || "";
-    }
-
-    const texte = await res.text();
-    return texte;
+    const data = JSON.parse(texte);
+    if (typeof data === "string") return data;
+    return [data?.cause, data?.message, data?.detail, data?.erreur, data?.error]
+      .find((message): message is string => typeof message === "string" && Boolean(message.trim())) || "";
   } catch {
-    return "";
+    return texte;
   }
 }
 

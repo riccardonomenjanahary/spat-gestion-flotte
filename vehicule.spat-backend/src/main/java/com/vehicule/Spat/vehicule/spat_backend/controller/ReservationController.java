@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 // =========================================================
@@ -323,6 +324,10 @@ public class ReservationController {
                 || "AGENT_PAR_INTERIM_CHEF".equalsIgnoreCase(roleDemandeur);
         boolean agentSurete = "AGENT_SURETE".equalsIgnoreCase(roleDemandeur);
         boolean demandeurDirection = assistantDirection || chefDirection;
+        boolean chefLogistique = "CHEF_SERVICE_LOGISTIQUE".equalsIgnoreCase(roleDemandeur);
+        if (missionHorsToamasina && chefLogistique && (request.getChauffeurId() == null || request.getVehiculeId() == null)) {
+            return ResponseEntity.badRequest().body("Veuillez sélectionner le véhicule et le chauffeur avant de créer la mission.");
+        }
         if (!missionHorsToamasina && !assistantDirection && !agentSurete && !Set.of("ADMIN", "SUPER_ADMIN", "CHEF_SERVICE_LOGISTIQUE")
                 .contains(roleDemandeur)) {
             return ResponseEntity.status(403).body("Les missions dans Toamasina sont réservées à l'Assistant de direction ou à l'Agent de sûreté.");
@@ -361,6 +366,8 @@ public class ReservationController {
                 ));
             }
             vehiculeAffecteDirection = vehiculesAffectes.stream()
+                    .map(vehicule -> vehiculeRepository.findByIdForUpdate(vehicule.getId()).orElse(null))
+                    .filter(Objects::nonNull)
                     .filter(vehicule -> disponibiliteReservationService.estVehiculeDisponiblePourPeriode(
                             vehicule.getId(), request.getDateDebut(), request.getDateFin(), null
                     ))
@@ -379,8 +386,8 @@ public class ReservationController {
                         String.join(" ; ", contraintes)
                 ));
             }
-        } else if (missionHorsToamasina && request.getVehiculeId() != null && demandeurDirection) {
-            vehiculeAffecteDirection = vehiculeRepository.findById(request.getVehiculeId()).orElse(null);
+        } else if (missionHorsToamasina && request.getVehiculeId() != null && (demandeurDirection || chefLogistique)) {
+            vehiculeAffecteDirection = vehiculeRepository.findByIdForUpdate(request.getVehiculeId()).orElse(null);
             if (vehiculeAffecteDirection == null) {
                 return ResponseEntity.badRequest().body("Le véhicule sélectionné est introuvable.");
             }
@@ -396,15 +403,15 @@ public class ReservationController {
         Chauffeur chauffeurAffecteDirection = null;
         // Pour une mission hors ville, le chauffeur est choisi manuellement
         // par le Chef du Service Logistique au moment de la validation N°1.
-        boolean chauffeurObligatoire = !missionHorsToamasina
+        boolean chauffeurObligatoire = (missionHorsToamasina && chefLogistique && vehiculeAffecteDirection != null) || (!missionHorsToamasina
                 && demandeurDirection
                 && "VOITURE".equals(typeVehiculeDemande)
-                && vehiculeAffecteDirection != null;
+                && vehiculeAffecteDirection != null);
         if (chauffeurObligatoire) {
             if (vehiculeAffecteDirection == null || request.getChauffeurId() == null) {
                 return ResponseEntity.badRequest().body("Veuillez sélectionner un chauffeur pour cette mission hors ville.");
             }
-            chauffeurAffecteDirection = chauffeurRepository.findById(request.getChauffeurId()).orElse(null);
+            chauffeurAffecteDirection = chauffeurRepository.findByIdForUpdate(request.getChauffeurId()).orElse(null);
             if (chauffeurAffecteDirection == null
                     || (!missionHorsToamasina && !chauffeurAutoService.estCompatible(vehiculeAffecteDirection, chauffeurAffecteDirection))) {
                 return ResponseEntity.badRequest().body("Le chauffeur sélectionné n'est pas compatible avec cette voiture.");
@@ -528,6 +535,10 @@ public class ReservationController {
                 Boolean.TRUE.equals(
                         request.getDemandeUrgente()
                 );
+
+        if (urgenceOperationnelle && !agentSurete) {
+            return ResponseEntity.badRequest().body("Les urgences des missions ordinaires sont traitées dans Réquisitions DGAL.");
+        }
 
         String typeDemande;
 
@@ -772,6 +783,15 @@ public class ReservationController {
                                 reservation
                         );
 
+        if (missionHorsToamasina && chefLogistique && vehiculeAffecteDirection != null) {
+            ResponseEntity<?> inspection = demanderAvisEntretienReservation(reservationSauvegardee, null);
+            if (!inspection.getStatusCode().is2xxSuccessful()) {
+                // Annuler aussi la création : aucun ticket ne doit rester sans inspection.
+                throw new org.springframework.web.server.ResponseStatusException(
+                        inspection.getStatusCode(), String.valueOf(inspection.getBody()));
+            }
+        }
+
         // -----------------------------------------------------
         // 9. REDIRIGER SELON LA ZONE DE MISSION
         // -----------------------------------------------------
@@ -970,9 +990,11 @@ public class ReservationController {
                         return ResponseEntity.status(403).body("Action réservée à l'Assistant de direction.");
                 }
                 if (utilisateur.getDirectionId() == null) {
-                        return ResponseEntity.badRequest().body("Le compte Assistant de direction doit être rattaché à une direction.");
+                        return ResponseEntity.badRequest().body(Map.of(
+                                "message", "Votre compte Assistant de direction doit être rattaché à une direction par un administrateur."));
                 }
-                if (request == null || (request.getHeureDepart() == null && request.getDateDebut() == null)
+                if (request == null
+                                || (!request.isDepartImmediat() && request.getHeureDepart() == null && request.getDateDebut() == null)
                                 || request.getMotif() == null || request.getMotif().isBlank()) {
                         return ResponseEntity.badRequest().body("L'objet et l'heure de départ sont obligatoires.");
                 }
@@ -991,14 +1013,19 @@ public class ReservationController {
                         return ResponseEntity.badRequest().body("Sélectionnez le demandeur dans la liste du personnel.");
                 }
 
-                LocalDateTime debut = request.getDateDebut() != null ? request.getDateDebut() : LocalDate.now().atTime(request.getHeureDepart());
-                LocalDateTime minuteCourante = LocalDateTime.now().withSecond(0).withNano(0);
+                LocalDateTime maintenant = LocalDateTime.now();
+                LocalDateTime debut = request.isDepartImmediat()
+                                ? maintenant.withNano(0)
+                                : request.getDateDebut() != null
+                                                ? request.getDateDebut()
+                                                : maintenant.toLocalDate().atTime(request.getHeureDepart());
+                LocalDateTime minuteCourante = maintenant.withSecond(0).withNano(0);
                 if (debut.isBefore(minuteCourante)) {
                         return ResponseEntity.badRequest().body("L'heure de départ ne peut pas être dans le passé.");
                 }
                 // Le parcours rapide en ville est destiné aux déplacements immédiats :
                 // la règle des 24 heures ne s'applique pas lorsqu'il est créé pour aujourd'hui.
-                boolean datePlanifiee = debut.toLocalDate().isAfter(LocalDate.now());
+                boolean datePlanifiee = debut.toLocalDate().isAfter(maintenant.toLocalDate());
                 if (datePlanifiee) {
                         LocalTime heureDepart = debut.toLocalTime();
                         boolean horairesTravail = (heureDepart.compareTo(LocalTime.of(8, 0)) >= 0
@@ -1009,7 +1036,7 @@ public class ReservationController {
                                 return ResponseEntity.badRequest().body(
                                                 "Une mission en ville planifiée doit être prévue entre 08 h et 12 h ou entre 14 h et 18 h.");
                         }
-                        if (debut.isBefore(LocalDateTime.now().plusHours(24))) {
+                        if (debut.isBefore(maintenant.plusHours(24))) {
                                 return ResponseEntity.badRequest().body(
                                                 "Une mission en ville planifiée doit être demandée au moins 24 heures à l'avance.");
                         }
@@ -1025,6 +1052,8 @@ public class ReservationController {
                                                         + " n'est affecté à votre direction dans Admin > Affectation."));
                 }
                 Vehicule vehicule = vehiculesAffectes.stream()
+                                .map(candidat -> vehiculeRepository.findByIdForUpdate(candidat.getId()).orElse(null))
+                                .filter(Objects::nonNull)
                                 .filter(candidat -> disponibiliteReservationService.estVehiculeDisponiblePourPeriode(
                                                 candidat.getId(), debut, finEstimee, null
                                 ))
@@ -1071,6 +1100,22 @@ public class ReservationController {
                 reservation.setObservations(request.getObservations() == null || request.getObservations().isBlank()
                                 ? null : request.getObservations().trim());
                 reservation.setBesoinChauffeur("VOITURE".equals(type));
+                if ("VOITURE".equals(type)) {
+                    Chauffeur chauffeur = chauffeurRepository.findAll().stream()
+                            .filter(candidat -> disponibiliteReservationService.estChauffeurDisponiblePourPeriode(
+                                    candidat.getId(), debut, finEstimee, null))
+                            .sorted(Comparator.comparing(Chauffeur::getId))
+                            .map(candidat -> chauffeurRepository.findByIdForUpdate(candidat.getId()).orElse(null))
+                            .filter(Objects::nonNull)
+                            .filter(candidat -> disponibiliteReservationService.estChauffeurDisponiblePourPeriode(
+                                    candidat.getId(), debut, finEstimee, null))
+                            .findFirst().orElse(null);
+                    if (chauffeur == null) {
+                        return ResponseEntity.status(409).body(contraintePlanification(
+                                "Aucun chauffeur avec un permis valide n'est disponible sur ce créneau."));
+                    }
+                    reservation.setChauffeur(chauffeur);
+                }
                 reservation.setDemandeurNom(request.getNom().trim());
                 reservation.setDemandeurPrenom(request.getPrenom().trim());
                 reservation.setDemandeurMatricule(request.getMatricule() == null || request.getMatricule().isBlank()
@@ -1743,6 +1788,16 @@ public class ReservationController {
         return ResponseEntity.ok(sauvegarde);
     }
 
+    private String lienEspaceDemandeur(Reservation reservation) {
+        String role = reservation.getDemandeur() == null || reservation.getDemandeur().getRole() == null
+                ? "" : reservation.getDemandeur().getRole().replaceFirst("^ROLE_", "");
+        return switch (role) {
+            case "CHEF_SERVICE_LOGISTIQUE" -> "/chef-service-logistique";
+            case "ASSISTANT_DIRECTION", "AGENT_PAR_INTERIM_ASSISTANT" -> "/assistant-direction";
+            default -> "/chef-direction";
+        };
+    }
+
     private Long lireIdentifiant(Map<String, Object> corps, String cle) {
         if (corps == null || corps.get(cle) == null) return null;
         try {
@@ -1811,6 +1866,10 @@ public class ReservationController {
                     .build();
         }
 
+        return demanderAvisEntretienReservation(reservation, request);
+    }
+
+    private ResponseEntity<?> demanderAvisEntretienReservation(Reservation reservation, Map<String, Object> request) {
         if (estCircuitAssistant(reservation) && !estAssistantDirection(utilisateurCourant())) {
             return ResponseEntity.status(403).body(
                     "Les missions dans Toamasina sont réservées à l'Assistant de direction."
@@ -2675,7 +2734,7 @@ public class ReservationController {
                         "Mission planifiée",
                         "Le ticket TKT-" + String.format("%05d", id)
                                 + " est planifié après les deux validations. L'ordre de mission est disponible au téléchargement.",
-                        "/chef-direction", id, null,
+                        lienEspaceDemandeur(reservationSauvegardee), id, null,
                         reservationSauvegardee.getVehicule() == null ? null : reservationSauvegardee.getVehicule().getId(), true);
             }
         } catch (Exception e) {
@@ -2747,7 +2806,7 @@ public class ReservationController {
         try {
             notificationService.creerPourMatriculeIsole(reservation.getDemandeurMatricule(), "MISSION_CLOTUREE", "IMPORTANT",
                     "Mission urgente clôturée", "Le ticket TKT-" + String.format("%05d", id) + " a été clôturé par le Chef Logistique.",
-                    "/chef-direction", id, null, reservation.getVehicule() == null ? null : reservation.getVehicule().getId(), true);
+                    lienEspaceDemandeur(reservation), id, null, reservation.getVehicule() == null ? null : reservation.getVehicule().getId(), true);
         } catch (Exception ignored) { }
         return ResponseEntity.ok(sauvegardee);
     }

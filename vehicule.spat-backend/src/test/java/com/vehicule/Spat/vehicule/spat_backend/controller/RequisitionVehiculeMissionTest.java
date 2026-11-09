@@ -39,12 +39,13 @@ class RequisitionVehiculeMissionTest {
         vehicule.setId(8L);
         vehicule.setCategorie(CategorieVehicule.MUTUALISEE);
         vehicule.setImmatriculation("5174 AH");
-        when(vehicules.findById(8L)).thenReturn(Optional.of(vehicule));
+        vehicule.setStatut("DISPONIBLE");
+        when(vehicules.findByIdForUpdate(8L)).thenReturn(Optional.of(vehicule));
 
         var response = controller.creerRequisition(Map.of(
                 "vehiculeId", 8,
                 "motif", "Réquisition de test",
-                "dateDebut", "2026-11-05T10:00:00"
+                "dateDebut", java.time.LocalDateTime.now().plusDays(1).toString()
         ));
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
@@ -58,7 +59,7 @@ class RequisitionVehiculeMissionTest {
         vehicule.setId(9L);
         vehicule.setCategorie(CategorieVehicule.MUTUALISEE);
         vehicule.setImmatriculation("5174 AH");
-        when(vehicules.findById(9L)).thenReturn(Optional.of(vehicule));
+        when(vehicules.findByIdForUpdate(9L)).thenReturn(Optional.of(vehicule));
         when(vehicules.save(vehicule)).thenReturn(vehicule);
         when(requisitions.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(utilisateurs.findByMatricule("DGAL001")).thenReturn(Optional.of(new com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur()));
@@ -71,7 +72,7 @@ class RequisitionVehiculeMissionTest {
                 "vehiculeId", 9,
                 "autreVehicule", true,
                 "motif", "Réquisition de test",
-                "dateDebut", "2026-11-05T10:00:00"
+                "dateDebut", java.time.LocalDateTime.now().plusDays(1).toString()
         ));
 
         assertEquals(HttpStatus.OK, response.getStatusCode());

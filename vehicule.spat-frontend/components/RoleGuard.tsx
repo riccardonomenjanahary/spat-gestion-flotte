@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { type Role } from "@/app/lib/roles";
+import { estRoleMasque, type Role } from "@/app/lib/roles";
 
 export default function RoleGuard({
   role,
@@ -50,6 +50,7 @@ export default function RoleGuard({
 
     if (
       !roleUtilisateur ||
+      estRoleMasque(roleUtilisateur) ||
       !rolesAutorises.includes(roleUtilisateur)
     ) {
       setAutorise(false);

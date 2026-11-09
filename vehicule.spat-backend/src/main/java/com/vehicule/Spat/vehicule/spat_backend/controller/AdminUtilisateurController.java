@@ -1,17 +1,18 @@
 package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.dto.CreateUtilisateurRequest;
+import com.vehicule.Spat.vehicule.spat_backend.config.Roles;
 import com.vehicule.Spat.vehicule.spat_backend.model.Direction;
 import com.vehicule.Spat.vehicule.spat_backend.model.Utilisateur;
 import com.vehicule.Spat.vehicule.spat_backend.repository.DirectionRepository;
-import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.service.EmailService;
 import com.vehicule.Spat.vehicule.spat_backend.service.NotificationService;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.SecureRandom;
@@ -23,7 +24,6 @@ import java.util.Set;
 public class AdminUtilisateurController {
 
     private final UtilisateurRepository utilisateurRepository;
-    private final ReservationRepository reservationRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final NotificationService notificationService;
@@ -71,7 +71,6 @@ public class AdminUtilisateurController {
 
     public AdminUtilisateurController(
             UtilisateurRepository utilisateurRepository,
-            ReservationRepository reservationRepository,
             PasswordEncoder passwordEncoder,
             EmailService emailService,
             NotificationService notificationService,
@@ -79,7 +78,6 @@ public class AdminUtilisateurController {
     ) {
 
         this.utilisateurRepository = utilisateurRepository;
-        this.reservationRepository = reservationRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.notificationService = notificationService;
@@ -109,6 +107,9 @@ public class AdminUtilisateurController {
     public ResponseEntity<?> creerUtilisateur(
             @RequestBody CreateUtilisateurRequest request
     ) {
+        if (Roles.estRoleMasque(request.getRole())) {
+            return ResponseEntity.badRequest().body("La création des comptes Chef de direction est temporairement masquée.");
+        }
 
         if (request.getNomComplet() == null
                 || request.getNomComplet().isBlank()) {
@@ -764,7 +765,6 @@ public class AdminUtilisateurController {
     // ============================================================
 
     @DeleteMapping("/{id}")
-    @Transactional
     public ResponseEntity<?> supprimerUtilisateur(
             @PathVariable Long id
     ) {
@@ -792,11 +792,12 @@ public class AdminUtilisateurController {
                     );
         }
 
-        reservationRepository
-                .deleteByDemandeurId(id);
-
-        utilisateurRepository
-                .deleteById(id);
+        try {
+            utilisateurRepository.deleteById(id);
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("Ce compte est lié à des données métier. Désactivez-le pour retirer son accès et conserver son historique.");
+        }
 
         return ResponseEntity
                 .noContent()

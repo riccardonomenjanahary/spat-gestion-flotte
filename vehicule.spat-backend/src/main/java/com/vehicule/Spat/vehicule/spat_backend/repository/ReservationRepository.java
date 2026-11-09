@@ -88,10 +88,6 @@ public interface ReservationRepository
             Long vehiculeId
     );
 
-    void deleteByDemandeurId(
-            Long demandeurId
-    );
-
     // =====================================================
     // VERROU RESERVATION
     // =====================================================

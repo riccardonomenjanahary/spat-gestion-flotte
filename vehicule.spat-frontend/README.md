@@ -70,9 +70,9 @@ Dans les formulaires concernés, utiliser le champ de recherche portant le nom d
 | **Super Admin** | Gère les comptes utilisateurs, consulte le répertoire du personnel et les habilitations. |
 | **Admin** | Administre les véhicules, les fiches conducteurs, les directions et affectations ; peut rattacher un véhicule à cinq directions au maximum ; gère les utilisateurs et les données de maintenance, carburant et missions ; consulte les rapports et statistiques. |
 | **Directeur DFP** | Consulte les écrans d'administration et les indicateurs autorisés en lecture seule, selon les droits configurés. |
-| **Chef de direction** | Crée et suit les demandes de mission hors ville de sa direction avec une voiture uniquement ; consulte le calendrier et l'historique. |
-| **Assistant de direction** | Crée et suit les missions en ville (voiture ou moto) et les demandes hors ville (voiture uniquement) ; clôture les missions en ville ; consulte l'historique et exporte les statistiques mensuelles au format CSV. |
-| **Chef du Service Logistique** | Traite les demandes hors ville, vérifie les disponibilités, affecte manuellement le véhicule et le chauffeur, transmet le véhicule à l'inspection DID et effectue la validation N°1. Suit aussi les dossiers logistiques, entretiens et échéances présentés dans son espace. |
+| **Chef de direction** | Compte et espace masqués, conservés pour une réactivation future. |
+| **Assistant de direction** | Crée et suit les missions en ville (voiture ou moto) ; clôture les missions en ville ; consulte l'historique et exporte les statistiques mensuelles au format CSV. La création hors ville est masquée. |
+| **Chef du Service Logistique** | Crée et traite les missions hors ville, vérifie les disponibilités, affecte manuellement le véhicule et le chauffeur, transmet le véhicule à l'inspection DID et effectue la validation N°1. Suit aussi les dossiers logistiques, entretiens et échéances présentés dans son espace. |
 | **Mécanicien DID** | Effectue l'inspection visuelle demandée, enregistre son avis, signale les travaux nécessaires et met à jour les dossiers d'entretien qui lui sont attribués. |
 | **Chef DGAL** | Supervise les indicateurs présentés dans son espace et effectue la validation N°2 des missions qui lui sont transmises. |
 | **Conducteur** | Fiche d'affectation gérée par la Logistique ; aucun compte ni espace de connexion. |
@@ -88,10 +88,9 @@ L'ancienne route **Dispatch** redirige vers les affectations enregistrées dans 
 - Les véhicules mutualisés et les motos sont planifiés par l'Assistant de direction ; les véhicules de mission et les autres demandes passent par le Service Logistique.
 - **Une mission hors ville utilise uniquement une voiture. Une moto ne peut pas être utilisée pour les missions hors ville.** Le Chef du Service Logistique choisit la voiture et le conducteur après vérification de la disponibilité.
 - **Les missions en ville peuvent utiliser soit une moto, soit une voiture**, selon les ressources disponibles et les règles d'affectation de la direction.
-- **L'espace Chef de direction est dédié exclusivement aux missions hors ville**. Le formulaire propose uniquement des voitures ; aucun choix de moto n'est disponible.
-- **L'espace Assistant de direction gère deux types de missions** :
-  - **Missions en ville** : formulaire rapide avec choix entre moto et voiture
-  - **Missions hors ville** : formulaire complet similaire au Chef de direction, avec voiture uniquement
+- **Le compte Chef de direction et son intérim sont masqués**. Les données existantes et la page sont conservées. La création des missions hors ville se fait dans l'espace du Chef du Service Logistique.
+  Pour réactiver ces comptes, passer `COMPTE_CHEF_DIRECTION_ACTIF` à `true` dans `app/lib/roles.ts` et dans `vehicule.spat-backend/src/main/java/com/vehicule/Spat/vehicule/spat_backend/config/Roles.java`. Les comptes existants restent administrables ; aucune donnée n'est supprimée. Le formulaire partagé est dans `components/CreationMissionHorsVille.tsx`.
+- **L'espace Assistant de direction permet de planifier uniquement les missions en ville**, avec un formulaire rapide et le choix entre moto et voiture. Le parcours de création hors ville est conservé mais masqué ; il peut être réactivé dans `app/assistant-direction/page.tsx` avec l'indicateur `MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES`.
 
 #### 2. Catégories de véhicules
 
@@ -214,17 +213,13 @@ Les valeurs configurables (jours fériés, horaires, catégories, affectations, 
 
 ### Créer et traiter une mission
 
-- **Chef de direction** : créer une demande hors ville en cliquant sur **Nouvelle mission**. Renseigner le bénéficiaire, le motif, la destination et les dates. Le type de véhicule est automatiquement défini comme voiture (les motos ne sont pas disponibles pour les missions hors ville). Suivre ensuite l'avancement du ticket dans le calendrier.
+- **Chef du Service Logistique** : cliquer sur **Nouvelle mission**, à côté de **Navettes parapheurs PACT**. Renseigner le bénéficiaire, l'entité, le motif, la destination, la durée, les dates, le forfaitaire et les passagers. Dans la section **Choisir le véhicule**, sélectionner une voiture et un chauffeur disponibles pour la période. À la création du ticket, la demande d’inspection visuelle est automatiquement envoyée au mécanicien DID. Un popup confirme l’envoi avec l’immatriculation. Attendre le retour du mécanicien, puis poursuivre les validations habituelles depuis le ticket.
 - **Assistant de direction** : cliquer sur **Nouvelle mission**, puis :
-  1. **Choisir d'abord la zone de mission** : "Dans la ville de Toamasina" ou "Hors ville de Toamasina"
-  2. **Choisir le type de véhicule** :
-     - Si zone = "Dans la ville de Toamasina" : moto ou voiture disponibles
-     - Si zone = "Hors ville de Toamasina" : voiture uniquement (pas de moto)
-  3. **Compléter le formulaire adapté** :
-     - Mission en ville : formulaire rapide (date, heure, bénéficiaire, objet)
-     - Mission hors ville : formulaire complet (bénéficiaire, dates, destination, passagers)
+  1. La zone est fixée à **Dans la ville de Toamasina**.
+  2. **Choisir le type de véhicule** : moto ou voiture.
+  3. **Compléter le formulaire rapide** (date, heure, bénéficiaire, objet).
   
-  Pour une mission en ville, utiliser le calendrier pour suivre la mission ; au retour, renseigner la date et l'heure de retour, ajouter un incident si nécessaire et clôturer. La mission clôturée rejoint l'historique. Pour une mission hors ville, la demande suit le circuit de validation du Service Logistique.
+  Utiliser le calendrier pour suivre la mission ; au retour, renseigner la date et l'heure de retour, ajouter un incident si nécessaire et clôturer. La mission clôturée rejoint l'historique.
   
 - **Chef du Service Logistique** : traiter les demandes hors ville, vérifier la disponibilité, affecter manuellement une voiture et un chauffeur, puis transmettre le véhicule au mécanicien DID avant la première validation.
 - **Mécanicien DID** : inspecter le véhicule transmis et saisir son avis.

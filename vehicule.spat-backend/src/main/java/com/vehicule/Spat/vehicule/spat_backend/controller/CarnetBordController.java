@@ -229,7 +229,9 @@ public class CarnetBordController {
             Reservation mission = reservationRepository.findById(Long.valueOf(body.get("reservationId").toString()))
                     .orElseThrow(() -> new IllegalArgumentException("Ticket introuvable"));
             acces.exigerLecture(mission);
-            if (!Set.of("VALIDEE", "PLANIFIEE").contains(mission.getStatut()))
+            boolean missionEnVilleEnCours = "VILLE_TOAMASINA".equals(mission.getZoneMission())
+                    && "EN_COURS".equals(mission.getStatut());
+            if (!Set.of("VALIDEE", "PLANIFIEE").contains(mission.getStatut()) && !missionEnVilleEnCours)
                 return ResponseEntity.status(409).body(Map.of("erreur", "La mission doit être validée avant la sortie."));
             Long vehiculeId = Long.parseLong(body.get("vehiculeId").toString());
             Vehicule vehicule = vehiculeRepository.findByIdForUpdate(vehiculeId)
@@ -340,9 +342,12 @@ public class CarnetBordController {
                     vehiculeRepository.save(retourVehicule);
                 }
             }
-            if (carnet.getReservation() != null) {
+            if (carnet.getReservation() != null
+                    && "VILLE_TOAMASINA".equals(carnet.getReservation().getZoneMission())) {
                 Reservation mission = carnet.getReservation();
-                mission.setStatut("CLOTUREE"); mission.setDateFin(carnet.getDateRetour());
+                mission.setStatut("CLOTUREE");
+                mission.setARegulariser(false);
+                mission.setDateFin(carnet.getDateRetour());
                 mission.setDureeUtilisationMinutes((int) java.time.Duration.between(carnet.getDateSortie(), carnet.getDateRetour()).toMinutes());
                 reservationRepository.save(mission);
             }

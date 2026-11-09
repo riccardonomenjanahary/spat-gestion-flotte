@@ -19,7 +19,15 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
+// Conserver le rôle et sa page pour une réactivation ultérieure.
+export const COMPTE_CHEF_DIRECTION_ACTIF = false;
+export function estRoleMasque(role: string | null | undefined): boolean {
+  return !COMPTE_CHEF_DIRECTION_ACTIF
+    && (role === ROLES.CHEF_DIRECTION || role === ROLES.AGENT_PAR_INTERIM_CHEF);
+}
+
 export function accueilPourRole(role: string | null | undefined): string {
+  if (estRoleMasque(role)) return "/non-autorise";
   const routes: Record<Role, string> = {
     SUPER_ADMIN: "/super-admin", ADMIN: "/admin", CO_ADMIN: "/admin", DIRECTEUR_DFP: "/admin",
     CHEF_SERVICE_LOGISTIQUE: "/chef-service-logistique", CHEF_DIRECTION: "/chef-direction",

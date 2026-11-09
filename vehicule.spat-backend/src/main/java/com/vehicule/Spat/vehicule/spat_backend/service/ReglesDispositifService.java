@@ -46,7 +46,10 @@ public class ReglesDispositifService {
             return "Véhicule indisponible : conflit, entretien, assurance ou visite technique à régulariser.";
         if (r.getDateCreation() == null || r.getDateDebut() == null || r.getDateFin() == null)
             return "Dates de la demande incomplètes.";
-        if (Duration.between(r.getDateCreation(), r.getDateDebut()).toHours() < 24
+        boolean sortieRapideLeJourMeme = "ASSISTANT_DIRECTION".equals(r.getModeCreation())
+                && "VILLE_TOAMASINA".equals(r.getZoneMission())
+                && r.getDateCreation().toLocalDate().equals(r.getDateDebut().toLocalDate());
+        if (!sortieRapideLeJourMeme && Duration.between(r.getDateCreation(), r.getDateDebut()).toHours() < 24
                 && (!r.isDemandeUrgente() || r.getMotifUrgence() == null || r.getMotifUrgence().isBlank()))
             return "Une demande déposée moins de 24 heures avant le départ nécessite une urgence motivée et tracée.";
         if (horsHoraires(r.getDateDebut(), r.getDateFin())

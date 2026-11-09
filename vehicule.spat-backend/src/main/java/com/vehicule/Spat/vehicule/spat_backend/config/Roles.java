@@ -1,6 +1,15 @@
 package com.vehicule.Spat.vehicule.spat_backend.config;
 
 public class Roles {
+    // Réactiver également COMPTE_CHEF_DIRECTION_ACTIF dans app/lib/roles.ts.
+    public static final boolean COMPTE_CHEF_DIRECTION_ACTIF = false;
+
+    public static boolean estRoleMasque(String role) {
+        String normalise = role == null ? "" : role.trim().replaceFirst("^ROLE_", "");
+        return !COMPTE_CHEF_DIRECTION_ACTIF
+                && (CHEF_DIRECTION.equalsIgnoreCase(normalise) || AGENT_PAR_INTERIM_CHEF.equalsIgnoreCase(normalise));
+    }
+
     public static final String SUPER_ADMIN = "SUPER_ADMIN";
     public static final String ADMIN = "ADMIN";
     public static final String CO_ADMIN = "CO_ADMIN";

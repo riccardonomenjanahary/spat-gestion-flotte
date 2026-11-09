@@ -71,6 +71,7 @@ class ProfilsHttpTest {
         "MECANICIEN_DID,PUT,/api/maintenances/1/avis-did,204",
         "AGENT_FLOTTE,PUT,/api/maintenances/1/avis-did,403",
         "CHEF_SERVICE_LOGISTIQUE,PUT,/api/reservations/1/decision,204",
+        "CHEF_SERVICE_LOGISTIQUE,POST,/api/reservations,204",
         "CHEF_SERVICE_LOGISTIQUE,PUT,/api/reservations/1/validation-n2,403",
         "CHEF_DGAL,PUT,/api/reservations/1/validation-n2,204",
         "ADMIN,POST,/api/admin/directions,204",

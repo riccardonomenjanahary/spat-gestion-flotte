@@ -104,7 +104,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     // NORMALISATION DU ROLE
                     // =============================================
 
-                    if (role != null && !role.isBlank() && !"CHAUFFEUR".equals(role)) {
+                    if (role != null && !role.isBlank() && !"CHAUFFEUR".equals(role) && !Roles.estRoleMasque(role)) {
 
                         /*
                          * Si le compte contient :

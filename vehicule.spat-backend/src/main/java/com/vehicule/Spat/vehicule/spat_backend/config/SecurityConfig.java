@@ -326,12 +326,7 @@ public class SecurityConfig {
                                         HttpMethod.POST,
                                         "/api/reservations/urgence-express"
                                 )
-                                .hasAnyRole(
-                                        Roles.ADMIN,
-                                        Roles.SUPER_ADMIN,
-                                        Roles.CHEF_SERVICE_LOGISTIQUE,
-                                        Roles.AGENT_FLOTTE
-                                )
+                                .denyAll()
 
                                 /*
                                  * RELANCE DU CONTROLE DID APRES AVIS DEFAVORABLE
@@ -568,11 +563,12 @@ public class SecurityConfig {
                                 .authenticated()
 
                                 // =========================================
-                                // URGENCE DE DERNIERE MINUTE : AGENT FLOTTE UNIQUEMENT
+                                // ANCIEN CIRCUIT D’URGENCE : HISTORIQUE EN LECTURE SEULE
                                 // =========================================
                                 .requestMatchers(HttpMethod.POST,
-                                        "/api/agent-flotte/tickets/*/urgence-derniere-minute")
-                                .hasRole(Roles.AGENT_FLOTTE)
+                                        "/api/agent-flotte/tickets/*/urgence-derniere-minute",
+                                        "/api/reservations/*/urgence-chef-logistique")
+                                .denyAll()
                                 .requestMatchers(HttpMethod.GET,
                                         "/api/agent-flotte/urgences-derniere-minute")
                                 .hasRole(Roles.AGENT_FLOTTE)
@@ -595,7 +591,6 @@ public class SecurityConfig {
                                 .hasRole(Roles.CHEF_SERVICE_LOGISTIQUE)
 
                                 .requestMatchers(HttpMethod.POST,
-                                        "/api/reservations/*/urgence-chef-logistique",
                                         "/api/reservations/*/demande-avis-arrivee",
                                         "/api/reservations/*/cloturer-apres-avis-did",
                                         "/api/reservations/*/cloturer-urgence")

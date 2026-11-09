@@ -15,7 +15,7 @@ import {
 import RoleGuard from "@/components/RoleGuard";
 import EnTete from "@/components/EnTete";
 import PersonnelAutocomplete from "@/components/PersonnelAutocomplete";
-import { ROLES } from "@/app/lib/roles";
+import { ROLES, COMPTE_CHEF_DIRECTION_ACTIF, estRoleMasque } from "@/app/lib/roles";
 interface Utilisateur {
   id: number;
   nomComplet: string;
@@ -264,6 +264,7 @@ function SuperAdminUtilisateursContent() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const roleInterim = params.get("interimRole");
+    if (estRoleMasque(roleInterim)) return;
     if (roleInterim !== ROLES.AGENT_PAR_INTERIM_ASSISTANT && roleInterim !== ROLES.AGENT_PAR_INTERIM_CHEF) return;
     const timer = window.setTimeout(() => {
       setNouveauRole(roleInterim);
@@ -825,18 +826,18 @@ function SuperAdminUtilisateursContent() {
                       <option value={ROLES.AGENT_SURETE}>
                         Agent de sûreté
                       </option>
-                      <option value={ROLES.CHEF_DIRECTION}>
+                      {(COMPTE_CHEF_DIRECTION_ACTIF || (modeEdition && utilisateurEnCours?.role === ROLES.CHEF_DIRECTION)) && <option value={ROLES.CHEF_DIRECTION}>
                         Chef de Direction des employés
-                      </option>
+                      </option>}
                       <option value={ROLES.ASSISTANT_DIRECTION}>
                         Assistant de Direction
                       </option>
                       <option value={ROLES.AGENT_PAR_INTERIM_ASSISTANT}>
                         Agent par intérim — Assistant de Direction
                       </option>
-                      <option value={ROLES.AGENT_PAR_INTERIM_CHEF}>
+                      {(COMPTE_CHEF_DIRECTION_ACTIF || (modeEdition && utilisateurEnCours?.role === ROLES.AGENT_PAR_INTERIM_CHEF)) && <option value={ROLES.AGENT_PAR_INTERIM_CHEF}>
                         Agent par intérim — Chef de Direction
-                      </option>
+                      </option>}
                       <option value="CHEF_SERVICE_LOGISTIQUE">
                         Chef Service Logistique
                       </option>

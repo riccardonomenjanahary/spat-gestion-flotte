@@ -1,6 +1,7 @@
 package com.vehicule.Spat.vehicule.spat_backend.controller;
 
 import com.vehicule.Spat.vehicule.spat_backend.dto.ClotureMissionAssistantDirectionRequest;
+import com.vehicule.Spat.vehicule.spat_backend.dto.CreateMissionAssistantDirectionRequest;
 import com.vehicule.Spat.vehicule.spat_backend.model.*;
 import com.vehicule.Spat.vehicule.spat_backend.repository.*;
 import com.vehicule.Spat.vehicule.spat_backend.service.*;
@@ -15,9 +16,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class ClotureProfilsTest {
     private final ReservationRepository reservations = mock(ReservationRepository.class);
     private final UtilisateurRepository utilisateurs = mock(UtilisateurRepository.class);
-    private final ReservationController assistant = new ReservationController(reservations, mock(VehiculeRepository.class),
-            mock(ChauffeurRepository.class), mock(ChauffeurAutoService.class), utilisateurs,
-            mock(DisponibiliteReservationService.class), mock(MaintenanceService.class), mock(NotificationService.class),
+    private final VehiculeRepository vehicules = mock(VehiculeRepository.class);
+    private final ChauffeurRepository chauffeurs = mock(ChauffeurRepository.class);
+    private final DisponibiliteReservationService disponibilites = mock(DisponibiliteReservationService.class);
+    private final ReservationController assistant = new ReservationController(reservations, vehicules,
+            chauffeurs, mock(ChauffeurAutoService.class), utilisateurs,
+            disponibilites, mock(MaintenanceService.class), mock(NotificationService.class),
             mock(MaintenanceRepository.class), mock(SignalementEntretienChauffeurRepository.class),
             mock(TransactionCarburantRepository.class), mock(ReglesDispositifService.class), mock(AccesParcoursService.class));
     private Reservation r;
@@ -39,6 +43,61 @@ class ClotureProfilsTest {
         var retour = new ClotureMissionAssistantDirectionRequest();
         retour.setDateHeureRetour(LocalDateTime.now().minusMinutes(1)); return retour;
     }
+    private CreateMissionAssistantDirectionRequest demandeVoiture() {
+        var demande = new CreateMissionAssistantDirectionRequest();
+        demande.setTypeVehicule("VOITURE");
+        demande.setNom("Recette");
+        demande.setPrenom("Test");
+        demande.setMotif("Essai du départ immédiat");
+        demande.setDestination("Toamasina");
+        demande.setDureeEstimeeMinutes(30);
+        return demande;
+    }
+
+    @Test void missionImmediateUtiliseHeureServeurEtAffecteChauffeur() {
+        Vehicule vehicule = r.getVehicule();
+        vehicule.setId(12L);
+        vehicule.setCategorie(CategorieVehicule.MUTUALISEE);
+        Chauffeur chauffeur = new Chauffeur();
+        chauffeur.setId(13L);
+        when(vehicules.findAll()).thenReturn(List.of(vehicule));
+        when(vehicules.findByIdForUpdate(12L)).thenReturn(Optional.of(vehicule));
+        when(chauffeurs.findAll()).thenReturn(List.of(chauffeur));
+        when(chauffeurs.findByIdForUpdate(13L)).thenReturn(Optional.of(chauffeur));
+        when(disponibilites.estVehiculeDisponiblePourPeriode(eq(12L), any(), any(), isNull())).thenReturn(true);
+        when(disponibilites.estChauffeurDisponiblePourPeriode(eq(13L), any(), any(), isNull())).thenReturn(true);
+        when(reservations.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var demande = demandeVoiture();
+        demande.setDepartImmediat(true);
+        demande.setDateDebut(LocalDateTime.now().minusMinutes(10));
+        LocalDateTime avant = LocalDateTime.now().withNano(0);
+        var resultat = assistant.creerMissionRapideAssistantDirection(demande);
+        assertEquals(200, resultat.getStatusCode().value());
+        Reservation mission = assertInstanceOf(Reservation.class, resultat.getBody());
+        assertFalse(mission.getDateDebut().isBefore(avant));
+        assertEquals(mission.getDateDebut().plusMinutes(30), mission.getDateFin());
+        assertSame(vehicule, mission.getVehicule());
+        assertSame(chauffeur, mission.getChauffeur());
+    }
+
+    @Test void compteSansDirectionReçoitUnMotifEtNAccedePasAuxNotificationsPartagees() {
+        u.setDirectionId(null);
+        var resultat = assistant.creerMissionRapideAssistantDirection(demandeVoiture());
+        assertEquals(400, resultat.getStatusCode().value());
+        assertInstanceOf(Map.class, resultat.getBody());
+        assertTrue(((Map<?, ?>) resultat.getBody()).get("message").toString().contains("rattaché à une direction"));
+        assertEquals(403, assistant.missionsActivesVehiculesPartages().getStatusCode().value());
+        verify(reservations, never()).save(any());
+    }
+
+    @Test void departSaisiDansLePasseResteRefuse() {
+        var demande = demandeVoiture();
+        demande.setDateDebut(LocalDateTime.now().minusMinutes(10));
+        assertEquals(400, assistant.creerMissionRapideAssistantDirection(demande).getStatusCode().value());
+        verify(reservations, never()).save(any());
+    }
+
     @Test void pasDeClotureSansValidation() {
         assertEquals(409, assistant.cloturerMissionAssistantDirection(1L, retour()).getStatusCode().value());
         verify(reservations, never()).save(any());

@@ -68,8 +68,17 @@ function RequisitionsContent() {
   };
 
   const terminer = async (id: number, action: "terminer" | "annuler") => {
-    await fetch(`${API}/requisitions/${id}/${action}`, { method: "PUT", headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" } });
-    await charger();
+    setErreur("");
+    try {
+      const response = await fetch(`${API}/requisitions/${id}/${action}`, { method: "PUT", headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" } });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.erreur || `Action refusée (HTTP ${response.status}).`);
+      }
+      await charger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Impossible de mettre à jour la réquisition.");
+    }
   };
 
   const selectedVehicle = vehicules.find(v => String(v.id) === vehiculeId);
@@ -103,7 +112,7 @@ function RequisitionsContent() {
           }} style={inputStyle}>
             <option value="">Choisir un véhicule</option>
             {vehiculesDeMission.map(v => {
-              const indisponible = ["MAINTENANCE", "EN_MAINTENANCE", "EN_PANNE", "HORS_SERVICE", "INDISPONIBLE", "INDISPONIBLE_TECHNIQUE", "REQUISITIONNE", "EN_MISSION", "REFORME", "TRANSFERE"].includes(String(v.statut || "").toUpperCase());
+              const indisponible = v.statut !== "DISPONIBLE";
               return <option key={v.id} value={`MISSION:${v.id}`} disabled={indisponible}>{v.immatriculation || `Véhicule #${v.id}`} ({v.statut || "—"})</option>;
             })}
             <option value="AUTRE">Autres véhicules</option>
@@ -114,7 +123,7 @@ function RequisitionsContent() {
             <select required value={vehiculeId} onChange={e => setVehiculeId(e.target.value)} style={inputStyle}>
               <option value="">Choisir un autre véhicule</option>
               {autresVehicules.map(v => {
-                const indisponible = ["MAINTENANCE", "EN_MAINTENANCE", "EN_PANNE", "HORS_SERVICE", "INDISPONIBLE", "INDISPONIBLE_TECHNIQUE", "REQUISITIONNE", "EN_MISSION", "REFORME", "TRANSFERE"].includes(String(v.statut || "").toUpperCase());
+                const indisponible = v.statut !== "DISPONIBLE";
                 return <option key={v.id} value={v.id} disabled={indisponible}>{v.immatriculation || `Véhicule #${v.id}`} — {v.categorie || "Catégorie non renseignée"} ({v.statut || "—"})</option>;
               })}
             </select>

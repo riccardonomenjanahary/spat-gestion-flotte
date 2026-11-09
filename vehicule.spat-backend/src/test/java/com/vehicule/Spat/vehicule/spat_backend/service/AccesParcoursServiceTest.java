@@ -28,10 +28,10 @@ class AccesParcoursServiceTest {
         assertTrue(acces.peutLire(utilisateur("ASSISTANT_DIRECTION", 20, 2), dossier()));
         assertFalse(acces.peutLire(utilisateur("ASSISTANT_DIRECTION", 20, 3), dossier()));
     }
-    @Test void chauffeurNeVoitQueSesMissions() {
+    @Test void ficheChauffeurNeDonnePasAccesAuxMissions() {
         Reservation r = dossier(); Chauffeur c = new Chauffeur(); c.setMatricule("C1"); r.setChauffeur(c);
         Utilisateur u = utilisateur("CHAUFFEUR", 30, 0); u.setMatricule("C1");
-        assertTrue(acces.peutLire(u, r)); u.setMatricule("C2"); assertFalse(acces.peutLire(u, r));
+        assertFalse(acces.peutLire(u, r)); u.setMatricule("C2"); assertFalse(acces.peutLire(u, r));
     }
     @ParameterizedTest @ValueSource(strings = {"ADMIN", "SUPER_ADMIN", "CO_ADMIN", "DIRECTEUR_DFP", "CHEF_DGAL", "CHEF_SERVICE_LOGISTIQUE", "AGENT_FLOTTE", "MECANICIEN_DID"})
     void profilsTransversesPeuventConsulter(String role) { assertTrue(acces.peutLire(utilisateur(role, 20, 3), dossier())); }

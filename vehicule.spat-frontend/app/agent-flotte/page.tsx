@@ -393,18 +393,6 @@ function AgentFlotteContent() {
   const [formCarburantOuvert, setFormCarburantOuvert] = useState(false);
   const [formAssuranceOuvert, setFormAssuranceOuvert] = useState(false);
   const [formSinistreOuvert, setFormSinistreOuvert] = useState(false);
-  const [urgenceZoneMission, setUrgenceZoneMission] = useState<"VILLE_TOAMASINA" | "HORS_TOAMASINA" | "">("");
-  const [urgenceTicket, setUrgenceTicket] = useState<Reservation | null>(null);
-  const [urgenceEnCours, setUrgenceEnCours] = useState(false);
-  const [confirmeDerogationVerrouillage, setConfirmeDerogationVerrouillage] = useState(false);
-  const [urgenceSousCategorie, setUrgenceSousCategorie] = useState("URGENCE_OPERATIONNELLE");
-  const [urgenceSousCategorieAutre, setUrgenceSousCategorieAutre] = useState("");
-  const [urgenceMotif, setUrgenceMotif] = useState("");
-  const [urgenceObjet, setUrgenceObjet] = useState("");
-  const [urgenceDepart, setUrgenceDepart] = useState("");
-  const [urgenceFin, setUrgenceFin] = useState("");
-  const [urgencePointDepart, setUrgencePointDepart] = useState("");
-  const [urgenceDestination, setUrgenceDestination] = useState("");
   const [tracesUrgence, setTracesUrgence] = useState<ChangementDerniereMinute[]>([]);
 
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
@@ -571,66 +559,7 @@ const [carbPeriode, setCarbPeriode] =
     } catch (e) { console.warn("Historique des urgences momentanément indisponible", e); }
   };
 
-  const ouvrirUrgence = (r: Reservation) => {
-    setUrgenceTicket(r);
-    setConfirmeDerogationVerrouillage(false);
-    setUrgenceZoneMission(r.zoneMission === "VILLE_TOAMASINA" || r.zoneMission === "HORS_TOAMASINA" ? r.zoneMission : "");
-    setUrgenceSousCategorie("URGENCE_OPERATIONNELLE");
-    setUrgenceMotif("");
-    setUrgenceObjet("");
-    setUrgencePointDepart(r.pointDepart || "");
-    setUrgenceDestination(r.destination || "");
-    const maintenant = new Date();
-    const fin = new Date(maintenant.getTime() + 60 * 60 * 1000);
-    const local = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-    setUrgenceDepart(local(maintenant));
-    setUrgenceFin(local(fin));
-  };
 
-  const soumettreUrgence = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!urgenceTicket || urgenceEnCours || !API) return;
-    const token = getToken();
-    if (!token) { toast.error("Session expirée."); return; }
-    if (!urgenceZoneMission) { toast.error("Sélectionnez la zone du nouveau trajet."); return; }
-    if (urgenceTicket.mobilisabilite === "VERROUILLEE" && !confirmeDerogationVerrouillage) {
-      toast.error("Confirmez explicitement la dérogation pour la mission verrouillée."); return;
-    }
-    if (!urgenceMotif.trim() || !urgenceObjet.trim() || !urgencePointDepart.trim() || !urgenceDestination.trim()
-        || !urgenceDepart || !urgenceFin || new Date(urgenceFin) <= new Date(urgenceDepart)) {
-      toast.error("Complétez les informations et vérifiez les dates."); return;
-    }
-    if (urgenceSousCategorie === "AUTRE" && !urgenceSousCategorieAutre.trim()) {
-      toast.error("Précisez la sous-catégorie de l'urgence."); return;
-    }
-    const avertissement = urgenceTicket.mobilisabilite === "VERROUILLEE"
-      ? "DÉROGATION EXCEPTIONNELLE : la mission initiale est VERROUILLÉE. Son véhicule et son chauffeur seront réaffectés. "
-      : "";
-    if (!window.confirm(`${avertissement}Créer la mission urgente et mettre le ticket TKT-${String(urgenceTicket.id).padStart(5,"0")} à reprogrammer ? Le demandeur initial et le chauffeur seront informés.`)) return;
-    setUrgenceEnCours(true);
-    try {
-      const res = await fetch(`${API}/agent-flotte/tickets/${urgenceTicket.id}/urgence-derniere-minute`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          sousCategorie: urgenceSousCategorie === "AUTRE"
-            ? `AUTRE — ${urgenceSousCategorieAutre.trim()}`
-            : urgenceSousCategorie,
-          motifUrgence: urgenceMotif.trim(), motif: urgenceObjet.trim(),
-          dateDebut: `${urgenceDepart}:00`, dateFin: `${urgenceFin}:00`,
-          pointDepart: urgencePointDepart.trim(), destination: urgenceDestination.trim(),
-          zoneMission: urgenceZoneMission,
-          derogationMissionVerrouillee: urgenceTicket.mobilisabilite === "VERROUILLEE" && confirmeDerogationVerrouillage,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.text().catch(() => "")) || `Erreur HTTP ${res.status}`);
-      const resultat: {ticketUrgentId?: number} = await res.json();
-      toast.success(`Mission urgente TKT-${String(resultat.ticketUrgentId ?? "").padStart(5,"0")} créée. Le ticket initial est à reprogrammer.`);
-      setUrgenceTicket(null);
-      await Promise.all([charger(), chargerTracesUrgence()]);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Impossible de créer la mission urgente."); }
-    finally { setUrgenceEnCours(false); }
-  };
 
   const charger = async () => {
     if (!API) {
@@ -881,30 +810,7 @@ const [carbPeriode, setCarbPeriode] =
     return liens;
   }, [tracesUrgence]);
 
-  const raisonUrgenceIndisponible = (r: Reservation): string | null => {
-    if (changementsParTicket.has(r.id)) {
-      return "Un changement de dernière minute est déjà enregistré pour ce ticket.";
-    }
-    if (r.statut !== "VALIDEE") {
-      return "La mission doit d’abord être validée au niveau 2.";
-    }
 
-    if (r.mobilisabilite && !["FLEXIBLE", "VERROUILLEE"].includes(r.mobilisabilite)) {
-      return "Mobilisabilité non reconnue : vérifiez le ticket avec le service logistique.";
-    }
-    if (!r.vehicule || !r.chauffeur) {
-      return "Un véhicule et un chauffeur doivent être affectés à cette mission.";
-    }
-    const depart = new Date(r.dateDebut).getTime();
-    if (!Number.isFinite(depart)) {
-      return "Date de départ invalide : vérifiez les informations de la mission.";
-    }
-    if (depart <= Date.now()) {
-      return "Le départ initial a déjà eu lieu : ce circuit ne s’applique plus.";
-    }
-    return null;
-  };
-  const urgencePossible = (r: Reservation) => raisonUrgenceIndisponible(r) === null;
 
   const ticketsAffiches = afficherHistoriqueMissions
     ? historiqueMissions
@@ -2179,76 +2085,7 @@ const carburantStats = useMemo(() => {
               )}
             </div>
 
-            {urgenceTicket && (
-              <SlideInPanel
-                open={urgenceTicket !== null}
-                eyebrow="Ticket / mission"
-                title={`Urgence de dernière minute — TKT-${String(urgenceTicket.id).padStart(5, "0")}`}
-                onClose={() => { if (!urgenceEnCours) setUrgenceTicket(null); }}
-              >
-              <form onSubmit={soumettreUrgence} style={{...cardStyleHistorique, marginBottom: 16, border: "2px solid #dc2626", display: "grid", gap: 10}}>
-                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap: 12}}>
-                  <strong style={{color:"#b91c1c"}}>Urgence de dernière minute — TKT-{String(urgenceTicket.id).padStart(5,"0")}</strong>
-                  <button type="button" onClick={() => setUrgenceTicket(null)} disabled={urgenceEnCours} style={refreshButton}><X size={14}/> Annuler</button>
-                </div>
 
-                <label style={labelStyle}>Sous-catégorie *
-                  <select required value={urgenceSousCategorie} onChange={e=>{ setUrgenceSousCategorie(e.target.value); if (e.target.value !== "AUTRE") setUrgenceSousCategorieAutre(""); }} style={inputStyle}>
-                    <option value="URGENCE_OPERATIONNELLE">Urgence opérationnelle</option>
-                    <option value="REUNION_IMPREVUE">Réunion imprévue</option><option value="AUTRE">Autre urgence justifiée</option>
-                  </select>
-                </label>
-                {urgenceSousCategorie === "AUTRE" && (
-                  <label style={labelStyle}>Précisez la sous-catégorie *
-                    <input required maxLength={255} value={urgenceSousCategorieAutre} onChange={e=>setUrgenceSousCategorieAutre(e.target.value)} style={inputStyle} placeholder="Décrivez l'urgence" />
-                  </label>
-                )}
-                <label style={labelStyle}>Motif de l'urgence *
-                  <textarea required maxLength={1000} value={urgenceMotif} onChange={e=>setUrgenceMotif(e.target.value)} rows={2} style={inputStyle}/>
-                </label>
-                <label style={labelStyle}>Objet de la nouvelle mission *
-                  <input required maxLength={255} value={urgenceObjet} onChange={e=>setUrgenceObjet(e.target.value)} style={inputStyle}/>
-                </label>
-                <label style={labelStyle}>Zone du NOUVEAU trajet *
-                  <select required value={urgenceZoneMission} onChange={e=>setUrgenceZoneMission(e.target.value as "VILLE_TOAMASINA" | "HORS_TOAMASINA" | "")} style={inputStyle}>
-                    <option value="">Choisir la zone du nouveau trajet</option>
-                    <option value="VILLE_TOAMASINA">Dans la ville de Toamasina</option>
-                    <option value="HORS_TOAMASINA">Hors de la ville de Toamasina</option>
-                  </select>
-                </label>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:10}}>
-                  <label style={labelStyle}>Date et heure de départ *
-                    <input type="datetime-local" required value={urgenceDepart} onChange={e=>setUrgenceDepart(e.target.value)} style={inputStyle}/>
-                  </label>
-                  <label style={labelStyle}>Date et heure de fin estimée *
-                    <input type="datetime-local" required value={urgenceFin} onChange={e=>setUrgenceFin(e.target.value)} style={inputStyle}/>
-                  </label>
-                  <label style={labelStyle}>Point de départ *
-                    <input required maxLength={255} value={urgencePointDepart} onChange={e=>setUrgencePointDepart(e.target.value)} style={inputStyle}/>
-                  </label>
-                  <label style={labelStyle}>Destination *
-                    <input required maxLength={255} value={urgenceDestination} onChange={e=>setUrgenceDestination(e.target.value)} style={inputStyle}/>
-                  </label>
-                </div>
-                <strong style={{fontSize:12, color:"#475569"}}>Véhicule : {urgenceTicket.vehicule?.immatriculation || "—"} · Chauffeur : {urgenceTicket.chauffeur ? nomChauffeur(urgenceTicket.chauffeur) : "—"}</strong>
-                {urgenceTicket.mobilisabilite === "VERROUILLEE" && (
-                  <div style={{padding:12, border:"1px solid #fca5a5", borderRadius:8, background:"#fef2f2", color:"#b91c1c", fontSize:12, lineHeight:1.5}}>
-                    <strong>Mission initiale verrouillée — dérogation exceptionnelle.</strong>
-                    <p style={{margin:"5px 0 8px"}}>Le créneau initial sera annulé et la mission devra être reprogrammée.</p>
-                    <label style={{display:"flex", alignItems:"flex-start", gap:9, cursor:"pointer"}}>
-                      <input type="checkbox" checked={confirmeDerogationVerrouillage}
-                        onChange={e=>setConfirmeDerogationVerrouillage(e.target.checked)}
-                        style={{marginTop:2}} required />
-                      <span>Je confirme exceptionnellement la réaffectation du véhicule et du chauffeur de cette mission verrouillée.</span>
-                    </label>
-                  </div>
-                )}
-                <button type="submit" className="btn-spat btn-rouge" disabled={urgenceEnCours || (urgenceTicket.mobilisabilite === "VERROUILLEE" && !confirmeDerogationVerrouillage)} style={{...refreshButton, opacity:urgenceEnCours?.6:1, justifySelf:"start", alignSelf:"start", width:"fit-content", maxWidth:"100%", minWidth:0, textAlign:"center"}}>
-                  <Zap size={15}/>{urgenceEnCours ? "Création en cours..." : "Créer le ticket urgent et reprogrammer l'initial"}
-                </button>
-              </form>
-              </SlideInPanel>
-            )}
 
             {ticketsAffiches.length === 0 ? (
               <BlocVide texte={afficherHistoriqueMissions
@@ -2399,37 +2236,6 @@ const carburantStats = useMemo(() => {
                           <StatutReservation statut={r.statut} />
                         </Td>
                         <Td>
-                          {!afficherHistoriqueMissions && !changementsParTicket.has(r.id) && (
-                            <div style={{ display: "grid", gap: 5, minWidth: 190, maxWidth: 245 }}>
-                              <button
-                                type="button"
-                                disabled={!urgencePossible(r)}
-                                title={raisonUrgenceIndisponible(r) ?? "Créer un ticket urgent lié à ce ticket"}
-                                onClick={() => ouvrirUrgence(r)}
-                                style={{
-                                  ...refreshButton,
-                                  backgroundColor: urgencePossible(r) ? "#dc2626" : "#e2e8f0",
-                                  borderColor: urgencePossible(r) ? "#dc2626" : "#cbd5e1",
-                                  color: urgencePossible(r) ? "#ffffff" : "#64748b",
-                                  cursor: urgencePossible(r) ? "pointer" : "not-allowed",
-                                  fontSize: 11,
-                                  whiteSpace: "normal",
-                                  textAlign: "center",
-                                }}
-                              >
-                                <Zap size={14} /> Changement de dernière minute
-                              </button>
-                              {raisonUrgenceIndisponible(r) ? (
-                                <span style={{ ...smallMuted, lineHeight: 1.4, maxWidth: 245 }}>
-                                  {raisonUrgenceIndisponible(r)}
-                                </span>
-                              ) : r.mobilisabilite === "VERROUILLEE" ? (
-                                <span style={{ ...smallMuted, lineHeight: 1.4, maxWidth: 245, color: "#b91c1c" }}>
-                                  Mission verrouillée : dérogation exceptionnelle à confirmer.
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
                           {changementsParTicket.get(r.id) && (
                             <div style={{...smallMuted, maxWidth: 250, marginTop: 4}}>
                               {changementsParTicket.get(r.id)?.ticketInitialId === r.id

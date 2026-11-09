@@ -24,11 +24,16 @@ import {
 } from "lucide-react";
 
 type Vehicule = { id: number; immatriculation: string; categorie?: string };
-type Mission = { id: number; vehicule?: Vehicule; dateDebut: string; dateFin: string; statut: string; destination?: string };
+type Mission = { id: number; vehicule?: Vehicule; dateDebut: string; dateFin: string; statut: string; destination?: string; zoneMission?: string };
 type DernierKilometrage = { estMotoElectrique?: boolean; dernierKilometrage?: number | null; source?: string; message?: string };
 type Carnet = { id: number; vehicule: Vehicule; conducteurNom: string; dateSortie: string; dateRetour?: string; destination: string; motif: string; kilometrageDepart?: number; kilometrageRetour?: number; niveauChargeDepart?: number; niveauChargeRetour?: number; statut: string };
 type Etat = { moment?: string; etatApparent: string; niveauCarburantCharge: string; equipementsOk: boolean; detailEquipements: string; anomalieSignalee: boolean; descriptionAnomalie: string };
 const STATUTS_MISSION_OUVRABLES = ["VALIDEE", "PLANIFIEE"];
+function missionOuvrable(mission: Mission) {
+  const statut = String(mission.statut).toUpperCase();
+  return Boolean(mission.vehicule) && (STATUTS_MISSION_OUVRABLES.includes(statut)
+    || (mission.zoneMission === "VILLE_TOAMASINA" && statut === "EN_COURS"));
+}
 const etatVide = (): Etat => ({ etatApparent: "BON", niveauCarburantCharge: "PLEIN", equipementsOk: true, detailEquipements: "", anomalieSignalee: false, descriptionAnomalie: "" });
 function heureLocale() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19); }
 const moto = (v?: Vehicule) => /moto/i.test(v?.categorie || "");
@@ -81,12 +86,12 @@ function CarnetBordContent() {
   const [erreur, setErreur] = useState(""); const [envoi, setEnvoi] = useState(false); const [etats, setEtats] = useState<Record<number, Etat[]>>({});
   const formulaireRef = useRef<HTMLFormElement>(null);
   const rappelsTraitesRef = useRef(new Set<number>());
-  const charger = useCallback(async () => { const [c, m] = await Promise.all([api<Carnet[]>("/carnet-bord"), api<Mission[]>("/reservations")]); setCarnets(c); setMissions(m.filter(x => STATUTS_MISSION_OUVRABLES.includes(String(x.statut).toUpperCase()) && x.vehicule)); }, []);
+  const charger = useCallback(async () => { const [c, m] = await Promise.all([api<Carnet[]>("/carnet-bord"), api<Mission[]>("/reservations")]); setCarnets(c); setMissions(m.filter(missionOuvrable)); }, []);
   useEffect(() => {
     void charger().catch(e => setErreur(String(e)));
     const intervalle = window.setInterval(() => {
       void api<Mission[]>("/reservations")
-        .then(data => setMissions(data.filter(m => STATUTS_MISSION_OUVRABLES.includes(String(m.statut).toUpperCase()) && m.vehicule)))
+        .then(data => setMissions(data.filter(missionOuvrable)))
         .catch(e => setErreur(String(e)));
     }, 30000);
     return () => window.clearInterval(intervalle);

@@ -4,80 +4,17 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LockKeyhole, UserRound, LoaderCircle, Eye, EyeOff } from "lucide-react";
-
-type Role =
-  | "SUPER_ADMIN"
-  | "ADMIN"
-  | "CO_ADMIN"
-  | "DIRECTEUR_DFP"
-  | "CHEF_SERVICE_LOGISTIQUE"
-  | "CHEF_DIRECTION"
-  | "ASSISTANT_DIRECTION"
-  | "CHEF_DGAL"
-  | "MECANICIEN_DID"
-  | "AGENT_FLOTTE"
-  | "AGENT_SURETE";
+import { accueilPourRole, estRoleMasque } from "../lib/roles";
 
 interface LoginResponse {
   token: string;
-  role: Role;
+  role: string;
   numMatricule: string;
 }
 
 interface EmailPersonnel {
   nom: string;
   email: string;
-}
-
-function homeForRole(role: string | null | undefined): string {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return "/super-admin";
-
-    case "ADMIN":
-    case "CO_ADMIN":
-    case "DIRECTEUR_DFP":
-      return "/admin";
-
-    case "CHEF_SERVICE_LOGISTIQUE":
-      return "/chef-service-logistique";
-
-    case "CHEF_DIRECTION":
-      return "/chef-direction";
-
-    case "ASSISTANT_DIRECTION":
-      return "/assistant-direction";
-
-    case "CHEF_DGAL":
-      return "/chef-dgal";
-
-    case "MECANICIEN_DID":
-      return "/mecanicien-did";
-
-    case "AGENT_FLOTTE":
-      return "/agent-flotte";
-    case "AGENT_SURETE":
-      return "/agent-surete";
-
-    default:
-      return "/login";
-  }
-}
-
-function isValidRole(role: string): role is Role {
-  return [
-    "SUPER_ADMIN",
-    "ADMIN",
-    "CO_ADMIN",
-    "DIRECTEUR_DFP",
-    "CHEF_SERVICE_LOGISTIQUE",
-    "CHEF_DIRECTION",
-    "ASSISTANT_DIRECTION",
-    "CHEF_DGAL",
-    "MECANICIEN_DID",
-    "AGENT_FLOTTE",
-    "AGENT_SURETE",
-  ].includes(role);
 }
 
 export default function LoginPage() {
@@ -166,22 +103,31 @@ export default function LoginPage() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const message =
-          data?.message || "Matricule ou mot de passe incorrect.";
+        const message = response.status >= 500
+          ? "Le serveur rencontre un problème. Réessayez dans quelques instants."
+          : data?.message || "La connexion a été refusée.";
 
         setErreur(message);
         toast.error(message);
         return;
       }
 
-      if (!data?.token || !data?.role) {
+      if (!data?.token || typeof data.role !== "string" || !data.role.trim()) {
         const message = "La réponse du serveur est incomplète.";
         setErreur(message);
         toast.error(message);
         return;
       }
 
-      if (!isValidRole(data.role)) {
+      const role = data.role.trim().replace(/^ROLE_/, "").toUpperCase();
+      if (estRoleMasque(role)) {
+        const message = "L'espace Chef de direction est temporairement indisponible. Les missions hors ville sont gérées par le Service Logistique.";
+        setErreur(message);
+        toast.error(message);
+        return;
+      }
+      const destination = accueilPourRole(role);
+      if (destination === "/non-autorise") {
         const message = `Rôle utilisateur inconnu : ${data.role}`;
         setErreur(message);
         toast.error(message);
@@ -190,7 +136,7 @@ export default function LoginPage() {
 
       const loginData: LoginResponse = {
         token: data.token,
-        role: data.role,
+        role,
         numMatricule: data.numMatricule || matricule,
       };
 
@@ -202,8 +148,6 @@ export default function LoginPage() {
       );
 
       toast.success("Connexion réussie.");
-
-      const destination = homeForRole(loginData.role);
 
       window.location.replace(destination);
     } catch (error) {
