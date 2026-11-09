@@ -80,7 +80,11 @@ export default function ModificationsAdminPage() {
   }, [page, router]);
 
   useEffect(() => {
-    void charger();
+    const initialisation = window.setTimeout(() => {
+      void charger();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [charger]);
 
   return (

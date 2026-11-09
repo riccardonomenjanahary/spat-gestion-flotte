@@ -93,7 +93,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Démarrer Maven avec Spring Boot
-.\mvnw.cmd spring-boot:run
+# Un chemin temporaire court évite l'échec des sockets internes Java sur Windows.
+.\mvnw.cmd spring-boot:run '-Dspring-boot.run.jvmArguments=-Djdk.net.unixdomain.tmpdir=.'
 
 # Si le script se termine (arrêt ou erreur)
 Write-Host ""

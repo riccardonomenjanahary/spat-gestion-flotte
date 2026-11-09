@@ -357,15 +357,19 @@ export default function FicheControleVehicule({
   };
 
   useEffect(() => {
-    if (initialData?.chauffeurId && !initialData.chauffeurNom && chauffeurs.length > 0) {
-      const chauffeur = chauffeurs.find(c => String(c.chauffeurId) === initialData.chauffeurId);
-      if (chauffeur) {
-        setData(prev => ({
-          ...prev,
-          chauffeurNom: `${chauffeur.nom} ${chauffeur.prenom}`,
-        }));
+    const initialisation = window.setTimeout(() => {
+      if (initialData?.chauffeurId && !initialData.chauffeurNom && chauffeurs.length > 0) {
+        const chauffeur = chauffeurs.find(c => String(c.chauffeurId) === initialData.chauffeurId);
+        if (chauffeur) {
+          setData(prev => ({
+            ...prev,
+            chauffeurNom: `${chauffeur.nom} ${chauffeur.prenom}`,
+          }));
+        }
       }
-    }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [initialData, chauffeurs]);
 
   const updateItem = (

@@ -13,7 +13,11 @@ function IncidentsContent() {
   const API = process.env.NEXT_PUBLIC_API_URL || ""; const [vehicules, setVehicules] = useState<Vehicule[]>([]); const [incidents, setIncidents] = useState<Incident[]>([]); const [vehiculeId, setVehiculeId] = useState(""); const [typeIncident, setTypeIncident] = useState("PANNE"); const [description, setDescription] = useState(""); const [erreur, setErreur] = useState("");
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" });
   const charger = async () => { const h = headers(); const [v, i] = await Promise.all([fetch(`${API}/vehicules`, { headers: h }), fetch(`${API}/signalements-incidents`, { headers: h })]); if (v.ok) setVehicules(await v.json()); if (i.ok) setIncidents(await i.json()); };
-  useEffect(() => { void charger(); }, []);
+  useEffect(() => {
+    const initialisation = window.setTimeout(() => { void charger();
+    }, 0);
+    return () => window.clearTimeout(initialisation);
+  }, []);
   const soumettre = async (e: React.FormEvent) => { e.preventDefault(); const r = await fetch(`${API}/signalements-incidents`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ vehiculeId: Number(vehiculeId), typeIncident, description, gravite: "MOYEN" }) }); if (!r.ok) setErreur(await r.text() || "Signalement impossible."); else { setDescription(""); await charger(); } };
   const statut = async (id: number, nouveauStatut: string) => { await fetch(`${API}/signalements-incidents/${id}/statut`, { method: "PUT", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ statut: nouveauStatut }) }); await charger(); };
   const vehiculeIndisponible = (v: Vehicule) => ["MAINTENANCE", "EN_MAINTENANCE", "EN_PANNE", "HORS_SERVICE", "INDISPONIBLE", "INDISPONIBLE_TECHNIQUE", "REQUISITIONNE", "EN_MISSION", "REFORME", "TRANSFERE"].includes(String(v.statut || "").toUpperCase());

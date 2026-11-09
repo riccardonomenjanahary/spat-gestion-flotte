@@ -14,6 +14,7 @@ import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
 import com.vehicule.Spat.vehicule.spat_backend.model.StatutMaintenance;
 import com.vehicule.Spat.vehicule.spat_backend.model.CategorieVehicule;
 import com.vehicule.Spat.vehicule.spat_backend.service.ChauffeurAutoService;
+import com.vehicule.Spat.vehicule.spat_backend.service.AccesParcoursService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,7 @@ public class VehiculeController {
     private final ChauffeurRepository chauffeurRepository;
     private final DirectionRepository directionRepository;
     private final ChauffeurAutoService chauffeurAutoService;
+    private final AccesParcoursService acces;
 
     public VehiculeController(
             VehiculeRepository vehiculeRepository,
@@ -45,7 +47,8 @@ public class VehiculeController {
             MaintenanceRepository maintenanceRepository,
             ChauffeurRepository chauffeurRepository,
             DirectionRepository directionRepository,
-            ChauffeurAutoService chauffeurAutoService
+            ChauffeurAutoService chauffeurAutoService,
+            AccesParcoursService acces
     ) {
         this.vehiculeRepository = vehiculeRepository;
         this.affectationRepository = affectationRepository;
@@ -54,6 +57,7 @@ public class VehiculeController {
         this.chauffeurRepository = chauffeurRepository;
         this.directionRepository = directionRepository;
         this.chauffeurAutoService = chauffeurAutoService;
+        this.acces = acces;
     }
 
     // =========================================================
@@ -62,7 +66,8 @@ public class VehiculeController {
 
     @GetMapping
     public List<Vehicule> lister() {
-        return vehiculeRepository.findAll();
+        var utilisateur = acces.courant();
+        return vehiculeRepository.findAll().stream().filter(v -> acces.peutLireVehicule(utilisateur, v)).toList();
     }
 
     // =========================================================
@@ -75,6 +80,7 @@ public class VehiculeController {
     ) {
 
         return vehiculeRepository.findById(id)
+                .filter(v -> acces.peutLireVehicule(acces.courant(), v))
                 .map(ResponseEntity::ok)
                 .orElse(
                         ResponseEntity

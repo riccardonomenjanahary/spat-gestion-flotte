@@ -12,24 +12,28 @@ export default function AdminLayout({
   const [autorise, setAutorise] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
+    const initialisation = window.setTimeout(() => {
+      const token = localStorage.getItem("token");
+      const role = localStorage.getItem("role");
 
-    
 
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
 
-    const rolesAutorises = ["ADMIN", "CO_ADMIN", "DIRECTEUR_DFP", "DIRECTION_GENERALE", "CONTROLE_GESTION"];
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
 
-    if (!role || !rolesAutorises.includes(role)) {
-      router.replace("/non-autorise");
-      return;
-    }
+      const rolesAutorises = ["ADMIN", "CO_ADMIN", "DIRECTEUR_DFP", "DIRECTION_GENERALE", "CONTROLE_GESTION"];
 
-    setAutorise(true);
+      if (!role || !rolesAutorises.includes(role)) {
+        router.replace("/non-autorise");
+        return;
+      }
+
+      setAutorise(true);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [router]);
 
   if (!autorise) {

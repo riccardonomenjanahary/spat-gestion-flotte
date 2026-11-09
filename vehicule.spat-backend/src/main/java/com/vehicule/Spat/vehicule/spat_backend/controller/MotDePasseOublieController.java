@@ -47,10 +47,13 @@ public class MotDePasseOublieController {
         if (email.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message", "L'adresse email est obligatoire."));
         }
+        if (email.length() > 254 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Veuillez saisir une adresse email valide."));
+        }
 
         Utilisateur utilisateur = utilisateurRepository.findByEmailIgnoreCase(email).orElse(null);
         if (utilisateur == null || utilisateur.getEmail() == null || !utilisateur.isActif()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Mail incorrect."));
+            return ResponseEntity.badRequest().body(Map.of("message", "Cette adresse email ne correspond à aucun compte actif enregistré."));
         }
 
         String motDePasseTemporaire = genererMotDePasseTemporaire();
@@ -68,6 +71,7 @@ public class MotDePasseOublieController {
             utilisateur.setMotDePasseTemporaireHash(null);
             utilisateur.setMotDePasseTemporaireExpireLe(null);
             utilisateurRepository.save(utilisateur);
+            return ResponseEntity.status(502).body(Map.of("message", "L'email n'a pas pu être envoyé. Veuillez réessayer ou contacter le Super Admin."));
         }
 
         return ResponseEntity.ok(Map.of(

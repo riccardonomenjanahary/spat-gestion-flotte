@@ -14,15 +14,19 @@ export default function RequireRole({
   const [autorise, setAutorise] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
+    const initialisation = window.setTimeout(() => {
+      const token = localStorage.getItem("token");
+      const role = localStorage.getItem("role");
 
-    if (!token || !role || !allow.includes(role)) {
-      router.replace("/login");
-      return;
-    }
+      if (!token || !role || !allow.includes(role)) {
+        router.replace("/login");
+        return;
+      }
 
-    setAutorise(true);
+      setAutorise(true);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [allow, router]);
 
   if (!autorise) {

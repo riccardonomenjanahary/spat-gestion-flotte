@@ -105,7 +105,11 @@ export default function AffectationsPage() {
   };
 
   useEffect(() => {
-    charger();
+    const initialisation = window.setTimeout(() => {
+      charger();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const vehiculesDispo = vehicules.filter((v) => v.statut === "DISPONIBLE");

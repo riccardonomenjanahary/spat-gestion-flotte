@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { LockKeyhole, UserRound, LoaderCircle, Eye, EyeOff } from "lucide-react";
 import { accueilPourRole, estRoleMasque } from "../lib/roles";
@@ -10,11 +10,6 @@ interface LoginResponse {
   token: string;
   role: string;
   numMatricule: string;
-}
-
-interface EmailPersonnel {
-  nom: string;
-  email: string;
 }
 
 export default function LoginPage() {
@@ -33,28 +28,6 @@ export default function LoginPage() {
   const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
   const [confirmationNouveauMotDePasse, setConfirmationNouveauMotDePasse] = useState("");
   const [emailTemporaireEnvoye, setEmailTemporaireEnvoye] = useState(false);
-  const [emailsPersonnel, setEmailsPersonnel] = useState<EmailPersonnel[]>([]);
-  const [rechercheEmail, setRechercheEmail] = useState("");
-
-  useEffect(() => {
-    fetch("/data/emails-personnel.json", { cache: "force-cache" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Répertoire email indisponible");
-        const data: unknown = await response.json();
-        if (!Array.isArray(data)) throw new Error("Format du répertoire email invalide");
-        setEmailsPersonnel(data as EmailPersonnel[]);
-      })
-      .catch(() => setEmailsPersonnel([]));
-  }, []);
-
-  const emailsFiltres = useMemo(() => {
-    const terme = rechercheEmail.trim().toLocaleLowerCase("fr");
-    if (!terme) return [];
-    return emailsPersonnel
-      .filter((contact) => `${contact.nom} ${contact.email}`.toLocaleLowerCase("fr").includes(terme))
-      .slice(0, 30);
-  }, [emailsPersonnel, rechercheEmail]);
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -170,7 +143,6 @@ export default function LoginPage() {
     setDemandeEnvoyee(false);
     setMethodeMotDePasse("choix");
     setEmailMotDePasse("");
-    setRechercheEmail("");
     setMotDePasseTemporaire("");
     setNouveauMotDePasse("");
     setConfirmationNouveauMotDePasse("");
@@ -244,8 +216,8 @@ export default function LoginPage() {
       toast.error("La variable NEXT_PUBLIC_API_URL n'est pas configurée.");
       return;
     }
-    if (!email) {
-      toast.error("Veuillez saisir votre adresse email.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Veuillez saisir une adresse email valide.");
       return;
     }
 
@@ -522,18 +494,11 @@ export default function LoginPage() {
               !emailTemporaireEnvoye ? (
                 <>
 
-                  <label className="reset-field-label" htmlFor="email-personnel-search">Rechercher un personnel ou un email</label>
-                  <input id="email-personnel-search" className="reset-input" value={rechercheEmail} onChange={(event) => setRechercheEmail(event.target.value)} placeholder="Nom ou adresse email" />
-                  <div role="radiogroup" aria-label="Emails du personnel" style={{ maxHeight: 190, overflowY: "auto", display: "grid", gap: 6, margin: "8px 0 12px" }}>
-                    {emailsFiltres.map((contact) => (
-                      <label key={`${contact.email}-${contact.nom}`} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", border: "1px solid #dbe3ea", borderRadius: 8, cursor: "pointer" }}>
-                        <input type="radio" name="email-personnel" value={contact.email} checked={emailMotDePasse === contact.email} onChange={() => setEmailMotDePasse(contact.email)} />
-                        <span><strong style={{ display: "block" }}>{contact.nom}</strong><small style={{ color: "#64748b" }}>{contact.email}</small></span>
-                      </label>
-                    ))}
-
-                    {rechercheEmail.trim() && !emailsFiltres.length && <span style={{ color: "#64748b", fontSize: 13 }}>Aucun email correspondant.</span>}
-                  </div>
+                  <label className="reset-field-label" htmlFor="reset-email">Adresse email enregistrée</label>
+                  <input id="reset-email" className="reset-input" type="email" autoComplete="email" required maxLength={254}
+                    value={emailMotDePasse} onChange={(event) => setEmailMotDePasse(event.target.value)}
+                    placeholder="Saisissez votre adresse email" disabled={demandeEnCours} />
+                  <p style={{ color: "#64748b", fontSize: 13 }}>Saisissez l’adresse email associée à votre compte dans le système.</p>
                   <button type="button" onClick={demanderMotDePasseTemporaire} disabled={demandeEnCours} className="modal-request-button">
                     {demandeEnCours ? "Envoi en cours..." : "Envoyer le mot de passe temporaire"}
                   </button>

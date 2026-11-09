@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -131,8 +132,13 @@ public class GpsService {
             return;
         }
 
+        JdkClientHttpRequestFactory gpsRequestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
+        gpsRequestFactory.setReadTimeout(Duration.ofSeconds(20));
+
         this.restClient =
                 RestClient.builder()
+                        .requestFactory(gpsRequestFactory)
                         .baseUrl(this.gpsBaseUrl)
                         .defaultHeader(
                                 HttpHeaders.ACCEPT,

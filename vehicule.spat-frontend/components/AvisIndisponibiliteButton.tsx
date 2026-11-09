@@ -15,7 +15,11 @@ export default function AvisIndisponibiliteButton() {
   const [envoi, setEnvoi] = useState(false);
 
   useEffect(() => {
-    setPret(true);
+    const initialisation = window.setTimeout(() => {
+      setPret(true);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   async function transmettre(event: FormEvent<HTMLFormElement>) {
@@ -73,7 +77,7 @@ export default function AvisIndisponibiliteButton() {
           aria-haspopup="dialog"
           style={{ position: "fixed", right: 24, bottom: 24, zIndex: 2147483000, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, minHeight: 54, padding: "14px 20px", border: "2px solid #ffffff", borderRadius: 999, background: "#b91c1c", color: "#ffffff", boxShadow: "0 8px 28px rgba(127,29,29,.45)", fontFamily: "Arial, sans-serif", fontSize: 15, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}
         >
-          <CalendarOff size={19} aria-hidden="true" /> Avis d'indisponibilité
+          <CalendarOff size={19} aria-hidden="true" /> Avis d&apos;indisponibilité
         </button>,
         document.body
       )}
@@ -92,7 +96,7 @@ export default function AvisIndisponibiliteButton() {
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <h2 id="avis-indisponibilite-titre" style={{ margin: 0, color: "#172033", fontSize: 20 }}>Avis d'indisponibilité</h2>
+                <h2 id="avis-indisponibilite-titre" style={{ margin: 0, color: "#172033", fontSize: 20 }}>Avis d&apos;indisponibilité</h2>
 
               </div>
               <button type="button" aria-label="Fermer" onClick={() => setOuvert(false)} disabled={envoi} style={{ border: 0, background: "transparent", cursor: "pointer", padding: 4 }}><X size={20} /></button>

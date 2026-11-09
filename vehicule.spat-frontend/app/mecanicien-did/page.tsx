@@ -370,7 +370,11 @@ function MecanicienDidContent() {
   );
 
   useEffect(() => {
-    charger(false);
+    const initialisation = window.setTimeout(() => {
+      charger(false);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [charger]);
 
   useEffect(() => {
@@ -1395,12 +1399,12 @@ function MecanicienDidContent() {
               <OngletButton couleur="ROUGE" actif={onglet === "ENTRETIENS"}
                 onClick={() => {setOnglet("ENTRETIENS"); setTicketOuvertId(null);}}
                 icon={<Wrench size={16} />}>
-                Dossiers d'entretien
+                Dossiers d&apos;entretien
               </OngletButton>
               <OngletButton couleur="BLEU" actif={onglet === "INCIDENTS"}
                 onClick={() => {setOnglet("INCIDENTS"); setTicketOuvertId(null);}}
                 icon={<Wrench size={16} />}>
-                Réparations d'incidents
+                Réparations d&apos;incidents
               </OngletButton>
             </nav>
 
@@ -1437,7 +1441,7 @@ function MecanicienDidContent() {
             "ENTRETIENS" && (
             <section>
               <Card>
-                <CardTitre icon={<Wrench size={18}/>}>Demandes d'entretien</CardTitre>
+                <CardTitre icon={<Wrench size={18}/>}>Demandes d&apos;entretien</CardTitre>
                 {demandesEntretien.length === 0 ? <BlocVide texte="Aucune demande d'entretien." /> : (
                   <div style={{display:"grid", gap: 10}}>
                     {demandesEntretien.map(m => {
@@ -1462,7 +1466,7 @@ function MecanicienDidContent() {
                             {m.motifRefusEntretien && <div>Motif du refus : {m.motifRefusEntretien}</div>}
                             {m.compteRenduEntretien && <div style={{whiteSpace:"pre-wrap", border:"1px solid #e5e7eb", padding: 10, borderRadius: 7}}><strong>Compte rendu</strong><div>{m.compteRenduEntretien}</div></div>}
                             {m.statut === "ENTRETIEN_AUTORISE" && <div style={{display:"grid", gap: 8}}>
-                              <label htmlFor={`compte-rendu-${m.id}`}>Compte rendu de l'entretien *</label>
+                              <label htmlFor={`compte-rendu-${m.id}`}>Compte rendu de l&apos;entretien *</label>
                               <textarea id={`compte-rendu-${m.id}`} rows={4} style={inputStyle} value={comptesRendus[m.id] ?? ""}
                                 onChange={e => setComptesRendus(old => ({...old, [m.id]: e.target.value}))}/>
                               <button type="button" disabled={terminerEnCours !== null} style={{...boutonSecondaire, backgroundColor:"#16a34a", color:"white", border:"none", width:"fit-content"}}

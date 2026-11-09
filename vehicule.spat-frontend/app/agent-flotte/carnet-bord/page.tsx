@@ -76,7 +76,7 @@ function FormEtat({ value, onChange }: { value: Etat; onChange: (e: Etat) => voi
   </fieldset>;
 }
 
-export default function CarnetBordPage() { return <RoleGuard roles={[ROLES.AGENT_FLOTTE, ROLES.ASSISTANT_DIRECTION, ROLES.CHEF_SERVICE_LOGISTIQUE]}><CarnetBordContent /></RoleGuard>; }
+export default function CarnetBordPage() { return <RoleGuard roles={[ROLES.AGENT_FLOTTE, ROLES.ASSISTANT_DIRECTION, ROLES.AGENT_PAR_INTERIM_ASSISTANT, ROLES.CHEF_SERVICE_LOGISTIQUE]}><CarnetBordContent /></RoleGuard>; }
 function CarnetBordContent() {
   const [carnets, setCarnets] = useState<Carnet[]>([]); const [missions, setMissions] = useState<Mission[]>([]);
   const [rappelMission, setRappelMission] = useState<Mission | null>(null);
@@ -88,13 +88,23 @@ function CarnetBordContent() {
   const rappelsTraitesRef = useRef(new Set<number>());
   const charger = useCallback(async () => { const [c, m] = await Promise.all([api<Carnet[]>("/carnet-bord"), api<Mission[]>("/reservations")]); setCarnets(c); setMissions(m.filter(missionOuvrable)); }, []);
   useEffect(() => {
-    void charger().catch(e => setErreur(String(e)));
-    const intervalle = window.setInterval(() => {
-      void api<Mission[]>("/reservations")
-        .then(data => setMissions(data.filter(missionOuvrable)))
-        .catch(e => setErreur(String(e)));
-    }, 30000);
-    return () => window.clearInterval(intervalle);
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        void charger().catch(e => setErreur(String(e)));
+        const intervalle = window.setInterval(() => {
+          void api<Mission[]>("/reservations")
+            .then(data => setMissions(data.filter(missionOuvrable)))
+            .catch(e => setErreur(String(e)));
+        }, 30000);
+        return () => window.clearInterval(intervalle);
+
+      })();
+    }, 0);
+    return () => {
+      window.clearTimeout(initialisation);
+      nettoyer?.();
+    };
   }, [charger]);
   useEffect(() => {
     const cleStockage = "spat-agent-flotte-rappels-missions";
@@ -118,32 +128,42 @@ function CarnetBordContent() {
   }, [missions, rappelMission]);
   const vehiculeSelectionneMission = missions.find(m => String(m.id) === missionId)?.vehicule;
   useEffect(() => {
-    const vehicule = vehiculeSelectionneMission;
-    if (!missionId || !vehicule) {
-      setCompteur(""); setInfoKilometrage(""); setKilometrageAutomatique(false); setChargementKilometrage(false);
-      return;
-    }
-    if (moto(vehicule)) {
-      setCompteur(""); setInfoKilometrage("Moto électrique : renseignez le niveau de charge au départ.");
-      setKilometrageAutomatique(false); setChargementKilometrage(false);
-      return;
-    }
-    let actif = true;
-    setCompteur(""); setInfoKilometrage(""); setKilometrageAutomatique(false); setChargementKilometrage(true);
-    api<DernierKilometrage>(`/carnet-bord/vehicule/${vehicule.id}/dernier-kilometrage`)
-      .then(resultat => {
-        if (!actif) return;
-        if (resultat.dernierKilometrage != null) {
-          setCompteur(String(resultat.dernierKilometrage));
-          setKilometrageAutomatique(true);
-          setInfoKilometrage(`Dernier kilométrage enregistré (${resultat.dernierKilometrage} km) — reprise automatique.`);
-        } else {
-          setInfoKilometrage(resultat.message || "Aucun historique disponible : saisie manuelle requise.");
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        const vehicule = vehiculeSelectionneMission;
+        if (!missionId || !vehicule) {
+          setCompteur(""); setInfoKilometrage(""); setKilometrageAutomatique(false); setChargementKilometrage(false);
+          return;
         }
-      })
-      .catch(() => { if (actif) setInfoKilometrage("Kilométrage indisponible : saisie manuelle requise."); })
-      .finally(() => { if (actif) setChargementKilometrage(false); });
-    return () => { actif = false; };
+        if (moto(vehicule)) {
+          setCompteur(""); setInfoKilometrage("Moto électrique : renseignez le niveau de charge au départ.");
+          setKilometrageAutomatique(false); setChargementKilometrage(false);
+          return;
+        }
+        let actif = true;
+        setCompteur(""); setInfoKilometrage(""); setKilometrageAutomatique(false); setChargementKilometrage(true);
+        api<DernierKilometrage>(`/carnet-bord/vehicule/${vehicule.id}/dernier-kilometrage`)
+          .then(resultat => {
+            if (!actif) return;
+            if (resultat.dernierKilometrage != null) {
+              setCompteur(String(resultat.dernierKilometrage));
+              setKilometrageAutomatique(true);
+              setInfoKilometrage(`Dernier kilométrage enregistré (${resultat.dernierKilometrage} km) — reprise automatique.`);
+            } else {
+              setInfoKilometrage(resultat.message || "Aucun historique disponible : saisie manuelle requise.");
+            }
+          })
+          .catch(() => { if (actif) setInfoKilometrage("Kilométrage indisponible : saisie manuelle requise."); })
+          .finally(() => { if (actif) setChargementKilometrage(false); });
+        return () => { actif = false; };
+
+      })();
+    }, 0);
+    return () => {
+      window.clearTimeout(initialisation);
+      nettoyer?.();
+    };
   }, [missionId, vehiculeSelectionneMission?.id, vehiculeSelectionneMission?.categorie]);
   function fermerRappelMission() {
     if (rappelMission) {

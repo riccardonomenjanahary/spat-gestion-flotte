@@ -110,8 +110,12 @@ export default function CarburantPage() {
   };
 
   useEffect(() => {
-    chargerDonnees();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initialisation = window.setTimeout(() => {
+      chargerDonnees();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const stats = useMemo(() => {

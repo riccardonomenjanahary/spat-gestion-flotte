@@ -21,7 +21,6 @@ const selectStyle: React.CSSProperties = {
 };
 
 const ROLES_AUTORISES = ["ASSISTANT_DIRECTION", "AGENT_PAR_INTERIM_ASSISTANT", "CHEF_DIRECTION", "AGENT_PAR_INTERIM_CHEF", "MECANICIEN_DID", "CHEF_ATELIER"];
-const STATUTS_BLOQUES = ["MAINTENANCE", "EN_PANNE", "HORS_SERVICE", "INDISPONIBLE", "REQUISITIONNE", "EN_MISSION", "REFORME", "TRANSFERE"];
 
 export default function IncidentSignalementButton({ role }: { role?: string }) {
   const API = process.env.NEXT_PUBLIC_API_URL || "";
@@ -34,28 +33,34 @@ export default function IncidentSignalementButton({ role }: { role?: string }) {
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState("");
   const visible = Boolean(role && ROLES_AUTORISES.includes(role));
+  const assistant = role === "ASSISTANT_DIRECTION" || role === "AGENT_PAR_INTERIM_ASSISTANT";
   const bleu = true;
 
   useEffect(() => {
     if (!ouvert || !visible) return;
     const controller = new AbortController();
-    setChargementVehicules(true);
-    fetch(`${API}/vehicules`, {
+    fetch(`${API}${assistant ? "/reservations/assistant-direction/vehicule-affecte" : "/vehicules"}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" },
       cache: "no-store", signal: controller.signal,
     })
       .then(async (response) => {
         if (!response.ok) throw new Error("Impossible de charger la liste des véhicules.");
         const data: unknown = await response.json();
-        if (!Array.isArray(data)) throw new Error("La liste des véhicules est invalide.");
-        setVehicules(data as Vehicule[]);
+        let liste: unknown = data;
+        if (assistant && data && typeof data === "object") {
+          const affectation = data as { vehiculesVoiture?: unknown; vehiculesMoto?: unknown };
+          if (!Array.isArray(affectation.vehiculesVoiture) || !Array.isArray(affectation.vehiculesMoto)) throw new Error("Les affectations de votre direction sont invalides.");
+          liste = [...affectation.vehiculesVoiture, ...affectation.vehiculesMoto];
+        }
+        if (!Array.isArray(liste)) throw new Error("La liste des véhicules est invalide.");
+        if (!controller.signal.aborted) setVehicules([...new Map((liste as Vehicule[]).map((v) => [v.id, v])).values()]);
       })
       .catch((error) => {
         if (!controller.signal.aborted) setErreur(error instanceof Error ? error.message : "Chargement impossible.");
       })
       .finally(() => { if (!controller.signal.aborted) setChargementVehicules(false); });
     return () => controller.abort();
-  }, [API, ouvert, visible]);
+  }, [API, ouvert, visible, assistant]);
 
   useEffect(() => {
     if (!ouvert) return;
@@ -69,7 +74,6 @@ export default function IncidentSignalementButton({ role }: { role?: string }) {
   if (!visible) return null;
 
   const vehiculeSelectionne = vehicules.find((vehicule) => String(vehicule.id) === vehiculeId);
-  const vehiculeIndisponible = (vehicule: Vehicule) => STATUTS_BLOQUES.includes(String(vehicule.statut || "").toUpperCase());
 
   const envoyer = async () => {
     setErreur("");
@@ -103,7 +107,7 @@ export default function IncidentSignalementButton({ role }: { role?: string }) {
   const boutonStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 15px", background: "#fff", color: "#1d4ed8", fontSize: 13, fontWeight: 750, cursor: "pointer" };
 
   return <>
-    <button type="button" onClick={() => { setErreur(""); setOuvert(true); }} style={boutonStyle}>
+    <button type="button" onClick={() => { setErreur(""); setVehicules([]); setVehiculeId(""); setChargementVehicules(true); setOuvert(true); }} style={boutonStyle}>
       <AlertTriangle size={17} color={bleu ? "#2563eb" : undefined} /> Signaler un incident
     </button>
 
@@ -140,14 +144,15 @@ export default function IncidentSignalementButton({ role }: { role?: string }) {
           <label style={{ display: "grid", gap: 7, color: "#334155", fontSize: 12, fontWeight: 750 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 7 }}><CarFront size={15} color="#64748b" /> Véhicule concerné <span style={{ color: "#dc2626" }}>*</span></span>
             <span style={{ position: "relative" }}>
-              <select required value={vehiculeId} onChange={(event) => setVehiculeId(event.target.value)} style={selectStyle}>
+              <select required disabled={chargementVehicules} value={vehiculeId} onChange={(event) => setVehiculeId(event.target.value)} style={selectStyle}>
                 <option value="">{chargementVehicules ? "Chargement des véhicules…" : "Sélectionner le véhicule concerné"}</option>
-                {vehicules.map((vehicule) => <option key={vehicule.id} value={vehicule.id} disabled={vehiculeIndisponible(vehicule)}>
-                  {vehicule.immatriculation || `#${vehicule.id}`} · {vehicule.statut || "Statut inconnu"}{vehiculeIndisponible(vehicule) ? " — indisponible" : ""}
+                {vehicules.map((vehicule) => <option key={vehicule.id} value={vehicule.id}>
+                  {vehicule.immatriculation || `#${vehicule.id}`} · {vehicule.statut || "Statut inconnu"}
                 </option>)}
               </select>
               <ChevronDown size={16} style={{ position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)", color: "#64748b", pointerEvents: "none" }} />
             </span>
+            {!chargementVehicules && !erreur && vehicules.length === 0 && <span role="status">{assistant ? "Aucun véhicule affecté à votre direction. Vérifiez le rattachement de votre compte et les affectations dans l’administration." : "Aucun véhicule disponible dans la liste."}</span>}
             {vehiculeSelectionne && <span style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 9, background: "#f8fafc", color: "#475569", fontSize: 11.5, fontWeight: 550 }}><Check size={14} color="#16a34a" /> Sélectionné : <strong style={{ color: "#0f172a" }}>{vehiculeSelectionne.immatriculation || `Véhicule #${vehiculeSelectionne.id}`}</strong></span>}
           </label>
 

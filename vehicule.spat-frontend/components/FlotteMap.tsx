@@ -39,6 +39,7 @@ export interface GpsPosition {
 }
 
 interface VehiculePositionLegacy {
+  dernierePositionLe?: string | null;
   id: number;
   immatriculation: string;
   modele?: string | null;
@@ -369,7 +370,11 @@ export default function FlotteMap({
   const erreursTuilesSatellite = useRef(0);
 
   useEffect(() => {
-    setIsClient(true);
+    const initialisation = window.setTimeout(() => {
+      setIsClient(true);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
   const [lieuxGps, setLieuxGps] = useState<Record<number, LieuGps>>({});
   const [lieuGpsNonDisponible, setLieuGpsNonDisponible] = useState<Record<number, boolean>>({});
@@ -430,7 +435,7 @@ export default function FlotteMap({
       longitude: vehicule.longitude,
       vitesse: 0,
       statutGps: vehicule.statut ?? null,
-      timestampGps: Math.floor(Date.now() / 1000),
+      timestampGps: vehicule.dernierePositionLe ? Date.parse(vehicule.dernierePositionLe) / 1000 : null,
     }));
   }, [positions, vehicules]);
 

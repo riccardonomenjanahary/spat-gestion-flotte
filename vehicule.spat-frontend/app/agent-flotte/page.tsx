@@ -4951,7 +4951,8 @@ function SuiviFlottePanel({
     let precedent: number | null = null;
     let total = 0;
     let segmentsValides = 0;
-    const lignes = relevesHistorique.map((releve) => {
+    const lignes: { releve: GpsReleveHistorique; distanceSegmentKm: number | null; distanceCumuleeKm: number }[] = [];
+    for (const releve of relevesHistorique) {
       const km = nombreGps(releve.odometreKm);
       let distanceSegmentKm: number | null = null;
       if (km !== null && km >= 0) {
@@ -4966,8 +4967,8 @@ function SuiviFlottePanel({
         }
         precedent = km;
       }
-      return { releve, distanceSegmentKm, distanceCumuleeKm: total };
-    });
+      lignes.push({ releve, distanceSegmentKm, distanceCumuleeKm: total });
+    }
     return { lignes, totalEstime: segmentsValides > 0 ? total : null };
   }, [relevesHistorique]);
   const distanceJourEstimee = relevesAvecDistance.totalEstime;
@@ -4986,17 +4987,21 @@ function SuiviFlottePanel({
   };
 
   useEffect(() => {
-    if (vehiculesGps.length === 0) {
-      setSelection(null);
-      return;
-    }
+    const initialisation = window.setTimeout(() => {
+      if (vehiculesGps.length === 0) {
+        setSelection(null);
+        return;
+      }
 
-    if (
-      selection == null ||
-      !vehiculesGps.some((v) => v.id === selection)
-    ) {
-      setSelection(vehiculesGps[0].id);
-    }
+      if (
+        selection == null ||
+        !vehiculesGps.some((v) => v.id === selection)
+      ) {
+        setSelection(vehiculesGps[0].id);
+      }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [vehiculesGps, selection]);
 
   const vehiculesFiltres = useMemo(() => {
@@ -5036,11 +5041,13 @@ function SuiviFlottePanel({
   const derniereRequeteRouteRef = useRef(0);
   const latitudeRoute = positionSelectionnee?.latitude == null ? NaN : Number(positionSelectionnee.latitude);
   const longitudeRoute = positionSelectionnee?.longitude == null ? NaN : Number(positionSelectionnee.longitude);
-  positionRouteRef.current = selection !== null && Number.isFinite(latitudeRoute) && Number.isFinite(longitudeRoute)
+  useEffect(() => {
+    positionRouteRef.current = selection !== null && Number.isFinite(latitudeRoute) && Number.isFinite(longitudeRoute)
     && Math.abs(latitudeRoute) <= 90 && Math.abs(longitudeRoute) <= 180
     && !(latitudeRoute === 0 && longitudeRoute === 0)
     ? { vehiculeId: selection, latitude: latitudeRoute, longitude: longitudeRoute }
     : null;
+  }, [selection, latitudeRoute, longitudeRoute]);
 
   useEffect(() => {
     let rechercheEnCours = false;

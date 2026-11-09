@@ -89,7 +89,11 @@ export default function StatistiquesAideDecisionPage() {
     }
   }, [API, router]);
 
-  useEffect(() => { void charger(); }, [charger]);
+  useEffect(() => {
+    const initialisation = window.setTimeout(() => { void charger();
+    }, 0);
+    return () => window.clearTimeout(initialisation);
+  }, [charger]);
 
   const stats = useMemo(() => {
     const now = new Date();

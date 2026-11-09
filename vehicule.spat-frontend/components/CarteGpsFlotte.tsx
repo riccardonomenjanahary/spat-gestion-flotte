@@ -144,13 +144,17 @@ export default function CarteGpsFlotte({
   const [listeOuverte, setListeOuverte] = useState(true);
 
   useEffect(() => {
-    if (vehiculesGps.length === 0) {
-      setSelection(null);
-      return;
-    }
-    if (selection == null || !vehiculesGps.some((v) => v.id === selection)) {
-      setSelection(vehiculesGps[0].id);
-    }
+    const initialisation = window.setTimeout(() => {
+      if (vehiculesGps.length === 0) {
+        setSelection(null);
+        return;
+      }
+      if (selection == null || !vehiculesGps.some((v) => v.id === selection)) {
+        setSelection(vehiculesGps[0].id);
+      }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [vehiculesGps, selection]);
 
   const vehiculesFiltres = useMemo(() => {

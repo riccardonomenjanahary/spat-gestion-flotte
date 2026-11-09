@@ -3,14 +3,15 @@ package com.vehicule.Spat.vehicule.spat_backend.config;
 import com.vehicule.Spat.vehicule.spat_backend.service.GpsService;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 
 @Configuration
 @EnableScheduling
 public class GpsScheduler {
-
     private final GpsService gpsService;
 
 
@@ -34,6 +35,7 @@ public class GpsScheduler {
      * gps.refresh-ms
      */
     @Scheduled(
+            scheduler = "gpsTaskScheduler",
             fixedDelayString = "${gps.refresh-ms:5000}",
             initialDelayString = "${gps.initial-delay-ms:5000}"
     )

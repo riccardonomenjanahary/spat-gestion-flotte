@@ -38,4 +38,14 @@ class AccesParcoursServiceTest {
     @Test void compteDesactiveInterditMemeAdministrateur() {
         Utilisateur u = utilisateur("ADMIN", 20, 3); u.setActif(false); assertFalse(acces.peutLire(u, dossier()));
     }
+
+    @Test void affectationRelationnellePrioritaireEtAliasHistoriquesSansCollision() {
+        Vehicule v = new Vehicule(); v.setCategorie(CategorieVehicule.MUTUALISEE); v.setAffectation("DAGR / SG");
+        assertFalse(AccesParcoursService.estAffecteDirection(1L, v));
+        assertTrue(AccesParcoursService.estAffecteDirection(13L, v));
+        assertTrue(AccesParcoursService.estAffecteDirection(11L, v));
+        Direction d = new Direction(); d.setId(5L); v.getDirections().add(d);
+        assertFalse(AccesParcoursService.estAffecteDirection(13L, v));
+        assertTrue(AccesParcoursService.estAffecteDirection(5L, v));
+    }
 }

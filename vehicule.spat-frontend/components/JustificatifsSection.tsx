@@ -142,8 +142,12 @@ export default function JustificatifsSection({
   }, [API, cible]);
 
   useEffect(() => {
-    setChargement(true);
-    charger();
+    const initialisation = window.setTimeout(() => {
+      setChargement(true);
+      charger();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [charger]);
 
   const deposer = async () => {

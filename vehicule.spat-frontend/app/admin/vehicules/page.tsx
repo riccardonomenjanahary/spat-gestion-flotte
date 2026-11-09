@@ -153,7 +153,11 @@ export default function VehiculesPage() {
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    setRole(localStorage.getItem("role"));
+    const initialisation = window.setTimeout(() => {
+      setRole(localStorage.getItem("role"));
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const lectureSeule = estLectureSeule(role);
@@ -377,16 +381,26 @@ export default function VehiculesPage() {
   };
 
   useEffect(() => {
-    chargerVehicules();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") actualiserStatutsVehicules();
-    }, 15000);
-    window.addEventListener("focus", actualiserStatutsVehicules);
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        chargerVehicules();
+        const interval = window.setInterval(() => {
+          if (document.visibilityState === "visible") actualiserStatutsVehicules();
+        }, 15000);
+        window.addEventListener("focus", actualiserStatutsVehicules);
+        return () => {
+          window.clearInterval(interval);
+          window.removeEventListener("focus", actualiserStatutsVehicules);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      })();
+    }, 0);
     return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", actualiserStatutsVehicules);
+      window.clearTimeout(initialisation);
+      nettoyer?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetFormulaire = () => {
@@ -632,9 +646,13 @@ export default function VehiculesPage() {
   );
 
   useEffect(() => {
-    if (pageActuelle > nombrePages) {
-      setPageActuelle(nombrePages);
-    }
+    const initialisation = window.setTimeout(() => {
+      if (pageActuelle > nombrePages) {
+        setPageActuelle(nombrePages);
+      }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [pageActuelle, nombrePages]);
 
   const totalVehicules = vehicules.length;

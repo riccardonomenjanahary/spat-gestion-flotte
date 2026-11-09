@@ -1,0 +1,3521 @@
+[
+  {
+    "matricule": "1988020",
+    "nom": "MAMPIHAO",
+    "prenom": "Liliane Yvette",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Tech Conf des Sces Administrat",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1991011",
+    "nom": "VONDRO",
+    "prenom": "Jocelyne",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Instrimentiste en Odontostomma",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "1993013",
+    "nom": "TSIFOINANDRIANARIVELO",
+    "prenom": "Louindendort .Jean",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Dpt CSCS, Aff So Rel Org",
+    "categorie": "HC",
+    "email": "ltsifoinandrianarivelo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1993014",
+    "nom": "RAZAFINDRAHASY",
+    "prenom": "Suzette Melanie",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Technicien Paie",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "1994001",
+    "nom": "RAZAFINDRASOAMANANA .",
+    "prenom": "Jacqueline",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Tech Conf des Sces Administrat",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1994011",
+    "nom": "BOSELA",
+    "prenom": "Tsimijaly",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Dpt Opération Nautique",
+    "categorie": "HC",
+    "email": "tbosela.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1994039",
+    "nom": "VAVINE",
+    "prenom": "Florence Rochelle",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Agent Administratif",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "1994045",
+    "nom": "RANDRIANAHARIVELO",
+    "prenom": "Noelson",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Remorqueur Portuaire",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1995044",
+    "nom": "TATA",
+    "prenom": "Joasy",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Coord Op Maritimes",
+    "categorie": "C",
+    "email": "jtata.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1995058",
+    "nom": "IALY",
+    "prenom": "Mampievo",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Dpt Procurement",
+    "categorie": "HC",
+    "email": "mialy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1995067",
+    "nom": "TOTO",
+    "prenom": "Josoa Melthine",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Technicien des Services Admini",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "1995071",
+    "nom": "RAVAOARISOA",
+    "prenom": "Miriam",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Employé de bureau",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "1996005",
+    "nom": "FENOMANANA",
+    "prenom": "Edmond",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef d'équipe Lamaneur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "1997004",
+    "nom": "RAFARATIANA",
+    "prenom": "Voahirana Jeanne",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Major Médical",
+    "categorie": "C"
+  },
+  {
+    "matricule": "1997013",
+    "nom": "RAZAFINANDRASANA",
+    "prenom": "Nelson",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Tech Conf Sces Trésor Cais cen",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1997023",
+    "nom": "SOLO",
+    "prenom": "Alfred",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "1997035",
+    "nom": "MODESTE",
+    "prenom": "",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de Trafic",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "1997038",
+    "nom": "RAVELOSON",
+    "prenom": "Justin",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Responsable Assurance",
+    "categorie": "C",
+    "email": "jraveloson.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997040",
+    "nom": "RABOTOVELO",
+    "prenom": "Sylvestre Bien Aimé",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de Trafic",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "1997047",
+    "nom": "ZAFITSIAFATOTRA",
+    "prenom": "Stanislas",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Sce Gestion des Factures",
+    "categorie": "C",
+    "email": "szafitsiafatotra.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997057",
+    "nom": "JAONARY",
+    "prenom": "Nestor",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Tech Conf Gestion consommables",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1997071",
+    "nom": "ALFRED",
+    "prenom": "Benjamin",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Technicien Confirmé",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1997109",
+    "nom": "TAMBY",
+    "prenom": "Ulrich Geraldo",
+    "direction": "DIR CAP",
+    "poste": "Chef Dpt Sécurité Maritime",
+    "categorie": "HC",
+    "email": "gtamby.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997113",
+    "nom": "TOTOAVIARISON",
+    "prenom": "Jonah",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef de Chantier ASCOM",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1997118",
+    "nom": "SOLOARIMALALA",
+    "prenom": "Alfred",
+    "direction": "DIR GENERALE",
+    "poste": "Secrétaire Particulière DG",
+    "categorie": "C",
+    "email": "asoloarimalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997125",
+    "nom": "RAVAOSOLO",
+    "prenom": "Jeannine",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef Dpt Dvpt Durable et Confo",
+    "categorie": "HC",
+    "email": "jravaosolo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997127",
+    "nom": "VIVIANE",
+    "prenom": "Holinindrainy",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Achats et marchés",
+    "categorie": "C",
+    "email": "hviviane.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997130",
+    "nom": "BADADE",
+    "prenom": "Jeanne De Chantal",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef d'unité administratif",
+    "categorie": "HC",
+    "email": "cbadade.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1997137",
+    "nom": "RAHARIMANANTSOA",
+    "prenom": "Jubel Seraphin",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Chef Chant Réseau d'Eau et Ele",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "1997149",
+    "nom": "BOTOU",
+    "prenom": "Froget Arcadius",
+    "direction": "DIR CAP",
+    "poste": "Chef Sce Sécu Espace Maritime",
+    "categorie": "C",
+    "email": "fbotou.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "1998002",
+    "nom": "ANDRIANASOLOMARY",
+    "prenom": "Jacky Francis Efadah",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Chef Dpt Maintenances",
+    "categorie": "HC",
+    "email": "jandrianasolomary.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2001004",
+    "nom": "MAKA",
+    "prenom": "Anita Sylvia",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Dpt Recouvrement",
+    "categorie": "HC",
+    "email": "amaka.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2002007",
+    "nom": "TODISOA",
+    "prenom": "Philiberte Ralambo",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Chant Drague",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2003003",
+    "nom": "ZAFIMANIRISOA",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef d'équipe Lamaneur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2007010",
+    "nom": "RAKOTOSON",
+    "prenom": "Mamy Tiana Ludy",
+    "direction": "DIR CAP",
+    "poste": "Employé de bureau",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2008002",
+    "nom": "ANDRIAMANANTENASOA",
+    "prenom": "Zakoly Vonjy Arilala",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef d'Unité Stomatologie",
+    "categorie": "HC"
+  },
+  {
+    "matricule": "2008003",
+    "nom": "TADAHY",
+    "prenom": "Sidonie",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Major Manipulateur Developpeur",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2008004",
+    "nom": "RANDRIANIRINA",
+    "prenom": "Rodin",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin Resp.  Radiologie",
+    "categorie": "HC1"
+  },
+  {
+    "matricule": "2008007",
+    "nom": "RAZAKAHARISOA",
+    "prenom": "Miora Junis",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Major Médical",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2008009",
+    "nom": "JEAN",
+    "prenom": "Hugues Francis",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Chef d'équipe Plombier",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2009002",
+    "nom": "RAKOTOZANAKA",
+    "prenom": "Jean Didier",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin Dentiste",
+    "categorie": "HC1",
+    "email": "jrakotozanaka.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2009003",
+    "nom": "SOAVOLOLONA",
+    "prenom": "Suzanne",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Agent d'Accueil Médical",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2009004",
+    "nom": "RAHANTAMALALA",
+    "prenom": "Danieline",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Laborantine",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2011001",
+    "nom": "RATOVONIRINA",
+    "prenom": "Harisoa Suzette",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Laborantine",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2011002",
+    "nom": "MIASA",
+    "prenom": "Olivier",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Maître Grais. Remorq.",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2011004",
+    "nom": "RATSIMBAZAFY",
+    "prenom": "Alfred",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Maître d' Equipage",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2011006",
+    "nom": "RANDRIANJAKA",
+    "prenom": "Romain",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Maître Grais. Remorq.",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2011007",
+    "nom": "RAKOTOBE",
+    "prenom": "Andriamarojohn Rijas",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef d'Unité Medecine Générale",
+    "categorie": "HC",
+    "email": "arakotobe.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2011008",
+    "nom": "SANONY",
+    "prenom": "David",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef Dpt CEMEDI",
+    "categorie": "HC",
+    "email": "dsanony.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2011009",
+    "nom": "RAKOTONANDRASANA",
+    "prenom": "Sitrakiniaina Gergio",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Infirmier(e)",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2013001",
+    "nom": "RABELAZA Lahinirina",
+    "prenom": "Josélito Chrysante",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Dir Mark et Comm",
+    "categorie": "HC",
+    "email": "jrabelaza.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013002",
+    "nom": "RAISINA",
+    "prenom": "Francina Clémence",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Chef Dpt Gestion des Contrats",
+    "categorie": "HC",
+    "email": "craisina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013003",
+    "nom": "RAVELOSOA",
+    "prenom": "Nestor",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Tech Conf Télécommunication",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2013005",
+    "nom": "MINIMINY",
+    "prenom": "Sylvianne",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Assistante de Direction",
+    "categorie": "T2",
+    "email": "sminiminy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013006",
+    "nom": "TIANA Arlette",
+    "prenom": "Sylvionie Alexina",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Sce Relations Sociales",
+    "categorie": "C",
+    "email": "stiana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013007",
+    "nom": "ANDRIANAVALISOA",
+    "prenom": "Holihanitriniaina",
+    "direction": "DIR GENERALE",
+    "poste": "Gestionnaire de la DG",
+    "categorie": "HC",
+    "email": "handrianavalisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013008",
+    "nom": "RAZANAJOHARY Nirinarisoa",
+    "prenom": "Eléa Joséphine",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Logistique",
+    "categorie": "C",
+    "email": "erazanajohary.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2013009",
+    "nom": "KADO",
+    "prenom": "Elia Sylvana Lynda",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Assistante de Direction",
+    "categorie": "T2",
+    "email": "ekado.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014001",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Manitra Sabrina",
+    "direction": "DIR AUDIT ET GESTION RISQUES",
+    "poste": "Auditeur Senior",
+    "categorie": "HC1",
+    "email": "mrandrianasolo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014002",
+    "nom": "ANDRIANASARA",
+    "prenom": "Julio Conrad Lovaher",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Directeur Affaires Juridiques",
+    "categorie": "HC",
+    "email": "jandrianasara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014003",
+    "nom": "RAZAFINDAHIFOTSY",
+    "prenom": "Son Espera",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Chef Dpt Contentieux et AJ",
+    "categorie": "HC",
+    "email": "srazafindahifotsy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014004",
+    "nom": "RASEDA",
+    "prenom": "Joëlson Meltine",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Dpt Gest Dom Portuaire",
+    "categorie": "HC",
+    "email": "mraseda.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014005",
+    "nom": "ANDRIANTSEHENO",
+    "prenom": "Pierre Onésime",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Juriste",
+    "categorie": "C",
+    "email": "pandriantseheno.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014006",
+    "nom": "IMBARA",
+    "prenom": "Nionel",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Dpt Acadm Portuaire",
+    "categorie": "HC",
+    "email": "nimbara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2014007",
+    "nom": "EMMANUEL",
+    "prenom": "",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014008",
+    "nom": "LEDOA",
+    "prenom": "Raymond Fleury",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef D'At Maté Roulants",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2014009",
+    "nom": "YAMICOLE",
+    "prenom": "Gidicaël",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur de Direction Général",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014010",
+    "nom": "RANDRIANANTENAINA",
+    "prenom": "Sabin Joël",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014011",
+    "nom": "RABE",
+    "prenom": "Venor",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014012",
+    "nom": "VELONJARA",
+    "prenom": "Parizera",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014013",
+    "nom": "LEZOMA",
+    "prenom": "Germain",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014014",
+    "nom": "FALY",
+    "prenom": "Zeze",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2014015",
+    "nom": "HARINOSY",
+    "prenom": "Joelson Wilson",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Machine",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2014016",
+    "nom": "BOTOZAZA",
+    "prenom": "Reuchelin Helmer",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Machine",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2014017",
+    "nom": "VAUVILLERE",
+    "prenom": "Sylvie",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Assistante de Direction",
+    "categorie": "T2",
+    "email": "svauvillere.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015001",
+    "nom": "RAELIARISOA",
+    "prenom": "Fanjanirina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Attaché de Direction",
+    "categorie": "HC",
+    "email": "fraeliarisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015002",
+    "nom": "RAZAFIMAMONJY",
+    "prenom": "Joli André",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Tech Sces Administratifs",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2015003",
+    "nom": "RAFANOMEZANTSOA Herivonjy",
+    "prenom": "Alban",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ingénieur chargé de mission",
+    "categorie": "HC",
+    "email": "arafanomezantsoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015004",
+    "nom": "RAJAONASY Emmanuel",
+    "prenom": "Julio",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Directeur Infra et Dév",
+    "categorie": "HC",
+    "email": "jrajaonasy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015005",
+    "nom": "MAHAVORY",
+    "prenom": "Louis Nicolas",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Dir Fin et de la Perfo",
+    "categorie": "HC",
+    "email": "nmahavory.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015006",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Mangalaza Eddy",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Dir Exploitation",
+    "categorie": "HC",
+    "email": "mrakotonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015007",
+    "nom": "RANDRIAMIANDRISOA",
+    "prenom": "Genese Justino J.",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Dpt Comptabilité et Fisca",
+    "categorie": "HC",
+    "email": "grandriamiandrisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015008",
+    "nom": "BOTOVAHINY",
+    "prenom": "Henri Joël",
+    "direction": "DIR CAP",
+    "poste": "Chef Dpt Police Portuaire",
+    "categorie": "HC",
+    "email": "jbotovahiny.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015009",
+    "nom": "RAHARIMALALA",
+    "prenom": "Monica Norosoa Hasin",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Dpt Marketing et Statisti",
+    "categorie": "HC",
+    "email": "mraharimalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015010",
+    "nom": "TSILANGOY",
+    "prenom": "Ange Natacha Rerette",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Dpt Communication",
+    "categorie": "HC",
+    "email": "ntsilangoy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015011",
+    "nom": "MANANJARA",
+    "prenom": "Henri Dominique",
+    "direction": "DIR AUDIT ET GESTION RISQUES",
+    "poste": "Dir Audit et Gest Risq",
+    "categorie": "HC",
+    "email": "hmananjara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015012",
+    "nom": "RANDRIAMBOAVONJY",
+    "prenom": "Nirina Hanitra",
+    "direction": "DIR GENERALE",
+    "poste": "Chef Dpt Qualité",
+    "categorie": "HC",
+    "email": "nrandriamboavonjy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015013",
+    "nom": "RASOLOFONIRINA",
+    "prenom": "Nancia",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Sce Paie",
+    "categorie": "C",
+    "email": "nrasolofonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015014",
+    "nom": "ZOELISOA Moravelona",
+    "prenom": "Céleste Francine",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef du Dpt Dvlpt des RH",
+    "categorie": "HC",
+    "email": "fzoelisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015015",
+    "nom": "MBOLA MITAHASOA",
+    "prenom": "Armand",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef du Dpt Admin R et Paie",
+    "categorie": "HC",
+    "email": "amitahasoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015016",
+    "nom": "JAONASY",
+    "prenom": "Jean Berchman",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef Dpt HST",
+    "categorie": "HC"
+  },
+  {
+    "matricule": "2015017",
+    "nom": "RANASIARINORO",
+    "prenom": "Nestassia",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef Sce Système HST",
+    "categorie": "C",
+    "email": "nranasiarinoro.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015018",
+    "nom": "AMBININTSOA Bébé",
+    "prenom": "Georges Daniel",
+    "direction": "DIR CAP",
+    "poste": "Dir Capitainerie",
+    "categorie": "HC",
+    "email": "dambinintsoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015019",
+    "nom": "RAHARIJAONA",
+    "prenom": "Jean Olivier",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Exploitation I C",
+    "categorie": "C",
+    "email": "jraharijaona.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015020",
+    "nom": "RAKOTOARISOA",
+    "prenom": "Ly Lalaina Stéphanie",
+    "direction": "DIR GENERALE",
+    "poste": "Chef Dpt Budget et CG",
+    "categorie": "HC",
+    "email": "lrakotoarisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015021",
+    "nom": "KOTOSON",
+    "prenom": "Berthieu",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Sce Admin du Personnel",
+    "categorie": "C",
+    "email": "bkotoson.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015022",
+    "nom": "HARINDRATSIMBA",
+    "prenom": "Johany Marino",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Responsable Production et Publ",
+    "categorie": "C",
+    "email": "jharindratsimba.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015023",
+    "nom": "TSARA",
+    "prenom": "Judio",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Strategic Analyst",
+    "categorie": "HC",
+    "email": "jtsara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015024",
+    "nom": "RAZAFINJANAHARY",
+    "prenom": "Aldain",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Trésorerie",
+    "categorie": "C",
+    "email": "arazafinjanahary.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015025",
+    "nom": "ANDRIAMBOLOLONIAINA",
+    "prenom": "Erik Admalandy",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Gestionnaire DFP",
+    "categorie": "HC",
+    "email": "eandriambololoniaina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015026",
+    "nom": "RAPARISON",
+    "prenom": "Hery Zo",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chef Sce Affaires So et Lgmts",
+    "categorie": "C",
+    "email": "hraparison.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015027",
+    "nom": "RABENANDRASANA",
+    "prenom": "Andonirina Miora",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Responsable Recrouvrement",
+    "categorie": "C",
+    "email": "arabenandrasana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015028",
+    "nom": "RAMAROLAHY",
+    "prenom": "Tsiriniaina Nicolas",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Gestion Engagement",
+    "categorie": "C",
+    "email": "tramarolahy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015029",
+    "nom": "HANTARILALA",
+    "prenom": "Vanessa Florence",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Comptabilité Générale",
+    "categorie": "C",
+    "email": "vhantarilala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2015030",
+    "nom": "RAZAFIMANDIMBY",
+    "prenom": "Anjara Harena",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Capitaine Remorqueur",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2016001",
+    "nom": "MAFOUTHRA",
+    "prenom": "Elina Christelle",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin",
+    "categorie": "HC1",
+    "email": "cmafouthra.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2016002",
+    "nom": "BOTOMORA",
+    "prenom": "Marie Elda",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin",
+    "categorie": "HC1",
+    "email": "ebotomora.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2016003",
+    "nom": "RAFANOMEZANTSOA",
+    "prenom": "Hery",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Chef d'Unité Imagerie Médicale",
+    "categorie": "HC",
+    "email": "hrafanomezantsoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2016004",
+    "nom": "ZAFINDRAVOLATSARASOLO",
+    "prenom": "Noronantenaina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Tech Conf des Sces Administrat",
+    "categorie": "T2",
+    "email": "nzafindravolatsarasol.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2016005",
+    "nom": "RABEFY",
+    "prenom": "Georges Louiset",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Gestion Maté Techn",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2016008",
+    "nom": "RANARISON",
+    "prenom": "Jérôme",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016009",
+    "nom": "LAITODY",
+    "prenom": "Joyace",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef d'équipe Lamaneur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016013",
+    "nom": "RABEARINIRINA",
+    "prenom": "Dera Auguste",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016014",
+    "nom": "RAZAFITSIVAHINY",
+    "prenom": "Armand",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016015",
+    "nom": "RAKOTOARISOA",
+    "prenom": "Marcellin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016017",
+    "nom": "RANDRIAMANJO",
+    "prenom": "Jean Jacques",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Agent de Bureau",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016023",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Blaise",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2016024",
+    "nom": "RAZAFINAVALONA",
+    "prenom": "Hery Nirina Clermont",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016026",
+    "nom": "RASOANAIVO",
+    "prenom": "Hajaniaina Ndriambol",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016027",
+    "nom": "RATSIRY",
+    "prenom": "Joseph Emmanuel",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016028",
+    "nom": "ALAIN",
+    "prenom": "Brutot",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016029",
+    "nom": "RAMANGAJAONA",
+    "prenom": "Grégoire Maurice",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016030",
+    "nom": "RANDRIAMALALA",
+    "prenom": "Joseph",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016031",
+    "nom": "ALAIN",
+    "prenom": "Patrick",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2016032",
+    "nom": "HERY",
+    "prenom": "Clément",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017002",
+    "nom": "HANDIVOLANONY",
+    "prenom": "Faéva",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Caissier",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2017003",
+    "nom": "RAKOTONINDRINA",
+    "prenom": "José",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2017004",
+    "nom": "BEALANANA",
+    "prenom": "Jacquelin",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2017005",
+    "nom": "NESTOR",
+    "prenom": "",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2017006",
+    "nom": "RAKOTONDRASOA",
+    "prenom": "Andry Orlando",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Coursier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2017008",
+    "nom": "RAKOTONDRAINY",
+    "prenom": "Ridja Richard",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Pilote",
+    "categorie": "HC1"
+  },
+  {
+    "matricule": "2017009",
+    "nom": "VELONKAJA",
+    "prenom": "Eugène",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Pilote",
+    "categorie": "HC1"
+  },
+  {
+    "matricule": "2017010",
+    "nom": "KOURSAN",
+    "prenom": "Laurent",
+    "direction": "DIR CAP",
+    "poste": "Chef Section Ctl Accès",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2017011",
+    "nom": "RATSIFERAMANJAKA",
+    "prenom": "Fanilonandraina V.",
+    "direction": "DIR CAP",
+    "poste": "Chauffeur pompier",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017012",
+    "nom": "BOTOU",
+    "prenom": "Jouvany Hengelo",
+    "direction": "DIR CAP",
+    "poste": "Chef Section Sapeur Pompier",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2017013",
+    "nom": "BONA",
+    "prenom": "Julien",
+    "direction": "DIR CAP",
+    "poste": "Chef Section Ctl Accès",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2017014",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Julien",
+    "direction": "DIR CAP",
+    "poste": "Chef service Prévention et int",
+    "categorie": "C",
+    "email": "jrakotonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2017015",
+    "nom": "RAZAFIMAHEFA",
+    "prenom": "Marcellin",
+    "direction": "DIR CAP",
+    "poste": "Chef Section Sapeur Pompier",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2017016",
+    "nom": "RAKOTOMALOANA",
+    "prenom": "Mampionona",
+    "direction": "DIR CAP",
+    "poste": "Chauffeur pompier",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017018",
+    "nom": "RANDRIANOELINA",
+    "prenom": "Mahasetra Mahitsison",
+    "direction": "DIR CAP",
+    "poste": "Chauffeur pompier",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017020",
+    "nom": "MAHATANA Hubert",
+    "prenom": "Francky Marcel",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017021",
+    "nom": "MASINDIA",
+    "prenom": "Jean Christian",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017022",
+    "nom": "TOBE Gérald",
+    "prenom": "Claudio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017023",
+    "nom": "RAZAFINDRASAMPY",
+    "prenom": "Giovanni Zachiah",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Vedette",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2017025",
+    "nom": "TAFANGY Andritiana",
+    "prenom": "Judicaël",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Machine",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017026",
+    "nom": "MIDASY",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Maître Grais. Remorq.",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2017027",
+    "nom": "MENA",
+    "prenom": "Jean Frédéric",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Machine",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017030",
+    "nom": "RATSIMANDRESY",
+    "prenom": "Hajanirina Madison",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Remorqueur Portuaire",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2017031",
+    "nom": "BAHOAKA",
+    "prenom": "Holaza",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Remorqueur Portuaire",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2017032",
+    "nom": "BOTOMORA",
+    "prenom": "Donné",
+    "direction": "DIR CAP",
+    "poste": "Pompier Plongeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2017033",
+    "nom": "RAVELOSON",
+    "prenom": "Widmarck Jean Rodolp",
+    "direction": "DIR CAP",
+    "poste": "Chef Section Sapeur Pompier",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2017034",
+    "nom": "BOTOZAZA",
+    "prenom": "Olivier",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Remorqueur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2018001",
+    "nom": "MANDRINDRA",
+    "prenom": "Delphin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Dpt Instal et Matér. Spéc",
+    "categorie": "HC",
+    "email": "dmandrindra.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2018002",
+    "nom": "RATOVONDRAZAKA Anjarison",
+    "prenom": "Gaël Jonathan",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2018003",
+    "nom": "RAPATSALAHINIAINA",
+    "prenom": "Elior  Evrard",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Magasinier",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2018004",
+    "nom": "BESON",
+    "prenom": "Lucianno",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Maître d' Equipage",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2018005",
+    "nom": "MICHEL",
+    "prenom": "Estheban Fleuris",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Vedette",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2018006",
+    "nom": "RAKOTOMAHEFARAIBE",
+    "prenom": "Jean Victor",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2018007",
+    "nom": "RAMBOLAMISITIANA",
+    "prenom": "Misaela",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2018008",
+    "nom": "ANDRIANARY",
+    "prenom": "Jean Willer",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Vedette",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2018009",
+    "nom": "RANDRIAMAHALEO Andriamaharoson",
+    "prenom": "Herbert",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ingenieur",
+    "categorie": "HC1",
+    "email": "hrandriamahaleo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2018010",
+    "nom": "RANDRIANA Valery",
+    "prenom": "Giscard",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Chef Chant Infra et Superstru",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2018011",
+    "nom": "RAVELOSON Arnistophène",
+    "prenom": "Eddie",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Electricien",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2018012",
+    "nom": "RAFARALAHY Elson",
+    "prenom": "Serge",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Electricien",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2018013",
+    "nom": "RANDRIANANTENAINA",
+    "prenom": "Joël",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Electricien",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2018014",
+    "nom": "RAMANAMAHEFA",
+    "prenom": "Andriamihanta",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Electricien",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2018015",
+    "nom": "SOARISON",
+    "prenom": "Remi",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Peintre Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2018016",
+    "nom": "RAMAHATRATRA",
+    "prenom": "Bruno",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2018017",
+    "nom": "JEAN CHRISTOPHE",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2019001",
+    "nom": "RANIVONIAINA",
+    "prenom": "Michel Herizo",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Silo et Portalino",
+    "categorie": "C",
+    "email": "mranivoniaina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2020001",
+    "nom": "LEKAMISY",
+    "prenom": "Adriano Evrard",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2020002",
+    "nom": "TOTOZANDRY",
+    "prenom": "Dixon",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2020003",
+    "nom": "RAKOTOARIMALALA",
+    "prenom": "Erno Teddy",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2020004",
+    "nom": "RASOLONDRAIBE",
+    "prenom": "Tovosoa",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Technicien en Electromecanique",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2020005",
+    "nom": "MAHEFASOA",
+    "prenom": "Dénis Roger",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Technicien en informatique",
+    "categorie": "T1",
+    "email": "dmahefasoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2020006",
+    "nom": "RAKOTONDRAVELO",
+    "prenom": "Jean Michel",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2020008",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Joseph",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020009",
+    "nom": "SATA  Lekasera",
+    "prenom": "Mick de Gyverin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020010",
+    "nom": "RENE CLAUDE",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020011",
+    "nom": "RATSIMATAHOTRA",
+    "prenom": "Abelson Joël",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020012",
+    "nom": "BEZOMA",
+    "prenom": "Modeste",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020013",
+    "nom": "RAZAFIARISON Clovis",
+    "prenom": "Eric Emilia Richard",
+    "direction": "DIR CAP",
+    "poste": "Agent de Bureau",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020014",
+    "nom": "RATOHIKARIVONY",
+    "prenom": "Jean Hugues",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020015",
+    "nom": "JAONARISON",
+    "prenom": "Justin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020016",
+    "nom": "MAHILO Jean",
+    "prenom": "Bertelot Robson",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020017",
+    "nom": "BOTO",
+    "prenom": "Flavien",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020018",
+    "nom": "RAZAFIMAHEFA",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020019",
+    "nom": "RANAIVOHARIVELO",
+    "prenom": "Jean Joseph",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020020",
+    "nom": "RAKOTONAIVO",
+    "prenom": "Jean Marc",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2020021",
+    "nom": "RANDRIANASOLOMANANA",
+    "prenom": "Haja Heritiana",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef du Service Maintenance de",
+    "categorie": "C",
+    "email": "hrandrianasolomanana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2020023",
+    "nom": "NORLINE",
+    "prenom": "Tonetsy",
+    "direction": "DIR CAP",
+    "poste": "Opératrice de saisie",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2020024",
+    "nom": "JOSEPH",
+    "prenom": "Josiane",
+    "direction": "DIR CAP",
+    "poste": "Agent de CTL Marchandises",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2020025",
+    "nom": "RAJOSOA",
+    "prenom": "Raseta",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Mécanicien MM",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2021001",
+    "nom": "RABEZANDRINY",
+    "prenom": "A. Mamiambinintsoa",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Chef du Département Ingénierie",
+    "categorie": "HC",
+    "email": "arabezandriny.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021004",
+    "nom": "HOSSNALY ROSSNALY",
+    "prenom": "Erminio Esposito",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin",
+    "categorie": "HC1",
+    "email": "ehossnaly.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021005",
+    "nom": "SOAZARA",
+    "prenom": "Annie Ornella",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Médecin",
+    "categorie": "HC1",
+    "email": "asoazara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021006",
+    "nom": "MIARISOA",
+    "prenom": "Risianjia",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Cadre en Comptabilité",
+    "categorie": "C",
+    "email": "rmiarisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021007",
+    "nom": "RASOLONIRINA",
+    "prenom": "Franklin",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Dpt Commercial et Relatio",
+    "categorie": "HC",
+    "email": "frasolonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021008",
+    "nom": "RAZAFINDRAKOTO",
+    "prenom": "Kerm Engio",
+    "direction": "DIR GENERALE",
+    "poste": "Contrôleur Junior",
+    "categorie": "C",
+    "email": "krazafindrakoto.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021009",
+    "nom": "RANDRIANARIVAHINY",
+    "prenom": "Hoby Herimalala",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Gestionnaire du Patri",
+    "categorie": "C",
+    "email": "hrandrianarivahiny.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021010",
+    "nom": "ANDRIANINISAINA",
+    "prenom": "Elisa Michelle",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Gestionnaire de centre de form",
+    "categorie": "C",
+    "email": "mandrianinisaina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021011",
+    "nom": "RAHARINANTENAINA",
+    "prenom": "Noeline",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Interface communication projec",
+    "categorie": "C",
+    "email": "nraharinantenaina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021012",
+    "nom": "RAKOTOARIMALALA Holinirina",
+    "prenom": "Eddith Marinah",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Sce Administration Généra",
+    "categorie": "C",
+    "email": "mrakotoarimalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021014",
+    "nom": "JAOZARA",
+    "prenom": "Yannick José",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Archiviste",
+    "categorie": "C",
+    "email": "yjaozara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021015",
+    "nom": "RAJOELARINOSY",
+    "prenom": "Bakoly Niaina",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Juriste",
+    "categorie": "C",
+    "email": "brajoelarinosy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021016",
+    "nom": "LANANA",
+    "prenom": "Léo Hardi Ludovic",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Suivi Op des Contrats",
+    "categorie": "C",
+    "email": "llanana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021018",
+    "nom": "LAHADY",
+    "prenom": "Kenny Franklin",
+    "direction": "DIR CAP",
+    "poste": "Chef Dpt Environnement",
+    "categorie": "HC",
+    "email": "klahady.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021020",
+    "nom": "RAFIDISON",
+    "prenom": "Olive",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de Trafic",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2021021",
+    "nom": "RAZAFY",
+    "prenom": "Virginie Valeria",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de Trafic",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2021022",
+    "nom": "RASOANATOAVINA VOLOLONIRINOMENJANAHARY",
+    "prenom": "Elodie Emma Marcelle",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Assistante de Direction",
+    "categorie": "C",
+    "email": "erasoanatoavina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021023",
+    "nom": "ZARA",
+    "prenom": "Adège",
+    "direction": "DIR CAP",
+    "poste": "Technicien administratif",
+    "categorie": "T1",
+    "email": "azara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021024",
+    "nom": "BOTOMAMOU",
+    "prenom": "Fabiola Annie",
+    "direction": "DIR GENERALE",
+    "poste": "Secrétaire Particulière DG",
+    "categorie": "C",
+    "email": "fbotomamou.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021025",
+    "nom": "RASOLOMANANA",
+    "prenom": "Adolphe Frégis",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Technicien en informatique",
+    "categorie": "T1",
+    "email": "frasolomanana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2021026",
+    "nom": "RANAIVOMANANA",
+    "prenom": "Ravakiniaina H.",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Infirmier(e)",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2021027",
+    "nom": "MAHAVALISOA",
+    "prenom": "Vavy Marie Franciana",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Infirmier(e)",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2021028",
+    "nom": "RANARIMANANA",
+    "prenom": "Jean Claude",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Infirmier(e)",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2021029",
+    "nom": "RANDRIANARISOA",
+    "prenom": "Paulin",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de sûreté",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021030",
+    "nom": "ISSOUFALY",
+    "prenom": "Abdallah",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de sûreté",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021031",
+    "nom": "GYM'NO",
+    "prenom": "Vincent Joseph",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de sûreté",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021032",
+    "nom": "MALAZA HERY ZO",
+    "prenom": "Mijoro",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de sûreté",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021034",
+    "nom": "RAZAFIMAHEFA",
+    "prenom": "Onjanarivo Olivier",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur Vedette",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2021035",
+    "nom": "RAVELOMANANTSOA",
+    "prenom": "Zafinera Dino",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2021038",
+    "nom": "RAMAMPIONINA",
+    "prenom": "Teddy Triophe",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2021039",
+    "nom": "TSIVATOU",
+    "prenom": "Eddy Oscar Claudius",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2021040",
+    "nom": "BEASSOU",
+    "prenom": "Euphrasie",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2021042",
+    "nom": "RASOANANDRASANA",
+    "prenom": "Rosette Soavinoro",
+    "direction": "DIR GENERALE",
+    "poste": "Agent Administratif",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021044",
+    "nom": "ABOUD",
+    "prenom": "Rouckia",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Agent Administratif",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2021045",
+    "nom": "LERA",
+    "prenom": "",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2021046",
+    "nom": "RAZAFINDRAHERINA",
+    "prenom": "Vero Mirantsoa",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Gestionnaire",
+    "categorie": "C",
+    "email": "vrazafindraherina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022001",
+    "nom": "MORAINA",
+    "prenom": "Gildas Odilon",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Chef Dpt Infrastructure, résea",
+    "categorie": "HC",
+    "email": "gmoraina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022002",
+    "nom": "BESA",
+    "prenom": "Volamiora Eva",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Chef Dpt Transformation Digita",
+    "categorie": "HC",
+    "email": "ebesa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022003",
+    "nom": "RAJAONARISOA",
+    "prenom": "Ny Hantaniaina",
+    "direction": "DIR AUDIT ET GESTION RISQUES",
+    "poste": "Auditeur Senior",
+    "categorie": "HC1",
+    "email": "nrajaonarisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022004",
+    "nom": "ALFRED",
+    "prenom": "Hans Fabrice",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Dpt Finances et Trésoreri",
+    "categorie": "HC",
+    "email": "halfred.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022005",
+    "nom": "ROMAIN",
+    "prenom": "Harison  Antony Yves",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Cadre Paie",
+    "categorie": "C",
+    "email": "aromain.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022006",
+    "nom": "SOAMALALANIONY",
+    "prenom": "Rafiringa",
+    "direction": "DIR AUDIT ET GESTION RISQUES",
+    "poste": "Auditeur Junior",
+    "categorie": "C",
+    "email": "rsoamalalaniony.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022007",
+    "nom": "FOTSY",
+    "prenom": "Iavemazava Germina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Technicien Finances",
+    "categorie": "T1",
+    "email": "gfotsy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022008",
+    "nom": "ANDRIAMBOLOLOMALALA",
+    "prenom": "Mbola Nantenaina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef de Sce Fiscalité",
+    "categorie": "C",
+    "email": "mandriambololomalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022009",
+    "nom": "RAZAFIMANDIMBY",
+    "prenom": "Soanambinina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Cadre en Comptabilité",
+    "categorie": "C",
+    "email": "arazafimandimby.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022010",
+    "nom": "INDRIANTSILAZO",
+    "prenom": "Mitantsoa Stynaure",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Technicien Paie",
+    "categorie": "T1",
+    "email": "mindriantsilazo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022011",
+    "nom": "INDRIANTSILAZO",
+    "prenom": "Zephyrin",
+    "direction": "DIR CAP",
+    "poste": "Tecn signalisation maritime",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2022012",
+    "nom": "RANDRIANAHARIVELO",
+    "prenom": "Mario Aristide",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Technicien des Travaux Génies",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2022013",
+    "nom": "FITSARANA",
+    "prenom": "Soafara Yasmine",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Assistante de Direction",
+    "categorie": "C",
+    "email": "yfitsarana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022014",
+    "nom": "ANDRIAMIHAJA",
+    "prenom": "Harry Ulrich Fleurio",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Juriste Conseil",
+    "categorie": "C",
+    "email": "handriamihaja.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022015",
+    "nom": "RAKOTOMAMONJY",
+    "prenom": "Faharetana A.",
+    "direction": "DIR CAP",
+    "poste": "Chef Dpt Régulation du Trafic",
+    "categorie": "HC",
+    "email": "frakotomamonjy.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022016",
+    "nom": "RAKOTONDRINA",
+    "prenom": "Faly Olivier",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Technicien des Services Admini",
+    "categorie": "T1",
+    "email": "frakotondrina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022017",
+    "nom": "ANDRISOA",
+    "prenom": "Malalatiana",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Assistante de Direction",
+    "categorie": "C",
+    "email": "mandrisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022018",
+    "nom": "RANDRIANIRINA",
+    "prenom": "Louisa Claudia",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Gestionnaire de talent",
+    "categorie": "C",
+    "email": "lrandrianirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022019",
+    "nom": "ANDRIAMIARISOA",
+    "prenom": "Sylvia Claudine",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Technicien des Services Admini",
+    "categorie": "T1",
+    "email": "sandriamiarisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022020",
+    "nom": "RASAMIMALALA",
+    "prenom": "Tahina M.",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Gest du PL Navigua",
+    "categorie": "C",
+    "email": "trasamimalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022021",
+    "nom": "NANTENAINA",
+    "prenom": "Aristide",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Tech gestion des matériels",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2022022",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Nico Ricardo",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Distributeur de médicaments",
+    "categorie": "E4",
+    "email": "rrakotonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022024",
+    "nom": "OLIVIER",
+    "prenom": "Maximin Kim",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Mécanicien diagnostiqueur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2022025",
+    "nom": "RASOLOFONIRINA",
+    "prenom": "Serginot Achille",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022026",
+    "nom": "KULPINSKI",
+    "prenom": "Zulucko R.",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022027",
+    "nom": "RASOLONIMANANA",
+    "prenom": "Mamiarilala",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022028",
+    "nom": "ZANTERA",
+    "prenom": "Ravonison Aniello",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Gestionnaire Logistique et Moy",
+    "categorie": "C",
+    "email": "azantera.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022029",
+    "nom": "MANANJANDRY",
+    "prenom": "Jean Bradley",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022030",
+    "nom": "FAMINDRA",
+    "prenom": "Jaïfa Man Jio",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022031",
+    "nom": "VELONJARA",
+    "prenom": "Manuel Fridolys",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022032",
+    "nom": "ANDRIAMAHAZO",
+    "prenom": "Sully Julio",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022033",
+    "nom": "RAVELONIRINA",
+    "prenom": "Guyo Charlin",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022034",
+    "nom": "MANAMBINA",
+    "prenom": "Donatien",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2022035",
+    "nom": "FANOMEZANTSOA",
+    "prenom": "Onjanirina Justin Y.",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron vedette",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2022036",
+    "nom": "RILY FIDELE",
+    "prenom": "Charlot",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur Vedette",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2022037",
+    "nom": "RAZAFIARIMANANA",
+    "prenom": "Nomenjanahary Ihita",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur Vedette",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2022038",
+    "nom": "LAHOSSA",
+    "prenom": "Sylvio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur Vedette",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2022039",
+    "nom": "RANASIARINORO",
+    "prenom": "Jessy Ludmillah",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Gestionnaire de talent",
+    "categorie": "C",
+    "email": "jranasiarinoro.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2022040",
+    "nom": "LARSENE",
+    "prenom": "Dimbiniaina M.Andréa",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Chargé de Coordi et projets RH",
+    "categorie": "HC1",
+    "email": "alarsene.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2023001",
+    "nom": "MALAMA",
+    "prenom": "Aristide",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Gestionnaire Logistique et Moy",
+    "categorie": "C",
+    "email": "amalama.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2023002",
+    "nom": "RAZAFIMAHANDRY",
+    "prenom": "Rindra Nantenaina",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Patron Vedette",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2023003",
+    "nom": "RAZAFITSIALANONA",
+    "prenom": "Jacques Gilberto",
+    "direction": "DIR CAP",
+    "poste": "Chef Sce Gestion TM",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2023004",
+    "nom": "RATSIMISETA",
+    "prenom": "Ralijaona Faniloniai",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Second Mécanicien de la Marine",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2023005",
+    "nom": "RAHERIMANANTSOA",
+    "prenom": "José Alain",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Second Mécanicien Remorq.",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2023006",
+    "nom": "RAHERIJAONA",
+    "prenom": "Miora. Henintsoa",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Ingénieur mécanicien matériels",
+    "categorie": "HC1",
+    "email": "hraherijaona.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2023007",
+    "nom": "NASOLONJANAHARY",
+    "prenom": "V. Andréa",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Distributeur de médicaments",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024001",
+    "nom": "RANAIVOARISON",
+    "prenom": "Sitrakiniaina Angelo",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Chef Sce Assistance Navires",
+    "categorie": "C",
+    "email": "sranaivoarison.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024002",
+    "nom": "RATOVOARINONY",
+    "prenom": "Safiditsoa",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Cadre Administrateur Multimedi",
+    "categorie": "C",
+    "email": "sratovoarinony.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024003",
+    "nom": "RAZAFINIRINA",
+    "prenom": "Marie Clara",
+    "direction": "DIR AUDIT ET GESTION RISQUES",
+    "poste": "Auditeur Junior",
+    "categorie": "C",
+    "email": "crazafinirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024004",
+    "nom": "RABEFENO",
+    "prenom": "Joelia Dominique",
+    "direction": "DIR GENERALE",
+    "poste": "Chef du service Organisation",
+    "categorie": "C",
+    "email": "jrabefeno.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024005",
+    "nom": "RAKOTO",
+    "prenom": "Rovaniaina Francky",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Cadre Developpeur informatique",
+    "categorie": "C",
+    "email": "frakoto.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024006",
+    "nom": "RAHARIMALALA FANOMEZANTSOA",
+    "prenom": "Aina Miranto",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Cadre en Ressources Humaines",
+    "categorie": "C",
+    "email": "araharimalala.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024007",
+    "nom": "RASENDRA",
+    "prenom": "Fu Nam Christophe",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Cadre en électromécanique",
+    "categorie": "C",
+    "email": "frasendra.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024008",
+    "nom": "RABENANDRASANA",
+    "prenom": "Leonel",
+    "direction": "DIR CAP",
+    "poste": "Technicien en Environnement",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2024009",
+    "nom": "TSITOHA",
+    "prenom": "Paulin Didier",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef de Sce Compta. Analytique",
+    "categorie": "C",
+    "email": "ptsitoha.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024010",
+    "nom": "RALALASON",
+    "prenom": "Heritiana Cynthia",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Cadre en RH",
+    "categorie": "C",
+    "email": "hralalason.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024011",
+    "nom": "RANDRIANARIMANANA",
+    "prenom": "Germino",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Technicien des services admini",
+    "categorie": "T1",
+    "email": "grandrianarimanana.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024012",
+    "nom": "SATOU",
+    "prenom": "Nirina Giovanni",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chef Dpt Gestion Administrativ",
+    "categorie": "HC",
+    "email": "nsatou.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024013",
+    "nom": "SOLOMAMPIONONA",
+    "prenom": "Hugues Fleuri",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Technicien en éléctromécanique",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2024014",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Jordy Yannick",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Technicien en électromécanique",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2024015",
+    "nom": "RASANO",
+    "prenom": "Gaël Florent Albert",
+    "direction": "DIR CAP",
+    "poste": "Chef Sce Contrôle Accès et Sur",
+    "categorie": "C",
+    "email": "grasano.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024016",
+    "nom": "BENALA",
+    "prenom": "Andriantiana Sitraki",
+    "direction": "DIR CAP",
+    "poste": "Contrôleur de sûreté",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024017",
+    "nom": "FENOZARA ELIPHAZ",
+    "prenom": "Marius",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024018",
+    "nom": "NITHO",
+    "prenom": "Rénole",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur ASCOM",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024019",
+    "nom": "BE",
+    "prenom": "Joris",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024020",
+    "nom": "MEXICO",
+    "prenom": "Edelwess Ulrich",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024021",
+    "nom": "ANDRIAMALAZAONY",
+    "prenom": "Angelin Stewart",
+    "direction": "DIR CAP",
+    "poste": "Pompier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024022",
+    "nom": "BRUNO",
+    "prenom": "Michel Nambinintsoa",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Sce Marketing Stat portua",
+    "categorie": "C",
+    "email": "rbruno.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2024023",
+    "nom": "ZENESY",
+    "prenom": "Epiphanio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024024",
+    "nom": "TOTO",
+    "prenom": "Stevy Laurie",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024025",
+    "nom": "ANDRIAMAHEFA",
+    "prenom": "Fréderic Henrive",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024026",
+    "nom": "ALFRED NIRISON",
+    "prenom": "Stephano",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024027",
+    "nom": "BALANTSY",
+    "prenom": "Gill Christo",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024028",
+    "nom": "ANDRIAMANANGANA",
+    "prenom": "Setramamy Lancio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024029",
+    "nom": "BALANTSY",
+    "prenom": "César",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024030",
+    "nom": "BEANJARA",
+    "prenom": "Claudio Elisé",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024031",
+    "nom": "FOSSA",
+    "prenom": "Jhonia Arielle",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024032",
+    "nom": "RAZAFIMAHALANONA",
+    "prenom": "Denis Laurenn",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Employée de bureau",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024033",
+    "nom": "TADIDY",
+    "prenom": "Philippe Chiland Esp",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Soudeur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024034",
+    "nom": "BRUTO",
+    "prenom": "Bernard",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Tourneur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024035",
+    "nom": "INTSIRAKA",
+    "prenom": "Lario Amédé",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ebeniste",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024036",
+    "nom": "RAZAMANY",
+    "prenom": "Olivier",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Machiniste",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024037",
+    "nom": "ANDRIANJAKA",
+    "prenom": "Jeannot Rivo Lalao",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Capitaine Remorqueur",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2024038",
+    "nom": "ANDRIAMPANOMEZANTSOA",
+    "prenom": "Fanoëlah",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024039",
+    "nom": "EMMANUEL",
+    "prenom": "Sylvain",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Graisseur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024040",
+    "nom": "RAKOTOSON",
+    "prenom": "Harivonjy",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024042",
+    "nom": "ROJONANDRASANA",
+    "prenom": "Sam Chain Charles Br",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024043",
+    "nom": "MANANJARA",
+    "prenom": "Jean Honoré Claudio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Dragage",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024044",
+    "nom": "RAFALINARY",
+    "prenom": "Elisa",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Intendante",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024045",
+    "nom": "RASOAMANDIMBY",
+    "prenom": "Jacqueline",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024046",
+    "nom": "TOMBO",
+    "prenom": "Ravololonirina",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Agent de sce Généraux",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024048",
+    "nom": "RANDRIAMANANA",
+    "prenom": "Georges",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024049",
+    "nom": "BAOLAHADY",
+    "prenom": "Mariette Marie",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024050",
+    "nom": "JOSOA",
+    "prenom": "Jenny Carlo",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Agent d'Accueil Médical",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024051",
+    "nom": "RASOANJANAHARY",
+    "prenom": "Chantal",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024052",
+    "nom": "BAMINO",
+    "prenom": "Charlotte",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024053",
+    "nom": "MARIE",
+    "prenom": "Rose",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024054",
+    "nom": "RAHANTAVOLOLONA",
+    "prenom": "Aimée Claudia",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024055",
+    "nom": "SOATODY",
+    "prenom": "Rachelle Angeline",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024056",
+    "nom": "VELOMORA",
+    "prenom": "Armine Tsiry",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante Médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024057",
+    "nom": "ANDRIAMANJAKA",
+    "prenom": "J. Ismael Kennedy",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Manipulateur en radiologie",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2024058",
+    "nom": "HANTANIRINA",
+    "prenom": "Fabienne",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024059",
+    "nom": "PORAKA",
+    "prenom": "Iago Paul Louis",
+    "direction": "DIR CAP",
+    "poste": "Magasinier Outillage",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024061",
+    "nom": "FARALAHY",
+    "prenom": "Arthur Dauphin",
+    "direction": "DIR CAP",
+    "poste": "Agent de phare",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024062",
+    "nom": "ALFRED",
+    "prenom": "Didier Gérard",
+    "direction": "DIR CAP",
+    "poste": "Agent de contrôle Accès",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024063",
+    "nom": "SAMPIVONY",
+    "prenom": "Claret Tiamaro",
+    "direction": "DIR CAP",
+    "poste": "Agent de contrôle Accès",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024064",
+    "nom": "IGNAKA",
+    "prenom": "Roger",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024065",
+    "nom": "JEAN FALY",
+    "prenom": "Celestin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024066",
+    "nom": "MARCELLIN",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024067",
+    "nom": "RAMAROSON",
+    "prenom": "Fulgence",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024068",
+    "nom": "RANDRIANARISON",
+    "prenom": "Florent",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024069",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Jarson",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024070",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Jean de Dieu",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024071",
+    "nom": "RAZAFIMAHATRATRA",
+    "prenom": "Auguste",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Lamaneur",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024072",
+    "nom": "ANDRIAMANANTENA",
+    "prenom": "Anthony Parfait",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024073",
+    "nom": "BENIAINA",
+    "prenom": "Tony",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024074",
+    "nom": "DOVO",
+    "prenom": "Jimy Richard",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024075",
+    "nom": "EMOJANGA",
+    "prenom": "Andrianarivo Tsiorir",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Portalino",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024076",
+    "nom": "LAHATRAY",
+    "prenom": "Ratefy",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024077",
+    "nom": "MAROARA",
+    "prenom": "Oldin Benedict",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024078",
+    "nom": "NASOLOMANJAKA",
+    "prenom": "Faly Nirina Antonio",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024079",
+    "nom": "RAMAHANDRISOA",
+    "prenom": "Mario Hubert",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024080",
+    "nom": "RATONSON",
+    "prenom": "Toda Donatien",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur Silo",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024084",
+    "nom": "BERNARD",
+    "prenom": "Augustin",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024087",
+    "nom": "JACQUES",
+    "prenom": "ANDRE",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024088",
+    "nom": "JAONASY",
+    "prenom": "Jean Paul Christian",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Soudeur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024089",
+    "nom": "LEDOA",
+    "prenom": "Nathaniel Ricco",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024091",
+    "nom": "MAHADIDY",
+    "prenom": "Daniel",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de Bureau",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2024092",
+    "nom": "RABE",
+    "prenom": "",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent d'hygiène",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024093",
+    "nom": "RAFOTOANA",
+    "prenom": "Olivier",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Soudeur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024094",
+    "nom": "RAHARISON",
+    "prenom": "Bruno",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Soudeur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024095",
+    "nom": "RAMANANTSOA",
+    "prenom": "Fidèle",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024096",
+    "nom": "RANAIVOARISON",
+    "prenom": "Venceslas Michel",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024098",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Michel",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ferrailleur",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024099",
+    "nom": "RASOLONIAINA",
+    "prenom": "Lydien Gniark Hon",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Peintre Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024100",
+    "nom": "RAVAONIRINA",
+    "prenom": "Charlys Odette",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Employé de Bureau",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024101",
+    "nom": "RAVELOMANANTSOA",
+    "prenom": "Victoria",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent Administratif",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024102",
+    "nom": "RAZAFIMANAMBY",
+    "prenom": "Efraim",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024103",
+    "nom": "RAZAFINDRAKATSO",
+    "prenom": "Richard Anthonis",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024104",
+    "nom": "RAZAFINDRAOELINA",
+    "prenom": "Fulgence",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024106",
+    "nom": "RAZANAMAHAVONJY",
+    "prenom": "Esquande Claudio",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024107",
+    "nom": "RICHARD",
+    "prenom": "Christian",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Plombier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024108",
+    "nom": "ROGER",
+    "prenom": "Edmond",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024109",
+    "nom": "ROMAIN",
+    "prenom": "",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Chauffeur",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2024110",
+    "nom": "SABOTSY",
+    "prenom": "François",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Maçon",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024112",
+    "nom": "SEVERIN",
+    "prenom": "Jacquesson",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Menuisier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024114",
+    "nom": "TSIANIGNA",
+    "prenom": "Eric",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Charpentier",
+    "categorie": "E3"
+  },
+  {
+    "matricule": "2024115",
+    "nom": "BRIGITTE",
+    "prenom": "",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Planton",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2024116",
+    "nom": "DESIRE",
+    "prenom": "",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Agent de Bureau",
+    "categorie": "E2"
+  },
+  {
+    "matricule": "2025001",
+    "nom": "ADOLPHE",
+    "prenom": "Jean Jacques",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025002",
+    "nom": "BOTOKANAMO",
+    "prenom": "",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025003",
+    "nom": "BESO",
+    "prenom": "François",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025005",
+    "nom": "FALIMANANA",
+    "prenom": "",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025006",
+    "nom": "RALAIZAFY",
+    "prenom": "Emmanuel",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025007",
+    "nom": "SANGOR",
+    "prenom": "Elouis",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025008",
+    "nom": "ANDRIAMANDIMBY",
+    "prenom": "Marius",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025009",
+    "nom": "SAKA",
+    "prenom": "Modestine Emilie",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Servante médicale",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025010",
+    "nom": "BESOA",
+    "prenom": "Oderle",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025012",
+    "nom": "RANDRIANASOLO",
+    "prenom": "Lydia",
+    "direction": "DIR CAP",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025013",
+    "nom": "HARISON",
+    "prenom": "",
+    "direction": "DIR CAP",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025014",
+    "nom": "TALATA",
+    "prenom": "Albert",
+    "direction": "DIR CAP",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2025015",
+    "nom": "MANESY",
+    "prenom": "Augustin",
+    "direction": "DIR CAP",
+    "poste": "Agent de chantier",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2026001",
+    "nom": "RANDRIAMBAHOAKA",
+    "prenom": "Heritiana Anicet",
+    "direction": "DIR GENERALE",
+    "poste": "DIRECTEUR GENERAL",
+    "categorie": "",
+    "email": "arandriambahoaka.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026002",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Vololoniaina",
+    "direction": "DIR GENERALE",
+    "poste": "Resp Protocole et Relation Ext",
+    "categorie": "C",
+    "email": "vrakotonirina.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026003",
+    "nom": "RABEHANITRINIAINA",
+    "prenom": "Lalaina Heriseheno",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Second Mécanicien Remorq.",
+    "categorie": "T2"
+  },
+  {
+    "matricule": "2026004",
+    "nom": "RAKOTOBE",
+    "prenom": "Mamy Nirina",
+    "direction": "DIR RESSOURCES HUMAINES",
+    "poste": "Dir des Ressources Humaines",
+    "categorie": "",
+    "email": "mrakotobe.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026005",
+    "nom": "NARY",
+    "prenom": "",
+    "direction": "DIR GENERALE",
+    "poste": "Agent d'hygiène",
+    "categorie": "E1"
+  },
+  {
+    "matricule": "2026006",
+    "nom": "RASAMISON",
+    "prenom": "Valérie",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Comptable",
+    "categorie": "T1"
+  },
+  {
+    "matricule": "2026007",
+    "nom": "VOCA",
+    "prenom": "Joël",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Directeur Digitalisation et In",
+    "categorie": "HC",
+    "email": "jvoca.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026008",
+    "nom": "RANAIVOSOLO",
+    "prenom": "Patrick",
+    "direction": "SECRETAIRE GENERAL",
+    "poste": "Secrétaire Général",
+    "categorie": "HC",
+    "email": "wranaivosolo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026009",
+    "nom": "BERNARD",
+    "prenom": "Njara Frédéric",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ingénieur en Génie civil et Ar",
+    "categorie": "HC1",
+    "email": "nbernard.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026010",
+    "nom": "VAHANJAKOTO",
+    "prenom": "Alphonse Severin",
+    "direction": "DIR GENERALE",
+    "poste": "Conseiller économique - croiss",
+    "categorie": "HC",
+    "email": "svahanjakoto.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026011",
+    "nom": "RAMINOALISOA",
+    "prenom": "Andrianiaina Herizo",
+    "direction": "DIR GENERALE",
+    "poste": "Conseiller Planification-Explo",
+    "categorie": "HC",
+    "email": "araminoalisoa.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026012",
+    "nom": "RAKOTONDRAVELO",
+    "prenom": "Riana Riccardo",
+    "direction": "DIR DIGITALISATION INNOVATION",
+    "poste": "Ingénieur Développeur Informat",
+    "categorie": "HC1",
+    "email": "rrakotondravelo.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026013",
+    "nom": "RALISON",
+    "prenom": "Gerlin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026014",
+    "nom": "SAMOELINA",
+    "prenom": "Zafy Alexis",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026015",
+    "nom": "GEORGES",
+    "prenom": "Lido Ariel",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026016",
+    "nom": "MARINA",
+    "prenom": "Tsaradia Ronaldo",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026017",
+    "nom": "ANDRIAMANANTENA",
+    "prenom": "Rado Tiana Bernardin",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Matelot Pont",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026018",
+    "nom": "RANDRIAMAHAZOSOA",
+    "prenom": "Zaramaminiaina",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ingénieur Hydraulicien",
+    "categorie": "HC1"
+  },
+  {
+    "matricule": "2026019",
+    "nom": "BEZARA",
+    "prenom": "Lide Henri Damien",
+    "direction": "DIR INFRASTRUCTURE ET DVPT",
+    "poste": "Ingénieur Electricien",
+    "categorie": "HC1",
+    "email": "lbezara.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026020",
+    "nom": "RAZAFIMANDROSO",
+    "prenom": "Fenitra Daréa",
+    "direction": "DIR GENERALE",
+    "poste": "Chef Dpt Gestion des Projets e",
+    "categorie": "HC",
+    "email": "frazafimandroso.spat@port-toamasina.mg"
+  },
+  {
+    "matricule": "2026021",
+    "nom": "RASOLOZAFINIRINDRARIVONY",
+    "prenom": "Ogascar Marino",
+    "direction": "DIR EXPLOITATION",
+    "poste": "Opérateur ASCOM",
+    "categorie": "E4"
+  },
+  {
+    "matricule": "2026022",
+    "nom": "RAKOTONIRINA",
+    "prenom": "Lovasoa Dieudonné",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Juriste Conseil",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026023",
+    "nom": "TAMBY",
+    "prenom": "Ursula Nicole",
+    "direction": "DIR AFFAIRES JURIDIQUES",
+    "poste": "Juriste Conseil",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026025",
+    "nom": "ALY",
+    "prenom": "Britta",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Juriste Conseil",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026026",
+    "nom": "HARISON",
+    "prenom": "Stéphanio André",
+    "direction": "DIR MARKETING ET COMMUNICATION",
+    "poste": "Chef Sce Communication externe",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026027",
+    "nom": "TSILAVO",
+    "prenom": "Julianot Xavier Honoré",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Technicien en Finance",
+    "categorie": "T"
+  },
+  {
+    "matricule": "2026028",
+    "nom": "RAFIDISAONINA",
+    "prenom": "Hubert Amédée",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Comptable",
+    "categorie": "T"
+  },
+  {
+    "matricule": "2026029",
+    "nom": "RABEARIVELO",
+    "prenom": "Hasintsoa Odon",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Comptable",
+    "categorie": "T"
+  },
+  {
+    "matricule": "2026030",
+    "nom": "RASOANAMPAITRA",
+    "prenom": "Francelette",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Comptable",
+    "categorie": "T"
+  },
+  {
+    "matricule": "2026031",
+    "nom": "SELAMANANA",
+    "prenom": "Vonjinirina Anatole",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Acheteur",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026032",
+    "nom": "RAZAFINDRAFOHIKA",
+    "prenom": "Nicole Juliana",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Acheteur",
+    "categorie": "C"
+  },
+  {
+    "matricule": "2026033",
+    "nom": "RAHARINIRINA",
+    "prenom": "Paulin Franco",
+    "direction": "DIR FINANCIERE ET PERFORMANCE",
+    "poste": "Responsable Magasin",
+    "categorie": "C"
+  }
+]

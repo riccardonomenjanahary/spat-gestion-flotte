@@ -137,7 +137,11 @@ export default function UtilisateursPage() {
     }
   };
   useEffect(() => {
-    chargerUtilisateurs();
+    const initialisation = window.setTimeout(() => {
+      chargerUtilisateurs();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
   const totalUtilisateurs = utilisateurs.length;
   const utilisateursActifs = utilisateurs.filter(

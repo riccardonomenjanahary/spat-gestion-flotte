@@ -84,7 +84,11 @@ export default function ChauffeursPage() {
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    setRole(localStorage.getItem("role"));
+    const initialisation = window.setTimeout(() => {
+      setRole(localStorage.getItem("role"));
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const lectureSeule = estLectureSeule(role);
@@ -128,7 +132,11 @@ export default function ChauffeursPage() {
   };
 
   useEffect(() => {
-    charger();
+    const initialisation = window.setTimeout(() => {
+      charger();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const resetForm = () => {

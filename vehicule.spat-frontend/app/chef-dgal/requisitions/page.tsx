@@ -54,7 +54,11 @@ function RequisitionsContent() {
     if (r.ok) setRequisitions(await r.json());
   };
 
-  useEffect(() => { void charger().catch(() => setErreur("Impossible de charger les réquisitions.")); }, []);
+  useEffect(() => {
+    const initialisation = window.setTimeout(() => { void charger().catch(() => setErreur("Impossible de charger les réquisitions."));
+    }, 0);
+    return () => window.clearTimeout(initialisation);
+  }, []);
 
   const soumettre = async (event: React.FormEvent) => {
     event.preventDefault();

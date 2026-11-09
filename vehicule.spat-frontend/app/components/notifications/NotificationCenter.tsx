@@ -96,14 +96,24 @@ export default function NotificationCenter({
   }, [API]);
 
   useEffect(() => {
-    chargerNotifications();
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        chargerNotifications();
 
-    const timer = window.setInterval(
-      chargerNotifications,
-      Math.max(5000, pollMs)
-    );
+        const timer = window.setInterval(
+          chargerNotifications,
+          Math.max(5000, pollMs)
+        );
 
-    return () => window.clearInterval(timer);
+        return () => window.clearInterval(timer);
+
+      })();
+    }, 0);
+    return () => {
+      window.clearTimeout(initialisation);
+      nettoyer?.();
+    };
   }, [chargerNotifications, pollMs]);
 
   useEffect(() => {
@@ -172,7 +182,7 @@ export default function NotificationCenter({
         notification.lien.startsWith("http://") ||
         notification.lien.startsWith("https://")
       ) {
-        window.location.href = notification.lien;
+        window.location.assign(notification.lien);
         return;
       }
 
@@ -220,7 +230,7 @@ export default function NotificationCenter({
           50% { transform: scale(1.15); }
         }
 
-        
+
         @keyframes spatNotifBellRing {
           0%, 100% { transform: rotate(0deg); }
           12% { transform: rotate(26deg); }

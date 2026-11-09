@@ -98,35 +98,39 @@ export default function EnTete({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const initialisation = window.setTimeout(() => {
+      const token = localStorage.getItem("token");
 
-    const roleStocke =
-      localStorage.getItem("role") ||
-      undefined;
+      const roleStocke =
+        localStorage.getItem("role") ||
+        undefined;
 
-    const matriculeStocke =
-      localStorage.getItem("numMatricule") ||
-      localStorage.getItem("matricule") ||
-      undefined;
+      const matriculeStocke =
+        localStorage.getItem("numMatricule") ||
+        localStorage.getItem("matricule") ||
+        undefined;
 
-    if (token) {
-      const decoded = decoderToken(token);
+      if (token) {
+        const decoded = decoderToken(token);
 
-      setInfos({
-        role:
-          decoded.role ||
-          roleStocke,
+        setInfos({
+          role:
+            decoded.role ||
+            roleStocke,
 
-        matricule:
-          decoded.matricule ||
-          matriculeStocke,
-      });
-    } else {
-      setInfos({
-        role: roleStocke,
-        matricule: matriculeStocke,
-      });
-    }
+          matricule:
+            decoded.matricule ||
+            matriculeStocke,
+        });
+      } else {
+        setInfos({
+          role: roleStocke,
+          matricule: matriculeStocke,
+        });
+      }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   useEffect(() => {

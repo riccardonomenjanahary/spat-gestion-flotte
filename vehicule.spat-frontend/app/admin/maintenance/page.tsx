@@ -136,14 +136,24 @@ export default function MaintenancePage() {
   };
 
   useEffect(() => {
-    charger();
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        charger();
 
-    const interval = window.setInterval(() => {
-      charger(true);
-    }, 15000);
+        const interval = window.setInterval(() => {
+          charger(true);
+        }, 15000);
 
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => window.clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      })();
+    }, 0);
+    return () => {
+      window.clearTimeout(initialisation);
+      nettoyer?.();
+    };
   }, []);
 
   const maintenancesFiltrees = useMemo(() => {
@@ -344,7 +354,7 @@ export default function MaintenancePage() {
                   ) : maintenancesFiltrees.length === 0 ? (
                     <tr>
                       <td colSpan={4} style={emptyStyle}>
-                        Aucun dossier d'entretien.
+                        Aucun dossier d&apos;entretien.
                       </td>
                     </tr>
                   ) : (

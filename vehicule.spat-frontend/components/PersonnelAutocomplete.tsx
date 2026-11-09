@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Search, UserRound } from "lucide-react";
 
@@ -22,6 +22,7 @@ interface PersonnelAutocompleteProps {
   placeholder?: string;
   style?: CSSProperties;
   afficherFiltresRecherche?: boolean;
+  limiterADirection?: boolean;
 }
 
 type ChampRecherche = "tous" | "nom" | "prenom" | "matricule" | "email";
@@ -58,7 +59,9 @@ export default function PersonnelAutocomplete({
   placeholder = "Tapez un nom, matricule ou poste...",
   style,
   afficherFiltresRecherche = false,
+  limiterADirection = false,
 }: PersonnelAutocompleteProps) {
+  const API = process.env.NEXT_PUBLIC_API_URL;
   const id = useId();
   const [personnels, setPersonnels] = useState<PersonnelSelection[]>([]);
   const [recherche, setRecherche] = useState("");
@@ -68,12 +71,22 @@ export default function PersonnelAutocomplete({
   const [indisponible, setIndisponible] = useState(false);
   const [champRecherche, setChampRecherche] = useState<ChampRecherche>("tous");
 
-  const emailPourPersonnel = (personnel: PersonnelSelection) =>
-    emailsParMatricule?.[personnel.matricule.trim()]?.trim() || personnel.email?.trim() || "";
+  const emailPourPersonnel = useCallback((personnel: PersonnelSelection) =>
+    emailsParMatricule?.[personnel.matricule.trim()]?.trim() || personnel.email?.trim() || "", [emailsParMatricule]);
 
   useEffect(() => {
     let actif = true;
-    chargerPersonnels()
+    const chargement = limiterADirection
+      ? (!API ? Promise.reject(new Error("API indisponible")) : fetch(`${API}/personnels/ma-direction`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }, cache: "no-store",
+        }).then(async (response) => {
+          if (!response.ok) throw new Error("Le personnel de votre direction ne peut pas être chargé.");
+          const donnees: unknown = await response.json();
+          if (!Array.isArray(donnees)) throw new Error("Répertoire invalide");
+          return donnees as PersonnelSelection[];
+        }))
+      : chargerPersonnels();
+    chargement
       .then((donnees) => {
         if (actif) setPersonnels(donnees);
       })
@@ -86,7 +99,7 @@ export default function PersonnelAutocomplete({
     return () => {
       actif = false;
     };
-  }, []);
+  }, [API, limiterADirection]);
 
   const resultats = useMemo(() => {
     const terme = normaliser(recherche);
@@ -102,7 +115,7 @@ export default function PersonnelAutocomplete({
       return [personnel.matricule, personnel.nom, personnel.prenom, personnel.direction, personnel.poste, personnel.categorie, email]
         .some((valeur) => normaliser(valeur || "").includes(terme));
     });
-  }, [afficherFiltresRecherche, champRecherche, emailsParMatricule, personnels, recherche]);
+  }, [afficherFiltresRecherche, champRecherche, emailPourPersonnel, personnels, recherche]);
 
   const choisir = (personnel: PersonnelSelection) => {
     setSelection(personnel.matricule);

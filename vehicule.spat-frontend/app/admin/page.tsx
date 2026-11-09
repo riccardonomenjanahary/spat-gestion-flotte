@@ -115,11 +115,19 @@ export default function AdminPage() {
   }, [API, router]);
 
   useEffect(() => {
-    setRole(localStorage.getItem("role"));
+    const initialisation = window.setTimeout(() => {
+      setRole(localStorage.getItem("role"));
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   useEffect(() => {
-    void chargerStats();
+    const initialisation = window.setTimeout(() => {
+      void chargerStats();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [chargerStats]);
 
   const statistiques = useMemo(() => {

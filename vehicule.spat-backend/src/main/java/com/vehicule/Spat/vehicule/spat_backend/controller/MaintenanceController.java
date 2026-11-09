@@ -5,6 +5,7 @@ import com.vehicule.Spat.vehicule.spat_backend.model.Vehicule;
 import com.vehicule.Spat.vehicule.spat_backend.repository.VehiculeRepository;
 import com.vehicule.Spat.vehicule.spat_backend.service.MaintenanceService;
 import com.vehicule.Spat.vehicule.spat_backend.service.EntretienPeriodiqueService;
+import com.vehicule.Spat.vehicule.spat_backend.service.AccesParcoursService;
 import com.vehicule.Spat.vehicule.spat_backend.repository.ReservationRepository;
 import com.vehicule.Spat.vehicule.spat_backend.repository.UtilisateurRepository;
 import com.vehicule.Spat.vehicule.spat_backend.model.Reservation;
@@ -24,16 +25,19 @@ public class MaintenanceController {
     private final ReservationRepository reservationRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final EntretienPeriodiqueService entretienPeriodiqueService;
+    private final AccesParcoursService acces;
     public MaintenanceController(MaintenanceService maintenanceService,
                                  VehiculeRepository vehiculeRepository,
                                  ReservationRepository reservationRepository,
                                  UtilisateurRepository utilisateurRepository,
-                                 EntretienPeriodiqueService entretienPeriodiqueService) {
+                                 EntretienPeriodiqueService entretienPeriodiqueService,
+                                 AccesParcoursService acces) {
         this.maintenanceService = maintenanceService;
         this.vehiculeRepository = vehiculeRepository;
         this.reservationRepository = reservationRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.entretienPeriodiqueService = entretienPeriodiqueService;
+        this.acces = acces;
     }
 
     // Route existante conservée pour les utilisateurs déjà autorisés.
@@ -103,11 +107,11 @@ public class MaintenanceController {
         }
         entretien.setNatureIntervention(request.getNatureIntervention().trim());
         boolean assistantDirection = authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ASSISTANT_DIRECTION".equals(authority.getAuthority()));
+                .anyMatch(authority -> "ROLE_ASSISTANT_DIRECTION".equals(authority.getAuthority())
+                        || "ROLE_AGENT_PAR_INTERIM_ASSISTANT".equals(authority.getAuthority()));
         if (assistantDirection) {
             Utilisateur utilisateur = utilisateurRepository.findByMatricule(authentication.getName()).orElse(null);
-            boolean vehiculeDeLaDirection = utilisateur != null && utilisateur.getDirectionId() != null
-                    && vehicule.getDirections().stream().anyMatch(direction -> utilisateur.getDirectionId().equals(direction.getId()));
+            boolean vehiculeDeLaDirection = utilisateur != null && utilisateur.isActif() && acces.vehiculeAssistant(utilisateur, vehicule);
             if (!vehiculeDeLaDirection) {
                 return ResponseEntity.status(403).body("Le véhicule sélectionné n'est pas affecté à votre direction.");
             }

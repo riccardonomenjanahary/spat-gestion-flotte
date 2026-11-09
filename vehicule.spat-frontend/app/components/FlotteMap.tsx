@@ -25,6 +25,7 @@ export interface GpsPosition {
 }
 
 interface VehiculePositionLegacy {
+  dernierePositionLe?: string | null;
   id: number;
   immatriculation: string;
   modele?: string | null;
@@ -166,7 +167,7 @@ export default function FlotteMap({
       longitude: vehicule.longitude,
       vitesse: 0,
       statutGps: vehicule.statut ?? null,
-      timestampGps: Math.floor(Date.now() / 1000),
+      timestampGps: vehicule.dernierePositionLe ? Date.parse(vehicule.dernierePositionLe) / 1000 : null,
     }));
   }, [positions, vehicules]);
 

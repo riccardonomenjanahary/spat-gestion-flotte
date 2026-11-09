@@ -3,6 +3,7 @@ package com.vehicule.Spat.vehicule.spat_backend.controller;
 import com.vehicule.Spat.vehicule.spat_backend.model.*;
 import com.vehicule.Spat.vehicule.spat_backend.repository.*;
 import com.vehicule.Spat.vehicule.spat_backend.service.NotificationService;
+import com.vehicule.Spat.vehicule.spat_backend.service.AccesParcoursService;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,19 +30,22 @@ public class SignalementIncidentController {
     private final ReservationRepository reservationRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
+    private final AccesParcoursService acces;
 
     public SignalementIncidentController(
             SignalementIncidentRepository signalementRepository,
             VehiculeRepository vehiculeRepository,
             ReservationRepository reservationRepository,
             UtilisateurRepository utilisateurRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            AccesParcoursService acces
     ) {
         this.signalementRepository = signalementRepository;
         this.vehiculeRepository = vehiculeRepository;
         this.reservationRepository = reservationRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
+        this.acces = acces;
     }
 
     /**
@@ -86,10 +90,14 @@ public class SignalementIncidentController {
     @PostMapping
     @Transactional
     public ResponseEntity<?> signaler(@RequestBody Map<String, Object> body) {
+        Utilisateur auteur = acces.courant();
         try {
             Long vehiculeId = Long.parseLong(body.get("vehiculeId").toString());
             Vehicule vehicule = vehiculeRepository.findById(vehiculeId)
                     .orElseThrow(() -> new RuntimeException("Véhicule introuvable"));
+            if (!acces.peutLireVehicule(auteur, vehicule)) {
+                return ResponseEntity.status(403).body(Map.of("erreur", "Ce véhicule n'est pas affecté à votre direction."));
+            }
 
             SignalementIncident signalement = new SignalementIncident();
             String typeIncident = (String) body.get("typeIncident");
@@ -113,7 +121,12 @@ public class SignalementIncidentController {
 
             if (body.containsKey("reservationId") && body.get("reservationId") != null) {
                 Long reservationId = Long.parseLong(body.get("reservationId").toString());
-                reservationRepository.findById(reservationId).ifPresent(signalement::setReservation);
+                Reservation reservation = reservationRepository.findById(reservationId).orElse(null);
+                if (reservation == null || !acces.peutLire(auteur, reservation) || reservation.getVehicule() == null
+                        || !vehiculeId.equals(reservation.getVehicule().getId())) {
+                    return ResponseEntity.status(403).body(Map.of("erreur", "La mission ne correspond pas au véhicule de votre direction."));
+                }
+                signalement.setReservation(reservation);
             }
 
             // Signaleur

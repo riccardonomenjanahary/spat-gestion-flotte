@@ -34,7 +34,7 @@ public class NotificationEmailDispatchService {
         this.emailService = emailService;
     }
 
-    @Scheduled(fixedDelayString = "${app.notifications.email.poll-ms:15000}",
+    @Scheduled(scheduler = "mailDispatchScheduler", fixedDelayString = "${app.notifications.email.poll-ms:15000}",
             initialDelayString = "${app.notifications.email.initial-delay-ms:15000}")
     public void expedierNotificationsEnAttente() {
         if (!actif) return;

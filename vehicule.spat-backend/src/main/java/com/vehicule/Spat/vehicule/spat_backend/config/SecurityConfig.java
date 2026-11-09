@@ -246,19 +246,21 @@ public class SecurityConfig {
                                 .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT,
                                         Roles.CHEF_DIRECTION, Roles.AGENT_PAR_INTERIM_CHEF,
                                         Roles.MECANICIEN_DID, Roles.CHEF_ATELIER)
+                                .requestMatchers(HttpMethod.GET, "/api/personnels/ma-direction")
+                                .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
                                 .requestMatchers(HttpMethod.POST, "/api/indisponibilites")
                                 .hasAnyRole(Roles.ASSISTANT_DIRECTION, Roles.CHEF_DIRECTION,
                                         Roles.AGENT_PAR_INTERIM_ASSISTANT, Roles.AGENT_PAR_INTERIM_CHEF)
                                 .requestMatchers(HttpMethod.POST, "/api/carnet-bord", "/api/carnet-bord/**")
                                 .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
-                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION)
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
                                 .requestMatchers(HttpMethod.GET, "/api/carnet-bord", "/api/carnet-bord/**")
                                 .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
-                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION, Roles.CHEF_DGAL, Roles.AGENT_SURETE,
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT, Roles.CHEF_DGAL, Roles.AGENT_SURETE,
                                         Roles.CO_ADMIN, Roles.DIRECTEUR_DFP)
                                 .requestMatchers(HttpMethod.PUT, "/api/carnet-bord/**")
                                 .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE,
-                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION)
+                                        Roles.AGENT_FLOTTE, Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
                                 .requestMatchers(HttpMethod.GET, "/api/justificatifs/a-valider")
                                 .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.CHEF_DGAL)
 
@@ -509,9 +511,19 @@ public class SecurityConfig {
                                 )
                                 .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN)
 
+                                // Seuls les gestionnaires du parc modifient les véhicules.
+                                .requestMatchers(HttpMethod.POST, "/api/vehicules")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.AGENT_FLOTTE)
+                                .requestMatchers(HttpMethod.PUT, "/api/vehicules/*")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.AGENT_FLOTTE)
+                                .requestMatchers(HttpMethod.DELETE, "/api/vehicules/*")
+                                .hasAnyRole(Roles.ADMIN, Roles.SUPER_ADMIN, Roles.CHEF_SERVICE_LOGISTIQUE, Roles.AGENT_FLOTTE)
+
                                 // Le mécanicien DID doit pouvoir lire le
                                 // référentiel des véhicules pour ouvrir la
                                 // fiche de contrôle qui lui est attribuée.
+                                // L'assistant et son intérim utilisent cette
+                                // liste dans le formulaire de signalement d'incident.
                                 .requestMatchers(
                                         HttpMethod.GET,
                                         "/api/vehicules"
@@ -525,6 +537,8 @@ public class SecurityConfig {
                                         Roles.AGENT_FLOTTE,
                                         Roles.MECANICIEN_DID,
                                         Roles.AGENT_SURETE,
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT,
                                         "MECANICIEN",
                                         Roles.DIRECTEUR_DFP,
                                         Roles.CO_ADMIN
@@ -580,7 +594,7 @@ public class SecurityConfig {
                                 // Nouveau circuit d'entretien : chaque action est réservée à son rôle.
                                 .requestMatchers(HttpMethod.POST,
                                         "/api/maintenances/demandes-entretien")
-                                .hasAnyRole(Roles.MECANICIEN_DID, Roles.ASSISTANT_DIRECTION)
+                                .hasAnyRole(Roles.MECANICIEN_DID, Roles.ASSISTANT_DIRECTION, Roles.AGENT_PAR_INTERIM_ASSISTANT)
 
                                 .requestMatchers(HttpMethod.PUT,
                                         "/api/maintenances/*/decision-entretien")
@@ -641,7 +655,8 @@ public class SecurityConfig {
                                         Roles.CO_ADMIN,
                                         Roles.MECANICIEN_DID,
                                         "MECANICIEN",
-                                        Roles.ASSISTANT_DIRECTION
+                                        Roles.ASSISTANT_DIRECTION,
+                                        Roles.AGENT_PAR_INTERIM_ASSISTANT
                                 )
 
                                 .requestMatchers(

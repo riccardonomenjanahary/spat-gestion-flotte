@@ -1,3 +1,4 @@
+import type { Styles, UserOptions } from "jspdf-autotable";
 
 
 export type ExportAlign = "left" | "center" | "right";
@@ -174,10 +175,10 @@ export async function exportPdf<T>({
 
   const head = [colonnes.map(c => c.header)];
   const body = donnees.map(ligne => colonnes.map(c => texteExport(valeurColonne(ligne, c))));
-  const columnStyles: Record<number, any> = {};
+  const columnStyles: Record<number, Partial<Styles>> = {};
   colonnes.forEach((c, i) => { if (c.align) columnStyles[i] = { halign: c.align }; });
 
-  const tableOptions = {
+  const tableOptions: UserOptions = {
     startY: y,
     head,
     body,
@@ -195,14 +196,7 @@ export async function exportPdf<T>({
     },
   };
 
-  const autoTableFn = (doc as any).autoTable || (autoTableModule as any).default || (autoTableModule as any).autoTable || autoTableModule;
-  if (typeof (doc as any).autoTable === "function") {
-    (doc as any).autoTable(tableOptions);
-  } else if (typeof autoTableFn === "function") {
-    autoTableFn(doc, tableOptions);
-  } else {
-    throw new Error("jspdf-autotable n'est pas disponible.");
-  }
+  autoTableModule.autoTable(doc, tableOptions);
 
   doc.save(`${nettoyerNomFichier(nomFichier || titre)}_${datePourNomFichier()}.pdf`);
 }

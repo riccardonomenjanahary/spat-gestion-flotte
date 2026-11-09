@@ -36,61 +36,75 @@ export default function DirectionsPage() {
   const [role, setRole] = useState("");
 
   useEffect(() => {
-    setRole(localStorage.getItem("role") || "");
+    const initialisation = window.setTimeout(() => {
+      setRole(localStorage.getItem("role") || "");
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!API || !token) {
-      if (API) setErreurChargement("Session indisponible.");
-      else setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
-      if (!token) router.replace("/login");
-      else toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
-      setChargement(false);
-      return;
-    }
-    let actif = true;
-    setErreurChargement(null);
-
-    const chargerDirections = fetch(`${API}/directions`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Impossible de charger les directions.");
-        const data: unknown = await response.json();
-        if (!Array.isArray(data)) throw new Error("Format de réponse directions invalide.");
-        return data as Direction[];
-      });
-
-    const chargerVehicules = fetch(`${API}/vehicules`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" })
-      .then(async (response) => {
-        if (response.status === 401) {
-          router.replace("/login");
-          throw new Error("SESSION");
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        const token = localStorage.getItem("token");
+        if (!API || !token) {
+          if (API) setErreurChargement("Session indisponible.");
+          else setErreurChargement("NEXT_PUBLIC_API_URL n'est pas configurée.");
+          if (!token) router.replace("/login");
+          else toast.error("NEXT_PUBLIC_API_URL n'est pas configurée");
+          setChargement(false);
+          return;
         }
-        if (!response.ok) throw new Error("Impossible de charger les véhicules.");
-        const data: unknown = await response.json();
-        if (!Array.isArray(data)) throw new Error("Format de réponse véhicules invalide.");
-        return data as Vehicule[];
-      });
+        let actif = true;
+        setErreurChargement(null);
 
-    Promise.all([chargerVehicules, chargerDirections])
-      .then(([liste, listeDirections]) => {
-        if (!actif) return;
-        const donnees = Array.isArray(liste) ? liste : [];
-        const referentiel = Array.isArray(listeDirections) ? listeDirections : [];
-        setVehicules(donnees);
-        setDirections(referentiel);
-        setBrouillons(Object.fromEntries(donnees.map((vehicule) => [vehicule.id, directionsDuVehicule(vehicule, referentiel)])));
-      })
-      .catch((erreur: Error) => {
-        if (actif) {
-          setVehicules([]);
-          setBrouillons({});
-          setErreurChargement(erreur.message || "Impossible de charger les affectations.");
-        }
-        if (actif && erreur.message !== "SESSION") toast.error(erreur.message || "Impossible de charger les affectations.");
-      })
-      .finally(() => { if (actif) setChargement(false); });
-    return () => { actif = false; };
+        const chargerDirections = fetch(`${API}/directions`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" })
+          .then(async (response) => {
+            if (!response.ok) throw new Error("Impossible de charger les directions.");
+            const data: unknown = await response.json();
+            if (!Array.isArray(data)) throw new Error("Format de réponse directions invalide.");
+            return data as Direction[];
+          });
+
+        const chargerVehicules = fetch(`${API}/vehicules`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" })
+          .then(async (response) => {
+            if (response.status === 401) {
+              router.replace("/login");
+              throw new Error("SESSION");
+            }
+            if (!response.ok) throw new Error("Impossible de charger les véhicules.");
+            const data: unknown = await response.json();
+            if (!Array.isArray(data)) throw new Error("Format de réponse véhicules invalide.");
+            return data as Vehicule[];
+          });
+
+        Promise.all([chargerVehicules, chargerDirections])
+          .then(([liste, listeDirections]) => {
+            if (!actif) return;
+            const donnees = Array.isArray(liste) ? liste : [];
+            const referentiel = Array.isArray(listeDirections) ? listeDirections : [];
+            setVehicules(donnees);
+            setDirections(referentiel);
+            setBrouillons(Object.fromEntries(donnees.map((vehicule) => [vehicule.id, directionsDuVehicule(vehicule, referentiel)])));
+          })
+          .catch((erreur: Error) => {
+            if (actif) {
+              setVehicules([]);
+              setBrouillons({});
+              setErreurChargement(erreur.message || "Impossible de charger les affectations.");
+            }
+            if (actif && erreur.message !== "SESSION") toast.error(erreur.message || "Impossible de charger les affectations.");
+          })
+          .finally(() => { if (actif) setChargement(false); });
+        return () => { actif = false; };
+
+      })();
+    }, 0);
+    return () => {
+      window.clearTimeout(initialisation);
+      nettoyer?.();
+    };
   }, [API, router]);
 
   const lectureSeule = role !== "ADMIN" && role !== "SUPER_ADMIN";
@@ -158,7 +172,7 @@ export default function DirectionsPage() {
       <EnTete afficherNotifications={false} />
       <main style={{ minHeight: "100vh", padding: "28px clamp(16px, 4vw, 42px)", background: "#f3f4f6" }}>
         <div style={{ maxWidth: 1440, margin: "0 auto" }}>
-          <button type="button" onClick={() => router.push("/admin")} style={retourStyle}><ArrowLeft size={17} /> Retour à l'administration</button>
+          <button type="button" onClick={() => router.push("/admin")} style={retourStyle}><ArrowLeft size={17} /> Retour à l&apos;administration</button>
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, margin: "18px 0 22px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={iconeStyle}><Building2 size={22} /></span>

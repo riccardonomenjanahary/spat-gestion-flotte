@@ -1926,7 +1926,9 @@ function AssistantDirectionContent() {
                     })}
                   </div>
                   <PersonnelAutocomplete
+                    limiterADirection
                     label="Demandeur"
+                    onClear={() => setFormulaire((ancien) => ({ ...ancien, demandeurNom: "", demandeurPrenom: "", demandeurMatricule: "", demandeurEntite: "" }))}
                     onSelect={(personnel) => setFormulaire((ancien) => ({
                       ...ancien,
                       demandeurNom: personnel.nom,
@@ -2003,7 +2005,9 @@ function AssistantDirectionContent() {
                 icone={<UserRound size={18} color="#475569" />}
               >
                 <PersonnelAutocomplete
+                  limiterADirection
                   label="Demandeur"
+                  onClear={() => setFormulaire((ancien) => ({ ...ancien, demandeurNom: "", demandeurPrenom: "", demandeurMatricule: "", demandeurEntite: "" }))}
                   style={{ marginBottom: 16 }}
                   onSelect={(personnel) => {
                     setFormulaire((ancien) => ({
@@ -2239,7 +2243,9 @@ function AssistantDirectionContent() {
 
                           <div style={{ display: "grid", gap: 8 }}>
                             <PersonnelAutocomplete
+                              limiterADirection
                               label={`Sélectionner le passager ${index + 1}`}
+                              onClear={() => modifierNomPassager(index, "")}
                               placeholder="Rechercher ce passager par nom, matricule ou poste..."
                               onSelect={(personnel) =>
                                 modifierNomPassager(

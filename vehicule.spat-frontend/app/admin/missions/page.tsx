@@ -9,7 +9,7 @@ import EnTete from "@/components/EnTete";
 import type { GpsPosition } from "@/components/FlotteMap";
 import FlotteMap from "@/components/FlotteMap";
 
-const MissionCard = dynamic<any>(() => import("@/components/MissionCard"), {
+const MissionCard = dynamic(() => import("@/components/MissionCard"), {
   ssr: false,
   loading: () => (
     <div
@@ -100,7 +100,7 @@ export default function MissionsPage() {
     const date = new Date();
     return date.toISOString().split('T')[0];
   });
-  const [relevesHistorique, setRelevesHistorique] = useState<any[]>([]);
+  const [relevesHistorique, setRelevesHistorique] = useState<GpsPosition[]>([]);
   const [chargementHistorique, setChargementHistorique] = useState(false);
   const [erreurHistorique, setErreurHistorique] = useState<string | null>(null);
 
@@ -246,7 +246,7 @@ export default function MissionsPage() {
 
       const data: unknown = await res.json();
       if (!Array.isArray(data)) throw new Error("Format de réponse historique GPS invalide.");
-      setRelevesHistorique(data as any[]);
+      setRelevesHistorique(data as GpsPosition[]);
       setErreurHistorique(null);
     } catch (error) {
       console.warn("Actualisation historique GPS indisponible :", error);
@@ -258,22 +258,36 @@ export default function MissionsPage() {
   }, [API, selectionGps, dateHistorique]);
 
   useEffect(() => {
-    charger();
-    chargerGps();
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        charger();
+        chargerGps();
 
-    const intervalMissions = window.setInterval(() => charger(true), 10000);
-    const intervalGps = window.setInterval(chargerGps, 5000);
+        const intervalMissions = window.setInterval(() => charger(true), 10000);
+        const intervalGps = window.setInterval(chargerGps, 5000);
 
+        return () => {
+          window.clearInterval(intervalMissions);
+          window.clearInterval(intervalGps);
+        };
+
+      })();
+    }, 0);
     return () => {
-      window.clearInterval(intervalMissions);
-      window.clearInterval(intervalGps);
+      window.clearTimeout(initialisation);
+      nettoyer?.();
     };
   }, [charger, chargerGps]);
 
   useEffect(() => {
-    if (vueGps === "HISTORIQUE" && selectionGps !== null) {
-      chargerHistoriqueGps();
-    }
+    const initialisation = window.setTimeout(() => {
+      if (vueGps === "HISTORIQUE" && selectionGps !== null) {
+        chargerHistoriqueGps();
+      }
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, [vueGps, selectionGps, dateHistorique, chargerHistoriqueGps]);
 
   const gpsParVehicule = useMemo(() => {

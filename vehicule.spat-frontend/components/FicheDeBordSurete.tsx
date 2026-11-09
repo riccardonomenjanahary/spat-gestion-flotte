@@ -629,78 +629,88 @@ function TrajetCarte(props: {
   const k = kmParcourus(t);
 
   useEffect(() => {
-    if (t.enregistre || !vehiculeId || !t.depart || !t.arrivee) {
-      setInfoGps("");
-      return;
-    }
-    const debutMs = new Date(t.depart).getTime();
-    const finMs = new Date(t.arrivee).getTime();
-    if (!Number.isFinite(debutMs) || !Number.isFinite(finMs) || finMs < debutMs) {
-      setInfoGps("");
-      return;
-    }
-    const dates = datesInclusives(t.depart.slice(0, 10), t.arrivee.slice(0, 10));
-    if (dates.length === 0 || dates.length > 3) {
-      setInfoGps("La période saisie est trop longue pour une recherche GPS automatique.");
-      return;
-    }
-
-    const controller = new AbortController();
-    const delai = window.setTimeout(async () => {
-      const token = localStorage.getItem("token");
-      const API = process.env.NEXT_PUBLIC_API_URL || "";
-      if (!token || !API) return;
-      setChargementGps(true);
-      setInfoGps("Recherche des relevés GPS sur cette période…");
-      try {
-        const historiques = await Promise.all(dates.map(async (date) => {
-          const query = new URLSearchParams({ vehiculeId: String(vehiculeId), date });
-          const response = await fetch(`${API}/gps/historique?${query}`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error("Historique GPS indisponible.");
-          const data = await response.json() as { positions?: GpsHistoriquePoint[] };
-          return Array.isArray(data.positions) ? data.positions : [];
-        }));
-        if (controller.signal.aborted) return;
-
-        const relevés = historiques.flat().flatMap((point) => {
-          const instant = point.dateGps ? new Date(point.dateGps).getTime() : Number.NaN;
-          const kilometrage = Number(point.odometreKm);
-          return Number.isFinite(instant) && Number.isFinite(kilometrage) && kilometrage >= 0
-            ? [{ instant, kilometrage }]
-            : [];
-        });
-        const proche = (instantCible: number) => relevés
-          .map((point) => ({ ...point, ecart: Math.abs(point.instant - instantCible) }))
-          .filter((point) => point.ecart <= 30 * 60_000)
-          .sort((a, b) => a.ecart - b.ecart)[0];
-        const kmDepartGps = proche(debutMs);
-        const kmArriveeGps = proche(finMs);
-
-        if (kmDepartGps) onGpsKilometrage("kmDepart", fmt(kmDepartGps.kilometrage), t.depart, t.arrivee);
-        if (kmArriveeGps) onGpsKilometrage("kmArrivee", fmt(kmArriveeGps.kilometrage), t.depart, t.arrivee);
-
-        const synchronises = [kmDepartGps, kmArriveeGps].filter(Boolean).length;
-        setInfoGps(synchronises
-          ? `Kilométrage synchronisé depuis ${synchronises} relevé(s) GPS proche(s) des heures saisies.`
-          : relevés.length
-            ? "Relevés GPS trouvés, mais aucun relevé compteur assez proche des heures du trajet."
-            : "Aucun relevé GPS avec compteur kilométrique sur cette période.");
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setInfoGps(error instanceof Error ? error.message : "Historique GPS indisponible.");
+    let nettoyer: (() => void) | undefined;
+    const initialisation = window.setTimeout(() => {
+      nettoyer = (() => {
+        if (t.enregistre || !vehiculeId || !t.depart || !t.arrivee) {
+          setInfoGps("");
+          return;
         }
-      } finally {
-        if (!controller.signal.aborted) setChargementGps(false);
-      }
-    }, 450);
+        const debutMs = new Date(t.depart).getTime();
+        const finMs = new Date(t.arrivee).getTime();
+        if (!Number.isFinite(debutMs) || !Number.isFinite(finMs) || finMs < debutMs) {
+          setInfoGps("");
+          return;
+        }
+        const dates = datesInclusives(t.depart.slice(0, 10), t.arrivee.slice(0, 10));
+        if (dates.length === 0 || dates.length > 3) {
+          setInfoGps("La période saisie est trop longue pour une recherche GPS automatique.");
+          return;
+        }
 
+        const controller = new AbortController();
+        const delai = window.setTimeout(async () => {
+          const token = localStorage.getItem("token");
+          const API = process.env.NEXT_PUBLIC_API_URL || "";
+          if (!token || !API) return;
+          setChargementGps(true);
+          setInfoGps("Recherche des relevés GPS sur cette période…");
+          try {
+            const historiques = await Promise.all(dates.map(async (date) => {
+              const query = new URLSearchParams({ vehiculeId: String(vehiculeId), date });
+              const response = await fetch(`${API}/gps/historique?${query}`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                cache: "no-store",
+                signal: controller.signal,
+              });
+              if (!response.ok) throw new Error("Historique GPS indisponible.");
+              const data = await response.json() as { positions?: GpsHistoriquePoint[] };
+              return Array.isArray(data.positions) ? data.positions : [];
+            }));
+            if (controller.signal.aborted) return;
+
+            const relevés = historiques.flat().flatMap((point) => {
+              const instant = point.dateGps ? new Date(point.dateGps).getTime() : Number.NaN;
+              const kilometrage = Number(point.odometreKm);
+              return Number.isFinite(instant) && Number.isFinite(kilometrage) && kilometrage >= 0
+                ? [{ instant, kilometrage }]
+                : [];
+            });
+            const proche = (instantCible: number) => relevés
+              .map((point) => ({ ...point, ecart: Math.abs(point.instant - instantCible) }))
+              .filter((point) => point.ecart <= 30 * 60_000)
+              .sort((a, b) => a.ecart - b.ecart)[0];
+            const kmDepartGps = proche(debutMs);
+            const kmArriveeGps = proche(finMs);
+
+            if (kmDepartGps) onGpsKilometrage("kmDepart", fmt(kmDepartGps.kilometrage), t.depart, t.arrivee);
+            if (kmArriveeGps) onGpsKilometrage("kmArrivee", fmt(kmArriveeGps.kilometrage), t.depart, t.arrivee);
+
+            const synchronises = [kmDepartGps, kmArriveeGps].filter(Boolean).length;
+            setInfoGps(synchronises
+              ? `Kilométrage synchronisé depuis ${synchronises} relevé(s) GPS proche(s) des heures saisies.`
+              : relevés.length
+                ? "Relevés GPS trouvés, mais aucun relevé compteur assez proche des heures du trajet."
+                : "Aucun relevé GPS avec compteur kilométrique sur cette période.");
+          } catch (error) {
+            if (!controller.signal.aborted) {
+              setInfoGps(error instanceof Error ? error.message : "Historique GPS indisponible.");
+            }
+          } finally {
+            if (!controller.signal.aborted) setChargementGps(false);
+          }
+        }, 450);
+
+        return () => {
+          window.clearTimeout(delai);
+          controller.abort();
+        };
+
+      })();
+    }, 0);
     return () => {
-      window.clearTimeout(delai);
-      controller.abort();
+      window.clearTimeout(initialisation);
+      nettoyer?.();
     };
   }, [vehiculeId, t.depart, t.arrivee, t.enregistre, onGpsKilometrage]);
 
@@ -793,81 +803,85 @@ export default function FicheDeBordSurete() {
   const maintenant = useMaintenant();
 
   useEffect(() => {
-    const ficheEnCours = lireEnCours();
-    if (ficheEnCours?.debut && ficheEnCours.debut.endsWith("T07:00")) {
+    const initialisation = window.setTimeout(() => {
+      const ficheEnCours = lireEnCours();
+      if (ficheEnCours?.debut && ficheEnCours.debut.endsWith("T07:00")) {
 
-      ficheEnCours.debut = "";
-      ecrireEnCours(ficheEnCours);
-    }
-    setFiche(ficheEnCours);
-    setArchives(listerArchives());
-    setPret(true);
-    const API = process.env.NEXT_PUBLIC_API_URL || "";
-    const headers = { Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" };
-    if (!API) return;
-    Promise.all([
-      fetch(`${API}/fiches-surete/profil`, { headers }).then((res) => res.ok ? res.json() : null).catch(() => null),
-      fetch(`${API}/carnet-bord`, { headers, cache: "no-store" }).then((res) => res.ok ? res.json() : []).catch(() => []),
-      fetch(`${API}/gps/positions`, { headers, cache: "no-store" }).then((res) => res.ok ? res.json() : []).catch(() => []),
-    ]).then(([profil, carnetsData, positionsData]) => {
-      const carnets = Array.isArray(carnetsData) ? carnetsData as CarnetHistorique[] : [];
-      const positions = Array.isArray(positionsData) ? positionsData as GpsPosition[] : [];
-      const immatNormalisee = normaliserImmatriculation("1205 TCA");
-      const positionSurete = positions.find((position) => normaliserImmatriculation(position.immatriculation) === immatNormalisee);
-      const carnetSurete = carnets.find((carnet) => normaliserImmatriculation(carnet.vehicule?.immatriculation) === immatNormalisee);
-      const vehiculeId = positionSurete?.vehiculeId ?? carnetSurete?.vehiculeId ?? carnetSurete?.vehicule?.id ?? null;
-      const carnetsSurete = carnets.filter((carnet) =>
-        vehiculeId != null
-          ? Number(carnet.vehiculeId ?? carnet.vehicule?.id) === vehiculeId
-          : normaliserImmatriculation(carnet.vehicule?.immatriculation) === immatNormalisee
-      );
-      const aujourdHui = dateLocaleDuJour();
-      const trajetsDuJour = carnetsSurete
-        .filter((carnet) => String(carnet.dateSortie || "").slice(0, 10) === aujourdHui)
-        .sort((a, b) => String(a.dateSortie).localeCompare(String(b.dateSortie)));
-      const dernierCarnetAvecRetour = [...carnetsSurete]
-        .sort((a, b) => String(b.dateRetour || b.dateSortie).localeCompare(String(a.dateRetour || a.dateSortie)))
-        .find((carnet) => carnet.kilometrageRetour != null);
-      const carnetEnCours = [...carnetsSurete]
-        .sort((a, b) => String(b.dateSortie).localeCompare(String(a.dateSortie)))
-        .find((carnet) => carnet.dateRetour == null && carnet.kilometrageDepart != null);
-      const kmGPS = positionSurete?.odometreKm;
-      const kmReference = kmGPS != null && Number.isFinite(kmGPS)
-        ? String(kmGPS)
-        : dernierCarnetAvecRetour?.kilometrageRetour != null
-          ? String(dernierCarnetAvecRetour.kilometrageRetour)
-          : carnetEnCours?.kilometrageDepart != null
-            ? String(carnetEnCours.kilometrageDepart)
-            : "";
-      const sourceKm = kmGPS != null && Number.isFinite(kmGPS)
-        ? "GPS en temps réel"
-        : dernierCarnetAvecRetour?.kilometrageRetour != null
-          ? "dernier retour du carnet de bord"
-          : carnetEnCours?.kilometrageDepart != null
-            ? "départ du carnet en cours"
-            : "aucun relevé disponible";
-
-      setVehiculeSureteId(vehiculeId);
-      setImmatriculationSurete(positionSurete?.immatriculation || carnetSurete?.vehicule?.immatriculation || "1205 TCA");
-      setKilometrageInitial(kmReference);
-      setSourceKilometrageInitial(sourceKm);
-      setTrajetsHistorique(trajetsDuJour);
-
-      if (profil?.nomComplet) {
-        const profilCharge = { nomComplet: profil.nomComplet, matricule: profil.matricule || "" };
-        setProfilAgent(profilCharge);
+        ficheEnCours.debut = "";
+        ecrireEnCours(ficheEnCours);
       }
-      setFiche((actuelle) => actuelle ? {
-        ...actuelle,
-        agent: actuelle.agent || profil?.nomComplet || "",
-        matricule: actuelle.matricule || profil?.matricule || "",
-        immatriculation: positionSurete?.immatriculation || carnetSurete?.vehicule?.immatriculation || actuelle.immatriculation,
-        depart: { ...actuelle.depart, km: actuelle.depart.km || kmReference },
-        trajets: actuelle.trajets.map((trajet, index) => index === 0 && !trajet.kmDepart
-          ? { ...trajet, kmDepart: kmReference }
-          : trajet),
-      } : actuelle);
-    }).catch(() => undefined);
+      setFiche(ficheEnCours);
+      setArchives(listerArchives());
+      setPret(true);
+      const API = process.env.NEXT_PUBLIC_API_URL || "";
+      const headers = { Authorization: `Bearer ${localStorage.getItem("token")}`, Accept: "application/json" };
+      if (!API) return;
+      Promise.all([
+        fetch(`${API}/fiches-surete/profil`, { headers }).then((res) => res.ok ? res.json() : null).catch(() => null),
+        fetch(`${API}/carnet-bord`, { headers, cache: "no-store" }).then((res) => res.ok ? res.json() : []).catch(() => []),
+        fetch(`${API}/gps/positions`, { headers, cache: "no-store" }).then((res) => res.ok ? res.json() : []).catch(() => []),
+      ]).then(([profil, carnetsData, positionsData]) => {
+        const carnets = Array.isArray(carnetsData) ? carnetsData as CarnetHistorique[] : [];
+        const positions = Array.isArray(positionsData) ? positionsData as GpsPosition[] : [];
+        const immatNormalisee = normaliserImmatriculation("1205 TCA");
+        const positionSurete = positions.find((position) => normaliserImmatriculation(position.immatriculation) === immatNormalisee);
+        const carnetSurete = carnets.find((carnet) => normaliserImmatriculation(carnet.vehicule?.immatriculation) === immatNormalisee);
+        const vehiculeId = positionSurete?.vehiculeId ?? carnetSurete?.vehiculeId ?? carnetSurete?.vehicule?.id ?? null;
+        const carnetsSurete = carnets.filter((carnet) =>
+          vehiculeId != null
+            ? Number(carnet.vehiculeId ?? carnet.vehicule?.id) === vehiculeId
+            : normaliserImmatriculation(carnet.vehicule?.immatriculation) === immatNormalisee
+        );
+        const aujourdHui = dateLocaleDuJour();
+        const trajetsDuJour = carnetsSurete
+          .filter((carnet) => String(carnet.dateSortie || "").slice(0, 10) === aujourdHui)
+          .sort((a, b) => String(a.dateSortie).localeCompare(String(b.dateSortie)));
+        const dernierCarnetAvecRetour = [...carnetsSurete]
+          .sort((a, b) => String(b.dateRetour || b.dateSortie).localeCompare(String(a.dateRetour || a.dateSortie)))
+          .find((carnet) => carnet.kilometrageRetour != null);
+        const carnetEnCours = [...carnetsSurete]
+          .sort((a, b) => String(b.dateSortie).localeCompare(String(a.dateSortie)))
+          .find((carnet) => carnet.dateRetour == null && carnet.kilometrageDepart != null);
+        const kmGPS = positionSurete?.odometreKm;
+        const kmReference = kmGPS != null && Number.isFinite(kmGPS)
+          ? String(kmGPS)
+          : dernierCarnetAvecRetour?.kilometrageRetour != null
+            ? String(dernierCarnetAvecRetour.kilometrageRetour)
+            : carnetEnCours?.kilometrageDepart != null
+              ? String(carnetEnCours.kilometrageDepart)
+              : "";
+        const sourceKm = kmGPS != null && Number.isFinite(kmGPS)
+          ? "GPS en temps réel"
+          : dernierCarnetAvecRetour?.kilometrageRetour != null
+            ? "dernier retour du carnet de bord"
+            : carnetEnCours?.kilometrageDepart != null
+              ? "départ du carnet en cours"
+              : "aucun relevé disponible";
+
+        setVehiculeSureteId(vehiculeId);
+        setImmatriculationSurete(positionSurete?.immatriculation || carnetSurete?.vehicule?.immatriculation || "1205 TCA");
+        setKilometrageInitial(kmReference);
+        setSourceKilometrageInitial(sourceKm);
+        setTrajetsHistorique(trajetsDuJour);
+
+        if (profil?.nomComplet) {
+          const profilCharge = { nomComplet: profil.nomComplet, matricule: profil.matricule || "" };
+          setProfilAgent(profilCharge);
+        }
+        setFiche((actuelle) => actuelle ? {
+          ...actuelle,
+          agent: actuelle.agent || profil?.nomComplet || "",
+          matricule: actuelle.matricule || profil?.matricule || "",
+          immatriculation: positionSurete?.immatriculation || carnetSurete?.vehicule?.immatriculation || actuelle.immatriculation,
+          depart: { ...actuelle.depart, km: actuelle.depart.km || kmReference },
+          trajets: actuelle.trajets.map((trajet, index) => index === 0 && !trajet.kmDepart
+            ? { ...trajet, kmDepart: kmReference }
+            : trajet),
+        } : actuelle);
+      }).catch(() => undefined);
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   useEffect(() => {
@@ -1132,7 +1146,7 @@ export default function FicheDeBordSurete() {
           </Champ>
           {u.statut === "" && (
             <div>
-              <button type="button" onClick={declencherUrgence} style={bouton("#dc2626")}>Déclencher l'urgence</button>
+              <button type="button" onClick={declencherUrgence} style={bouton("#dc2626")}>Déclencher l&apos;urgence</button>
             </div>
           )}
           {u.statut === "EN_COURS" && (
@@ -1142,7 +1156,7 @@ export default function FicheDeBordSurete() {
                 {maintenant ? ` (${dureeTxt(minutesEntre(u.declencheeLe, maintenant))})` : ""}
               </p>
               <div>
-                <button type="button" onClick={cloturerUrgence} style={bouton("#16a34a")}>Clôturer l'urgence</button>
+                <button type="button" onClick={cloturerUrgence} style={bouton("#16a34a")}>Clôturer l&apos;urgence</button>
               </div>
             </>
           )}

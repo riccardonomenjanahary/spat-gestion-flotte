@@ -1435,52 +1435,14 @@ public class ReservationController {
         }
 
         private List<Vehicule> trouverVehiculesAffectesDirection(Long directionId, String typeVehicule) {
-                List<String> alias = switch (directionId.intValue()) {
-                        case 1 -> List.of("DG", "DIRECTION GENERALE");
-                        case 2 -> List.of("AUDIT", "GESTION DES RISQUES");
-                        case 3 -> List.of("DAJ", "AFFAIRES JURIDIQUES");
-                        case 4 -> List.of("DIRCAP", "CAPITAINERIE");
-                        case 5 -> List.of("DID", "INFRASTRUCTURE ET DEVELOPPEMENT");
-                        case 6 -> List.of("MARKETING");
-                        case 7 -> List.of("DIREX", "EXPLOITATION");
-                        case 8 -> List.of("DFP", "FINANCIERE ET PERFORMANCE");
-                        case 9 -> List.of("DRH", "RESSOURCES HUMAINES");
-                        case 10 -> List.of("DDI", "DIGITALISATION ET INNOVATION");
-                        case 11 -> List.of("SG", "SECRETARIAT GENERAL");
-                        case 12 -> List.of("DMC", "MARKETING ET COMMUNICATION");
-                        case 13 -> List.of("DAGR", "AFFAIRES GENERALES");
-                        default -> List.of();
-                };
                 return vehiculeRepository.findAll().stream()
                         .filter(vehicule -> "VOITURE".equals(typeVehicule)
                                 ? com.vehicule.Spat.vehicule.spat_backend.model.CategorieVehicule.estVoitureMutualisee(vehicule.getCategorie())
                                 : vehicule.getCategorie() != null
                                         && vehicule.getCategorie().toUpperCase(Locale.ROOT).contains("MOTO"))
-                        // La relation Admin > Affectation est la source de vérité.
-                        // Le texte historique n'est utilisé qu'en repli pour les
-                        // véhicules qui n'ont encore aucune relation migrée.
-                        .filter(vehicule -> (vehicule.getDirections() != null && vehicule.getDirections().stream()
-                                .anyMatch(direction -> directionId.equals(direction.getId())))
-                                || ((vehicule.getDirections() == null || vehicule.getDirections().isEmpty())
-                                && contientAliasAffectation(vehicule.getAffectation(), alias)))
+                        .filter(vehicule -> com.vehicule.Spat.vehicule.spat_backend.service.AccesParcoursService.estAffecteDirection(directionId, vehicule))
                         .sorted(Comparator.comparing(Vehicule::getId))
                         .toList();
-        }
-
-        private boolean contientAliasAffectation(String affectation, List<String> alias) {
-                if (affectation == null || affectation.isBlank()) return false;
-                String normalisee = Normalizer.normalize(affectation, Normalizer.Form.NFD)
-                        .replaceAll("\\p{M}", "")
-                        .toUpperCase(Locale.ROOT)
-                        .replaceAll("[^A-Z0-9]+", " ")
-                        .trim();
-                return alias.stream().map(valeur -> Normalizer.normalize(valeur, Normalizer.Form.NFD)
-                                .replaceAll("\\p{M}", "")
-                                .toUpperCase(Locale.ROOT)
-                                .replaceAll("[^A-Z0-9]+", " ")
-                                .trim())
-                        .anyMatch(valeur -> Arrays.asList(normalisee.split("\\s+")).contains(valeur)
-                                || normalisee.contains(valeur));
         }
 
         private boolean estVoiture(Vehicule vehicule) {
@@ -1564,11 +1526,13 @@ public class ReservationController {
             return ResponseEntity.badRequest().body("La date de retour doit être après la date de départ.");
         }
 
+        Utilisateur lecteur = accesParcours.courant();
         Set<String> statutsOccupants = Set.of("EN_ATTENTE", "EN_ATTENTE_AVIS_DID", "VALIDEE_N1", "VALIDEE", "PLANIFIEE", "CLOTUREE");
         List<Reservation> missions = reservationRepository.findAllByOrderByDateCreationDesc();
         List<Map<String, Object>> resultat = new ArrayList<>();
 
         for (Vehicule vehicule : vehiculeRepository.findAll()) {
+            if (!accesParcours.peutLireVehicule(lecteur, vehicule)) continue;
             // L'Assistant doit aussi voir la disponibilité des motos affectées
             // à sa direction, avec les mêmes règles que les voitures.
             if (!estVoiture(vehicule) && !estMoto(vehicule)) continue;

@@ -332,7 +332,11 @@ function ChauffeurContent() {
   };
 
   useEffect(() => {
-    charger();
+    const initialisation = window.setTimeout(() => {
+      charger();
+
+    }, 0);
+    return () => window.clearTimeout(initialisation);
   }, []);
 
   const cloturerMission = async (mission: Reservation) => {
@@ -397,13 +401,17 @@ function ChauffeurContent() {
     [missions]
   );
 
-  const missionsAVenir = useMemo(() => {
-    const maintenant = Date.now();
+  const [instantActuel, setInstantActuel] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setInstantActuel(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
+  const missionsAVenir = useMemo(() => {
     return missionsValidees.filter(
-      (mission) => new Date(mission.dateFin).getTime() >= maintenant
+      (mission) => new Date(mission.dateFin).getTime() >= instantActuel
     );
-  }, [missionsValidees]);
+  }, [missionsValidees, instantActuel]);
 
   const missionSelectionnee = useMemo(
     () =>
@@ -1110,7 +1118,7 @@ function ChauffeurContent() {
 
               {missionsValidees.length === 0 ? (
                 <div style={emptyStyle}>
-                  Aucun ticket validé n'est disponible pour une déclaration
+                  Aucun ticket validé n&apos;est disponible pour une déclaration
                   de consommation.
                 </div>
               ) : (

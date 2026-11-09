@@ -24,6 +24,14 @@ Le dépôt contient deux applications distinctes :
 
 Préparer une base PostgreSQL et configurer `SPAT_DB_URL`, `SPAT_DB_USERNAME`, `SPAT_DB_PASSWORD` et un secret JWT fort (`SPAT_JWT_SECRET`). Depuis `vehicule.spat-backend` :
 
+Pour une base neuve, les comptes initiaux ne sont créés que si leurs mots de passe sont fournis par `SPAT_BOOTSTRAP_ADMIN_PASSWORD`, `SPAT_BOOTSTRAP_COADMIN_PASSWORD` et `SPAT_BOOTSTRAP_SUPERADMIN_PASSWORD` (respectivement les matricules `2026012`, `2022002` et `2024005`). Aucun mot de passe par défaut n'est enregistré dans le code ; les comptes déjà existants ne sont jamais réinitialisés au démarrage. Le test de démarrage utilise une base H2 en mémoire, sans GPS ni emails réels.
+
+Pour le SMTP Gmail, configurer `SPAT_MAIL_USERNAME` avec le compte d'envoi retenu (`ingitspat@gmail.com`) et `SPAT_MAIL_PASSWORD` avec le mot de passe d'application Google de ce même compte. `SPAT_MAIL_FROM` est facultatif et utilise par défaut le compte SMTP. Sous Windows, `vehicule.spat-backend/scripts/configure-smtp.ps1` permet une saisie masquée du secret ; redémarrer le backend après sa mise à jour. La connexion SSL vérifie le nom du serveur et son certificat.
+
+Le polling GPS, la file de notifications email et les tâches métier disposent de planificateurs séparés : un SMTP lent ne bloque pas le GPS. Les emails de comptes utilisent le pool asynchrone borné `mailTaskExecutor`. La file de notifications conserve ses réservations atomiques et ses reprises limitées ; les tests couvrent les doublons, les pannes SMTP et les pièces jointes PDF.
+
+Les essais réels sont séparés des tests automatiques ordinaires : `LiveIntegrationDiagnosticsTest` ne s'exécute que si `SPAT_LIVE_DIAGNOSTICS=true`. Le test d'envoi exige aussi `SPAT_DIAGNOSTIC_RECIPIENT`, limité à la boîte SMTP elle-même ; il envoie un unique message technique puis recherche sa référence en lecture seule dans INBOX. Sous Windows, ajouter `-Djdk.net.unixdomain.tmpdir=.` à Maven en cas d'échec de création des sockets Java dans un chemin temporaire trop long. Le GPS est testé sans écriture dans la base métier. Une position ancienne ne constitue pas une validation de suivi en temps réel.
+
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
@@ -88,6 +96,8 @@ L'ancienne route **Dispatch** redirige vers les affectations enregistrées dans 
 - Les véhicules mutualisés et les motos sont planifiés par l'Assistant de direction ; les véhicules de mission et les autres demandes passent par le Service Logistique.
 - **Une mission hors ville utilise uniquement une voiture. Une moto ne peut pas être utilisée pour les missions hors ville.** Le Chef du Service Logistique choisit la voiture et le conducteur après vérification de la disponibilité.
 - **Les missions en ville peuvent utiliser soit une moto, soit une voiture**, selon les ressources disponibles et les règles d'affectation de la direction.
+- **Le signalement d'incident de l'Assistant de direction est limité aux véhicules affectés à sa direction**, y compris pour son intérim. DAJ, DID et DAGR partagent les deux voitures **5533AE et 5334AJ** ; chacune conserve sa moto affectée. Une indisponibilité ne bloque pas le signalement d'un nouvel incident.
+- **Les recherches de demandeurs et de passagers de l'Assistant de direction portent uniquement sur le personnel de sa direction**, pour tous les filtres (nom, prénom, matricule, email). Le serveur utilise la direction du compte connecté et applique les corrections du Super Admin au répertoire initial embarqué dans `vehicule.spat-backend/src/main/resources/data/personnels.json`.
 - **Le compte Chef de direction et son intérim sont masqués**. Les données existantes et la page sont conservées. La création des missions hors ville se fait dans l'espace du Chef du Service Logistique.
   Pour réactiver ces comptes, passer `COMPTE_CHEF_DIRECTION_ACTIF` à `true` dans `app/lib/roles.ts` et dans `vehicule.spat-backend/src/main/java/com/vehicule/Spat/vehicule/spat_backend/config/Roles.java`. Les comptes existants restent administrables ; aucune donnée n'est supprimée. Le formulaire partagé est dans `components/CreationMissionHorsVille.tsx`.
 - **L'espace Assistant de direction permet de planifier uniquement les missions en ville**, avec un formulaire rapide et le choix entre moto et voiture. Le parcours de création hors ville est conservé mais masqué ; il peut être réactivé dans `app/assistant-direction/page.tsx` avec l'indicateur `MISSIONS_HORS_VILLE_ASSISTANT_ACTIVEES`.

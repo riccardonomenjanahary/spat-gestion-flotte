@@ -51,7 +51,7 @@ export default function MissionCard({
   onTerminer,
 }: {
   mission: Mission;
-  onTerminer?: (mission: any) => void;
+  onTerminer?: (mission: Mission) => void;
 }) {
   const v = mission.vehicule;
   const c = mission.chauffeur;

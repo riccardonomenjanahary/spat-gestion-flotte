@@ -10,7 +10,7 @@ const FlotteMap = dynamic(() => import("@/components/FlotteMap"), {
 interface Vehicule {
   id: number;
   immatriculation: string;
-  modele?: string;
+  modele?: string | null;
   statut: string;
   gpsEquipe?: boolean | null;
   gpsDeviceId?: number | null;
@@ -23,18 +23,18 @@ interface Chauffeur {
   id?: number;
   nom: string;
   prenom: string;
-  telephone?: string;
+  telephone?: string | null;
   statut?: string;
 }
 
 interface Mission {
   id: number;
-  vehiculeId: number;
-  chauffeurId: number;
-  dateDebut: string;
+  vehiculeId?: number | null;
+  chauffeurId?: number | null;
+  dateDebut?: string | null;
   dateFin?: string | null;
-  vehicule?: Vehicule;
-  chauffeur?: Chauffeur;
+  vehicule?: Vehicule | null;
+  chauffeur?: Chauffeur | null;
   positionGps?: GpsPosition | null;
 }
 
