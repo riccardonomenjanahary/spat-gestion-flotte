@@ -1,0 +1,107 @@
+{
+  "duration": 164.133333,
+  "segments": [
+    {
+      "start": 1,
+      "end": 13,
+      "screen": "Connexion",
+      "text": "Cette présentation explique l'utilisation de l'espace Assistant de direction pour les missions en ville. Connectez-vous avec votre matricule et votre mot de passe."
+    },
+    {
+      "start": 15,
+      "end": 22,
+      "screen": "Accès au portail",
+      "text": "Après connexion, le portail ouvre l'espace correspondant à votre rôle et à votre direction."
+    },
+    {
+      "start": 23,
+      "end": 30.5,
+      "screen": "Calendrier",
+      "text": "Le calendrier permet de consulter les missions. Les boutons donnent accès à la création, à l'historique et aux autres démarches."
+    },
+    {
+      "start": 31,
+      "end": 36,
+      "screen": "Habilitation moto",
+      "text": "Habilitation moto ouvre la préparation d'un dossier de conducteur, avec son permis."
+    },
+    {
+      "start": 37,
+      "end": 46,
+      "screen": "Demande d'entretien",
+      "text": "Demande d'entretien permet de choisir le véhicule et de préciser la panne ou l'anomalie. Ici, la fenêtre est fermée sans envoi."
+    },
+    {
+      "start": 47,
+      "end": 54,
+      "screen": "Navigation",
+      "text": "Le bouton Annuler ferme un formulaire sans transmettre de demande. Revenons au calendrier pour préparer le déplacement."
+    },
+    {
+      "start": 55,
+      "end": 63,
+      "screen": "Avis d'indisponibilité",
+      "text": "Avis d'indisponibilité permet de saisir une période et un motif, puis de transmettre l'avis. Ici, aucun avis n'est envoyé."
+    },
+    {
+      "start": 65,
+      "end": 75,
+      "screen": "Nouvelle mission",
+      "text": "Cliquez sur Nouvelle mission. La zone est limitée à la ville de Toamasina. Choisissez le type de véhicule, puis utilisez Continuer pour ouvrir le formulaire."
+    },
+    {
+      "start": 76,
+      "end": 85,
+      "screen": "Choix du demandeur",
+      "text": "Recherchez le demandeur et sélectionnez la bonne personne. Le véhicule affecté à la direction et sa disponibilité apparaissent en haut."
+    },
+    {
+      "start": 86,
+      "end": 94,
+      "screen": "Conducteur et motif",
+      "text": "Le champ Conducteur présente les personnes habilitées disponibles. Ici, aucun résultat. Choisissez ensuite le motif."
+    },
+    {
+      "start": 94.2,
+      "end": 102,
+      "screen": "Destination et création",
+      "text": "Renseignez le départ, la destination et la durée estimée en minutes. Complétez les observations, puis cliquez sur Créer la mission."
+    },
+    {
+      "start": 103,
+      "end": 108,
+      "screen": "Mission créée",
+      "text": "La mission est créée. Ouvrez son détail dans le calendrier."
+    },
+    {
+      "start": 108.2,
+      "end": 117,
+      "screen": "Retour et clôture",
+      "text": "Au retour, indiquez la durée réelle dans le champ prévu. Le bouton Valider le retour et clôturer enregistre la fin du déplacement."
+    },
+    {
+      "start": 118,
+      "end": 127,
+      "screen": "Historique",
+      "text": "La confirmation affiche le résultat de la clôture. Historique du mois permet de retrouver les sorties enregistrées et de vérifier les informations de la mission."
+    },
+    {
+      "start": 129,
+      "end": 140,
+      "screen": "Dossier d'habilitation",
+      "text": "Revenons à Habilitation moto. Recherchez le personnel concerné, renseignez le poste et joignez le permis demandé. Vérifiez les pièces avant toute transmission du dossier."
+    },
+    {
+      "start": 141,
+      "end": 149.5,
+      "screen": "Entretien du véhicule",
+      "text": "Pour une demande d'entretien, choisissez le bon véhicule et décrivez précisément la panne. Envoyer la demande transmet le formulaire une fois complété."
+    },
+    {
+      "start": 151,
+      "end": 164,
+      "screen": "Incident et repères",
+      "text": "Signaler un incident sert à déclarer une anomalie sur un véhicule. Vérifiez toujours le véhicule concerné et les informations saisies. Pour chaque mission, contrôlez la confirmation de création, puis enregistrez le retour réel."
+    }
+  ]
+}

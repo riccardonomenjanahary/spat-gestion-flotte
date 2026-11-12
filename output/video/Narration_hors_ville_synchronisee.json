@@ -1,0 +1,247 @@
+{
+  "source": "C:\\Users\\Spat-Admin\\Downloads\\mission hors ville.mp4",
+  "duration": 448.333333,
+  "voice": "Microsoft Paul - français - synthèse locale",
+  "segments": [
+    {
+      "start": 1,
+      "end": 20,
+      "screen": "Connexion Logistique",
+      "text": "Cette démonstration suit une mission hors ville dans G P A SPAT. Nous passerons par la Logistique, le mécanicien D I D, la Logistique à nouveau, le Chef D G A L et l’Agent flotte. Chaque rôle intervient à une étape précise du circuit."
+    },
+    {
+      "start": 24,
+      "end": 35,
+      "screen": "Logistique - création",
+      "text": "Le Chef du Service Logistique ouvre Nouvelle mission. Dans Bénéficiaire de la mission, il sélectionne la personne concernée et renseigne sa direction, son département ou son service."
+    },
+    {
+      "start": 36,
+      "end": 44,
+      "screen": "Motif et destination",
+      "text": "Il précise ensuite l’objet du déplacement et le lieu de placement. La zone est fixée hors ville de Toamasina."
+    },
+    {
+      "start": 45,
+      "end": 53.5,
+      "screen": "Dates",
+      "text": "Le nombre de jours, le forfaitaire et les dates de départ et de retour définissent les conditions et la période de réservation."
+    },
+    {
+      "start": 54,
+      "end": 61.5,
+      "screen": "Choix des ressources",
+      "text": "Dans Choisir le véhicule, il sélectionne une voiture disponible, puis un chauffeur. Créer le ticket lance l’enregistrement."
+    },
+    {
+      "start": 63,
+      "end": 74,
+      "screen": "Inspection automatique",
+      "text": "Le popup confirme l’envoi automatique de la demande d’inspection visuelle. Le bouton Compris ferme ce message. Le ticket reste en attente de l’avis D I D avant validation."
+    },
+    {
+      "start": 77,
+      "end": 93,
+      "screen": "Connexion DID",
+      "text": "Nous passons au compte du mécanicien D I D. La création du ticket ne suffit pas à autoriser le départ. Le mécanicien doit d’abord examiner le véhicule et renseigner son contrôle avant mission."
+    },
+    {
+      "start": 96,
+      "end": 103.5,
+      "screen": "DID - fiche",
+      "text": "La notification indique le ticket à inspecter. Fiche de contrôle ouvre le dossier correspondant au véhicule de la mission."
+    },
+    {
+      "start": 104,
+      "end": 110.5,
+      "screen": "DID - relevés",
+      "text": "Le mécanicien vérifie les informations de départ et renseigne le compteur kilométrique ainsi que le niveau de carburant."
+    },
+    {
+      "start": 111,
+      "end": 121,
+      "screen": "DID - extérieur",
+      "text": "Dans Extérieur, le mécanicien renseigne la carrosserie, les pneus et les autres points visibles. Chaque case et commentaire doivent correspondre aux constats réels."
+    },
+    {
+      "start": 122,
+      "end": 132,
+      "screen": "DID - sécurité",
+      "text": "Les équipements de sécurité comprennent les ceintures, le freinage et les éléments de la liste. Les commentaires précisent les anomalies constatées."
+    },
+    {
+      "start": 133,
+      "end": 141,
+      "screen": "DID - moteur",
+      "text": "La rubrique Opération du moteur permet ensuite de renseigner les vérifications du démarrage, des bruits, des niveaux et des éléments associés."
+    },
+    {
+      "start": 142,
+      "end": 153,
+      "screen": "DID - transmission",
+      "text": "La fiche couvre également la boîte de vitesses puis les trains avant et arrière. Cette saisie conserve l’état du véhicule au départ et facilite la comparaison avec un contrôle ultérieur."
+    },
+    {
+      "start": 154,
+      "end": 165,
+      "screen": "DID - électricité",
+      "text": "Le mécanicien parcourt ensuite l’éclairage et le système électrique : feux, batterie et instruments de bord. Les commentaires servent à préciser toute particularité relevée pendant l’inspection."
+    },
+    {
+      "start": 166,
+      "end": 177.5,
+      "screen": "DID - observations",
+      "text": "La dernière partie concerne le circuit de climatisation et les observations générales. Avant de transmettre le contrôle, le mécanicien relit la fiche et consigne les informations utiles à la Logistique."
+    },
+    {
+      "start": 179,
+      "end": 184.5,
+      "screen": "DID - envoi",
+      "text": "Avis avant mission transmet le résultat du contrôle au Chef du Service Logistique."
+    },
+    {
+      "start": 188,
+      "end": 203,
+      "screen": "Retour connexion Logistique",
+      "text": "Nous revenons maintenant au Chef du Service Logistique. Le contrôle technique est une étape du circuit ; il ne remplace pas la décision de validation. La Logistique retrouve le ticket et consulte le dernier avis du mécanicien."
+    },
+    {
+      "start": 206,
+      "end": 215.5,
+      "screen": "Logistique - dernier avis",
+      "text": "Le ticket indique qu’un avis favorable a été reçu. Détails permet de vérifier le véhicule, le chauffeur et les informations du contrôle avant de poursuivre."
+    },
+    {
+      "start": 216,
+      "end": 221.5,
+      "screen": "Logistique - N1",
+      "text": "Valider numéro un enregistre la première validation et transmet la demande au Chef D G A L."
+    },
+    {
+      "start": 222,
+      "end": 232.5,
+      "screen": "Logistique - OM",
+      "text": "Télécharger l’ordre de mission produit le PDF. Ici, l’envoi au demandeur est indisponible, car aucune adresse email n’est enregistrée."
+    },
+    {
+      "start": 236,
+      "end": 251,
+      "screen": "Connexion DGAL",
+      "text": "Le circuit passe maintenant au Chef D G A L pour la seconde validation. Il contrôle le dossier transmis par la Logistique. L’ordre de mission doit être signé, déposé dans le ticket et validé avant cette décision finale."
+    },
+    {
+      "start": 255,
+      "end": 265,
+      "screen": "DGAL - dossier",
+      "text": "Dans Tickets à valider, le Chef D G A L retrouve la mission, les ressources affectées et la trace de la première validation. Il ouvre ensuite la section de l’ordre de mission signé."
+    },
+    {
+      "start": 266,
+      "end": 280,
+      "screen": "DGAL - sélection de pièce",
+      "text": "Le sélecteur de fichier sert à choisir la version signée de l’ordre de mission. Le bouton Déposer l’ajoute au dossier. La signature se fait avant le dépôt ; le portail conserve ensuite la pièce et son état de validation."
+    },
+    {
+      "start": 286.6,
+      "end": 289.8,
+      "screen": "DGAL - dépôt",
+      "text": "Le dépôt du document est confirmé."
+    },
+    {
+      "start": 290,
+      "end": 293.5,
+      "screen": "DGAL - validation pièce",
+      "text": "Valider approuve la pièce jointe."
+    },
+    {
+      "start": 294,
+      "end": 297.5,
+      "screen": "DGAL - N2",
+      "text": "Valider niveau deux termine le circuit de décision."
+    },
+    {
+      "start": 298,
+      "end": 311,
+      "screen": "DGAL - pilotage",
+      "text": "Après la validation, le Chef D G A L consulte le pilotage mensuel, l’historique des ordres de mission et les entretiens. Ces onglets servent à la supervision ; ils correspondent à des vues différentes du suivi du parc."
+    },
+    {
+      "start": 312,
+      "end": 320.5,
+      "screen": "DGAL - assurances et synthèse",
+      "text": "Assurances et sinistres présente les dossiers correspondants. Synthèse rassemble les indicateurs de suivi destinés au pilotage du département."
+    },
+    {
+      "start": 322,
+      "end": 337.5,
+      "screen": "DGAL - réquisitions",
+      "text": "Réquisitions D G A L ouvre un circuit distinct de mobilisation prioritaire. Le formulaire précise le véhicule, le motif, le bénéficiaire, la destination et la période. Cette fonction ne remplace pas la demande ordinaire hors ville."
+    },
+    {
+      "start": 338,
+      "end": 345,
+      "screen": "DGAL - réquisition non enregistrée",
+      "text": "Ici, le formulaire est seulement présenté. Aucune réquisition n’est enregistrée avant le passage à l’espace suivant."
+    },
+    {
+      "start": 349,
+      "end": 364,
+      "screen": "Connexion Agent flotte",
+      "text": "Nous passons enfin au compte Agent flotte. Son espace assure le suivi opérationnel du parc après les décisions. Il permet de consulter les missions, les informations G P S, le carburant, les assurances, les sinistres et le carnet de bord."
+    },
+    {
+      "start": 366,
+      "end": 373,
+      "screen": "Agent flotte - GPS",
+      "text": "Suivi flotte affiche la carte G P S. La date de dernière position doit être vérifiée avant toute interprétation."
+    },
+    {
+      "start": 374,
+      "end": 381,
+      "screen": "Agent flotte - missions",
+      "text": "Tickets et missions permet de retrouver les déplacements, les véhicules, les chauffeurs et les états de traitement."
+    },
+    {
+      "start": 382,
+      "end": 390,
+      "screen": "Agent flotte - carburant",
+      "text": "Carburant présente le suivi des consommations. Assurances et sinistres ouvre ensuite la gestion des couvertures et des dossiers déclarés."
+    },
+    {
+      "start": 391,
+      "end": 400,
+      "screen": "Agent flotte - police",
+      "text": "Nouvelle police d’assurance ouvre la saisie du véhicule, de l’assureur, des dates et de la pièce justificative. Enregistrer la police valide la saisie complète."
+    },
+    {
+      "start": 402,
+      "end": 415,
+      "screen": "Agent flotte - sinistre",
+      "text": "Nouveau dossier de sinistre permet de préciser le véhicule, la date, le conducteur, les circonstances, les dégâts et la prise en charge. Créer le dossier de sinistre sert à enregistrer une déclaration complète, avec ses références utiles."
+    },
+    {
+      "start": 416,
+      "end": 421,
+      "screen": "Agent flotte - fermeture sinistre",
+      "text": "Dans la démonstration, ce formulaire est refermé sans créer de nouveau dossier."
+    },
+    {
+      "start": 422,
+      "end": 434.5,
+      "screen": "Agent flotte - carnet",
+      "text": "Le bouton Carnet de bord ouvre la fiche de sortie et l’état des lieux. Sélectionnez la mission, indiquez le kilométrage de départ et renseignez l’état apparent, le carburant, les équipements et les anomalies éventuelles."
+    },
+    {
+      "start": 435,
+      "end": 443,
+      "screen": "Agent flotte - exports",
+      "text": "Enregistrer la sortie conserve la fiche complète. PDF, CSV et Excel permettent d’exporter le carnet de bord."
+    },
+    {
+      "start": 443.5,
+      "end": 448.2,
+      "screen": "Fin",
+      "text": "La préparation est terminée. L’Agent flotte poursuit le suivi."
+    }
+  ]
+}

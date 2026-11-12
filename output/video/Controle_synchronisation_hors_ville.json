@@ -1,0 +1,362 @@
+[
+  {
+    "passage": 1,
+    "ecran": "Connexion Logistique",
+    "debut": 1,
+    "fin_parole": 15.847,
+    "limite_ecran": 20,
+    "acceleration": 1.0,
+    "texte": "Cette démonstration suit une mission hors ville dans G P A SPAT. Nous passerons par la Logistique, le mécanicien D I D, la Logistique à nouveau, le Chef D G A L et l’Agent flotte. Chaque rôle intervient à une étape précise du circuit."
+  },
+  {
+    "passage": 2,
+    "ecran": "Logistique - création",
+    "debut": 24,
+    "fin_parole": 34.778,
+    "limite_ecran": 35,
+    "acceleration": 1.037,
+    "texte": "Le Chef du Service Logistique ouvre Nouvelle mission. Dans Bénéficiaire de la mission, il sélectionne la personne concernée et renseigne sa direction, son département ou son service."
+  },
+  {
+    "passage": 3,
+    "ecran": "Motif et destination",
+    "debut": 36,
+    "fin_parole": 42.975,
+    "limite_ecran": 44,
+    "acceleration": 1.0,
+    "texte": "Il précise ensuite l’objet du déplacement et le lieu de placement. La zone est fixée hors ville de Toamasina."
+  },
+  {
+    "passage": 4,
+    "ecran": "Dates",
+    "debut": 45,
+    "fin_parole": 51.944,
+    "limite_ecran": 53.5,
+    "acceleration": 1.0,
+    "texte": "Le nombre de jours, le forfaitaire et les dates de départ et de retour définissent les conditions et la période de réservation."
+  },
+  {
+    "passage": 5,
+    "ecran": "Choix des ressources",
+    "debut": 54,
+    "fin_parole": 61.28,
+    "limite_ecran": 61.5,
+    "acceleration": 1.102,
+    "texte": "Dans Choisir le véhicule, il sélectionne une voiture disponible, puis un chauffeur. Créer le ticket lance l’enregistrement."
+  },
+  {
+    "passage": 6,
+    "ecran": "Inspection automatique",
+    "debut": 63,
+    "fin_parole": 73.779,
+    "limite_ecran": 74,
+    "acceleration": 1.077,
+    "texte": "Le popup confirme l’envoi automatique de la demande d’inspection visuelle. Le bouton Compris ferme ce message. Le ticket reste en attente de l’avis D I D avant validation."
+  },
+  {
+    "passage": 7,
+    "ecran": "Connexion DID",
+    "debut": 77,
+    "fin_parole": 88.935,
+    "limite_ecran": 93,
+    "acceleration": 1.0,
+    "texte": "Nous passons au compte du mécanicien D I D. La création du ticket ne suffit pas à autoriser le départ. Le mécanicien doit d’abord examiner le véhicule et renseigner son contrôle avant mission."
+  },
+  {
+    "passage": 8,
+    "ecran": "DID - fiche",
+    "debut": 96,
+    "fin_parole": 103.278,
+    "limite_ecran": 103.5,
+    "acceleration": 1.05,
+    "texte": "La notification indique le ticket à inspecter. Fiche de contrôle ouvre le dossier correspondant au véhicule de la mission."
+  },
+  {
+    "passage": 9,
+    "ecran": "DID - relevés",
+    "debut": 104,
+    "fin_parole": 110.279,
+    "limite_ecran": 110.5,
+    "acceleration": 1.06,
+    "texte": "Le mécanicien vérifie les informations de départ et renseigne le compteur kilométrique ainsi que le niveau de carburant."
+  },
+  {
+    "passage": 10,
+    "ecran": "DID - extérieur",
+    "debut": 111,
+    "fin_parole": 120.687,
+    "limite_ecran": 121,
+    "acceleration": 1.0,
+    "texte": "Dans Extérieur, le mécanicien renseigne la carrosserie, les pneus et les autres points visibles. Chaque case et commentaire doivent correspondre aux constats réels."
+  },
+  {
+    "passage": 11,
+    "ecran": "DID - sécurité",
+    "debut": 122,
+    "fin_parole": 130.601,
+    "limite_ecran": 132,
+    "acceleration": 1.0,
+    "texte": "Les équipements de sécurité comprennent les ceintures, le freinage et les éléments de la liste. Les commentaires précisent les anomalies constatées."
+  },
+  {
+    "passage": 12,
+    "ecran": "DID - moteur",
+    "debut": 133,
+    "fin_parole": 140.778,
+    "limite_ecran": 141,
+    "acceleration": 1.033,
+    "texte": "La rubrique Opération du moteur permet ensuite de renseigner les vérifications du démarrage, des bruits, des niveaux et des éléments associés."
+  },
+  {
+    "passage": 13,
+    "ecran": "DID - transmission",
+    "debut": 142,
+    "fin_parole": 152.647,
+    "limite_ecran": 153,
+    "acceleration": 1.0,
+    "texte": "La fiche couvre également la boîte de vitesses puis les trains avant et arrière. Cette saisie conserve l’état du véhicule au départ et facilite la comparaison avec un contrôle ultérieur."
+  },
+  {
+    "passage": 14,
+    "ecran": "DID - électricité",
+    "debut": 154,
+    "fin_parole": 164.778,
+    "limite_ecran": 165,
+    "acceleration": 1.049,
+    "texte": "Le mécanicien parcourt ensuite l’éclairage et le système électrique : feux, batterie et instruments de bord. Les commentaires servent à préciser toute particularité relevée pendant l’inspection."
+  },
+  {
+    "passage": 15,
+    "ecran": "DID - observations",
+    "debut": 166,
+    "fin_parole": 177.28,
+    "limite_ecran": 177.5,
+    "acceleration": 1.083,
+    "texte": "La dernière partie concerne le circuit de climatisation et les observations générales. Avant de transmettre le contrôle, le mécanicien relit la fiche et consigne les informations utiles à la Logistique."
+  },
+  {
+    "passage": 16,
+    "ecran": "DID - envoi",
+    "debut": 179,
+    "fin_parole": 184.054,
+    "limite_ecran": 184.5,
+    "acceleration": 1.0,
+    "texte": "Avis avant mission transmet le résultat du contrôle au Chef du Service Logistique."
+  },
+  {
+    "passage": 17,
+    "ecran": "Retour connexion Logistique",
+    "debut": 188,
+    "fin_parole": 201.811,
+    "limite_ecran": 203,
+    "acceleration": 1.0,
+    "texte": "Nous revenons maintenant au Chef du Service Logistique. Le contrôle technique est une étape du circuit ; il ne remplace pas la décision de validation. La Logistique retrouve le ticket et consulte le dernier avis du mécanicien."
+  },
+  {
+    "passage": 18,
+    "ecran": "Logistique - dernier avis",
+    "debut": 206,
+    "fin_parole": 215.278,
+    "limite_ecran": 215.5,
+    "acceleration": 1.035,
+    "texte": "Le ticket indique qu’un avis favorable a été reçu. Détails permet de vérifier le véhicule, le chauffeur et les informations du contrôle avant de poursuivre."
+  },
+  {
+    "passage": 19,
+    "ecran": "Logistique - N1",
+    "debut": 216,
+    "fin_parole": 221.279,
+    "limite_ecran": 221.5,
+    "acceleration": 1.069,
+    "texte": "Valider numéro un enregistre la première validation et transmet la demande au Chef D G A L."
+  },
+  {
+    "passage": 20,
+    "ecran": "Logistique - OM",
+    "debut": 222,
+    "fin_parole": 231.01,
+    "limite_ecran": 232.5,
+    "acceleration": 1.0,
+    "texte": "Télécharger l’ordre de mission produit le PDF. Ici, l’envoi au demandeur est indisponible, car aucune adresse email n’est enregistrée."
+  },
+  {
+    "passage": 21,
+    "ecran": "Connexion DGAL",
+    "debut": 236,
+    "fin_parole": 249.857,
+    "limite_ecran": 251,
+    "acceleration": 1.0,
+    "texte": "Le circuit passe maintenant au Chef D G A L pour la seconde validation. Il contrôle le dossier transmis par la Logistique. L’ordre de mission doit être signé, déposé dans le ticket et validé avant cette décision finale."
+  },
+  {
+    "passage": 22,
+    "ecran": "DGAL - dossier",
+    "debut": 255,
+    "fin_parole": 264.78,
+    "limite_ecran": 265,
+    "acceleration": 1.116,
+    "texte": "Dans Tickets à valider, le Chef D G A L retrouve la mission, les ressources affectées et la trace de la première validation. Il ouvre ensuite la section de l’ordre de mission signé."
+  },
+  {
+    "passage": 23,
+    "ecran": "DGAL - sélection de pièce",
+    "debut": 266,
+    "fin_parole": 279.552,
+    "limite_ecran": 280,
+    "acceleration": 1.0,
+    "texte": "Le sélecteur de fichier sert à choisir la version signée de l’ordre de mission. Le bouton Déposer l’ajoute au dossier. La signature se fait avant le dépôt ; le portail conserve ensuite la pièce et son état de validation."
+  },
+  {
+    "passage": 24,
+    "ecran": "DGAL - dépôt",
+    "debut": 286.6,
+    "fin_parole": 289.169,
+    "limite_ecran": 289.8,
+    "acceleration": 1.0,
+    "texte": "Le dépôt du document est confirmé."
+  },
+  {
+    "passage": 25,
+    "ecran": "DGAL - validation pièce",
+    "debut": 290,
+    "fin_parole": 292.542,
+    "limite_ecran": 293.5,
+    "acceleration": 1.0,
+    "texte": "Valider approuve la pièce jointe."
+  },
+  {
+    "passage": 26,
+    "ecran": "DGAL - N2",
+    "debut": 294,
+    "fin_parole": 297.277,
+    "limite_ecran": 297.5,
+    "acceleration": 1.024,
+    "texte": "Valider niveau deux termine le circuit de décision."
+  },
+  {
+    "passage": 27,
+    "ecran": "DGAL - pilotage",
+    "debut": 298,
+    "fin_parole": 310.777,
+    "limite_ecran": 311,
+    "acceleration": 1.022,
+    "texte": "Après la validation, le Chef D G A L consulte le pilotage mensuel, l’historique des ordres de mission et les entretiens. Ces onglets servent à la supervision ; ils correspondent à des vues différentes du suivi du parc."
+  },
+  {
+    "passage": 28,
+    "ecran": "DGAL - assurances et synthèse",
+    "debut": 312,
+    "fin_parole": 320.278,
+    "limite_ecran": 320.5,
+    "acceleration": 1.036,
+    "texte": "Assurances et sinistres présente les dossiers correspondants. Synthèse rassemble les indicateurs de suivi destinés au pilotage du département."
+  },
+  {
+    "passage": 29,
+    "ecran": "DGAL - réquisitions",
+    "debut": 322,
+    "fin_parole": 337.277,
+    "limite_ecran": 337.5,
+    "acceleration": 1.011,
+    "texte": "Réquisitions D G A L ouvre un circuit distinct de mobilisation prioritaire. Le formulaire précise le véhicule, le motif, le bénéficiaire, la destination et la période. Cette fonction ne remplace pas la demande ordinaire hors ville."
+  },
+  {
+    "passage": 30,
+    "ecran": "DGAL - réquisition non enregistrée",
+    "debut": 338,
+    "fin_parole": 344.779,
+    "limite_ecran": 345,
+    "acceleration": 1.106,
+    "texte": "Ici, le formulaire est seulement présenté. Aucune réquisition n’est enregistrée avant le passage à l’espace suivant."
+  },
+  {
+    "passage": 31,
+    "ecran": "Connexion Agent flotte",
+    "debut": 349,
+    "fin_parole": 363.778,
+    "limite_ecran": 364,
+    "acceleration": 1.024,
+    "texte": "Nous passons enfin au compte Agent flotte. Son espace assure le suivi opérationnel du parc après les décisions. Il permet de consulter les missions, les informations G P S, le carburant, les assurances, les sinistres et le carnet de bord."
+  },
+  {
+    "passage": 32,
+    "ecran": "Agent flotte - GPS",
+    "debut": 366,
+    "fin_parole": 372.759,
+    "limite_ecran": 373,
+    "acceleration": 1.0,
+    "texte": "Suivi flotte affiche la carte G P S. La date de dernière position doit être vérifiée avant toute interprétation."
+  },
+  {
+    "passage": 33,
+    "ecran": "Agent flotte - missions",
+    "debut": 374,
+    "fin_parole": 380.313,
+    "limite_ecran": 381,
+    "acceleration": 1.0,
+    "texte": "Tickets et missions permet de retrouver les déplacements, les véhicules, les chauffeurs et les états de traitement."
+  },
+  {
+    "passage": 34,
+    "ecran": "Agent flotte - carburant",
+    "debut": 382,
+    "fin_parole": 389.778,
+    "limite_ecran": 390,
+    "acceleration": 1.061,
+    "texte": "Carburant présente le suivi des consommations. Assurances et sinistres ouvre ensuite la gestion des couvertures et des dossiers déclarés."
+  },
+  {
+    "passage": 35,
+    "ecran": "Agent flotte - police",
+    "debut": 391,
+    "fin_parole": 399.78,
+    "limite_ecran": 400,
+    "acceleration": 1.134,
+    "texte": "Nouvelle police d’assurance ouvre la saisie du véhicule, de l’assureur, des dates et de la pièce justificative. Enregistrer la police valide la saisie complète."
+  },
+  {
+    "passage": 36,
+    "ecran": "Agent flotte - sinistre",
+    "debut": 402,
+    "fin_parole": 414.781,
+    "limite_ecran": 415,
+    "acceleration": 1.135,
+    "texte": "Nouveau dossier de sinistre permet de préciser le véhicule, la date, le conducteur, les circonstances, les dégâts et la prise en charge. Créer le dossier de sinistre sert à enregistrer une déclaration complète, avec ses références utiles."
+  },
+  {
+    "passage": 37,
+    "ecran": "Agent flotte - fermeture sinistre",
+    "debut": 416,
+    "fin_parole": 420.654,
+    "limite_ecran": 421,
+    "acceleration": 1.0,
+    "texte": "Dans la démonstration, ce formulaire est refermé sans créer de nouveau dossier."
+  },
+  {
+    "passage": 38,
+    "ecran": "Agent flotte - carnet",
+    "debut": 422,
+    "fin_parole": 434.277,
+    "limite_ecran": 434.5,
+    "acceleration": 1.007,
+    "texte": "Le bouton Carnet de bord ouvre la fiche de sortie et l’état des lieux. Sélectionnez la mission, indiquez le kilométrage de départ et renseignez l’état apparent, le carburant, les équipements et les anomalies éventuelles."
+  },
+  {
+    "passage": 39,
+    "ecran": "Agent flotte - exports",
+    "debut": 435,
+    "fin_parole": 442.778,
+    "limite_ecran": 443,
+    "acceleration": 1.046,
+    "texte": "Enregistrer la sortie conserve la fiche complète. PDF, CSV et Excel permettent d’exporter le carnet de bord."
+  },
+  {
+    "passage": 40,
+    "ecran": "Fin",
+    "debut": 443.5,
+    "fin_parole": 447.98,
+    "limite_ecran": 448.2,
+    "acceleration": 1.073,
+    "texte": "La préparation est terminée. L’Agent flotte poursuit le suivi."
+  }
+]

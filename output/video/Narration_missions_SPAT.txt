@@ -1,0 +1,72 @@
+SÉQUENCE 01 - Introduction
+
+Cette présentation explique comment créer et suivre une mission dans GPA SPAT. Nous verrons d’abord les déplacements dans la ville de Toamasina, puis les missions hors ville. Pour chaque parcours, nous préciserons qui intervient, quels boutons utiliser et quelles vérifications effectuer avant de poursuivre.
+
+SÉQUENCE 02 - Accéder à l’espace Assistant de direction
+
+Nous sommes dans l’espace Assistant de direction. Cet espace permet de préparer les missions en ville, de consulter le calendrier et d’enregistrer les retours. Les véhicules proposés dépendent des affectations de la direction. Pour commencer, cliquez sur Nouvelle mission. Ce bouton ouvre la saisie d’un déplacement ; il ne correspond pas à une mission hors ville.
+
+SÉQUENCE 03 - Choisir le moyen matériel
+
+Choisissez le moyen matériel adapté : moto ou voiture. Le formulaire présente les véhicules affectés à votre direction ou à son groupe de directions. Une voiture mutualisée peut être utilisée par plusieurs directions, mais elle ne peut pas être réservée deux fois sur la même période. L’indication de disponibilité doit donc être vérifiée pour le créneau demandé.
+
+SÉQUENCE 04 - Sélectionner le demandeur
+
+Dans Demandeur, saisissez une partie du nom, du prénom, du matricule ou de l’email. La recherche s’effectue automatiquement dans les différents champs. Seul le personnel appartenant à la direction connectée est proposé. Sélectionnez la bonne personne dans les résultats : le bouton radio confirme son identité et complète les informations associées. Vérifiez le matricule avant de continuer.
+
+SÉQUENCE 05 - Départ, destination et durée
+
+Le choix Départ permet de partir immédiatement ou de préciser une date et une heure. Complétez la destination, l’objet du déplacement et sa durée estimée, exprimée en minutes. Cette durée réserve le véhicule jusqu’au retour prévu. Pour une réservation à une date future, respectez au moins vingt-quatre heures d’anticipation et les plages de départ prévues, de huit heures à midi ou de quatorze heures à dix-huit heures. Le parcours rapide du jour est distinct de cette réservation future.
+
+SÉQUENCE 06 - Créer la mission en ville
+
+Ajoutez les observations utiles, puis cliquez une seule fois sur Créer la mission. Le système vérifie les ressources et la période. Pour une voiture, le parcours rapide affecte un chauffeur disponible avec un permis valide. Pour une moto, sélectionnez le conducteur habilité lorsque le formulaire le demande. Après confirmation, vérifiez la référence, l’immatriculation et les horaires dans le calendrier.
+
+SÉQUENCE 07 - Comprendre un refus de réservation
+
+Si la création est refusée, lisez la cause affichée. Le véhicule peut être déjà réservé, réquisitionné, indisponible ou en entretien. L’assurance et la visite technique doivent couvrir toute la période. Le chauffeur peut aussi être occupé ou avoir un permis non valide jusqu’au retour prévu. Corrigez la cause ou choisissez un autre créneau autorisé ; répéter le clic ne supprime pas le blocage.
+
+SÉQUENCE 08 - Clôturer la sortie en ville
+
+Au retour, ouvrez la mission concernée et renseignez la date et l’heure réelles de retour. Elles doivent être postérieures au départ et ne peuvent pas être dans le futur. Complétez les observations, puis confirmez la clôture. La mission rejoint l’historique. Si un incident empêche une nouvelle utilisation, utilisez également Signaler un incident pour alerter les responsables et rendre le véhicule indisponible.
+
+SÉQUENCE 09 - Passer à la création hors ville
+
+Passons maintenant à l’espace Chef du Service Logistique. Les missions hors ville sont créées depuis cet espace. Cliquez sur Nouvelle mission, à côté de Navettes parapheurs PACT. Les navettes disposent de leur propre traitement ; pour notre exemple, nous ouvrons bien le formulaire d’une mission hors ville ordinaire.
+
+SÉQUENCE 10 - Renseigner le bénéficiaire et le déplacement
+
+Renseignez le bénéficiaire et son entité, puis les informations de déplacement : motif, destination, durée, dates de départ et de retour, forfaitaire et passagers. Le départ est prévu depuis SPAT Toamasina. La zone hors ville et le type voiture sont prédéfinis. Vérifiez que la période couvre tout le déplacement. Le matricule du bénéficiaire doit être exact, notamment pour retrouver son adresse lors de l’envoi de l’ordre de mission.
+
+SÉQUENCE 11 - Choisir voiture et chauffeur
+
+La section Choisir le véhicule fait partie du formulaire de création. Sélectionnez une voiture de mission disponible sur toute la période, puis le chauffeur. Le circuit ordinaire hors ville utilise les voitures seize quatorze W W A ou seize quinze W W A. Le contrôle porte aussi sur les autres missions du chauffeur et sur la validité de son permis jusqu’au retour prévu.
+
+SÉQUENCE 12 - Créer le ticket et lire le popup
+
+Cliquez sur Créer le ticket. La création transmet automatiquement la demande d’inspection visuelle au mécanicien DID. Le popup confirme la voiture concernée et précise qu’il faut attendre le retour du mécanicien pour valider. Aucun bouton supplémentaire d’envoi de la demande n’est nécessaire. À ce stade, la mission est enregistrée, mais son départ n’est pas encore autorisé.
+
+SÉQUENCE 13 - Réaliser l’inspection avant mission
+
+Le mécanicien DID retrouve la demande, vérifie le ticket et l’immatriculation, puis renseigne la fiche après l’inspection physique. La commande de contrôle avant mission enregistre la fiche et transmet un avis favorable. En présence d’une anomalie bloquante, le mécanicien utilise le traitement d’avis défavorable prévu et décrit le problème. Un contrôle favorable ne doit jamais être confirmé sans inspection.
+
+SÉQUENCE 14 - Première validation et remplacement
+
+De retour dans l’espace Logistique, vérifiez que le dernier avis DID est favorable pour la voiture toujours affectée. Cliquez ensuite sur Valider numéro un. Le dossier est transmis au Chef DGAL. Si l’avis est défavorable, choisissez une autre voiture disponible, adaptez le chauffeur si nécessaire et relancez l’inspection sur le même ticket. Un avis portant sur l’ancien véhicule ne valide pas son remplacement.
+
+SÉQUENCE 15 - Ordre de mission et signature
+
+Le bouton Télécharger l’ordre de mission produit le PDF. Le bouton Envoyer l’ordre de mission au demandeur transmet ce document à l’adresse enregistrée pour le bénéficiaire. Après signature manuelle, déposez la version signée dans les justificatifs de la réservation, au type Ordre de mission, puis faites valider la pièce. Le simple dépôt du fichier ne remplace pas sa validation.
+
+SÉQUENCE 16 - Seconde validation DGAL
+
+Le Chef DGAL ouvre la demande après la première validation. Il contrôle le dossier et utilise Valider niveau deux avant l’heure de départ. Le système vérifie de nouveau les ressources, les documents et les règles applicables. Un ordre de mission signé et validé est obligatoire pour la voiture de mission. Après succès, la mission hors ville est planifiée et son circuit de validation est achevé.
+
+SÉQUENCE 17 - Retour et clôture hors ville
+
+Au retour, la Logistique utilise Clôturer la mission pour engager le traitement de fin de mission et l’inspection d’arrivée. Cette étape est ouverte dans les vingt-quatre dernières heures de la période prévue, puis au retour. Le mécanicien renseigne le contrôle après mission. Lorsque son avis favorable est reçu, le bouton Avis du mécanicien permet à la Logistique de confirmer la clôture définitive. L’avis de départ ne remplace pas celui du retour.
+
+SÉQUENCE 18 - Repères à retenir
+
+Retenez les deux parcours. En ville, l’assistant crée la sortie, la suit et saisit le retour. Hors ville, la Logistique crée et affecte, le DID inspecte, la Logistique valide au premier niveau, puis le DGAL valide au second. Le retour nécessite son propre contrôle. À chaque étape, vérifiez les ressources, les pièces et le résultat affiché avant de poursuivre.
+

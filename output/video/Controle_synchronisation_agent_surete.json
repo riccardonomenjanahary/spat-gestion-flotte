@@ -1,0 +1,218 @@
+[
+  {
+    "passage": 1,
+    "ecran": "Connexion",
+    "debut": 1,
+    "fin_parole": 11.319,
+    "limite_ecran": 14.5,
+    "acceleration": 1.0,
+    "texte": "Cette présentation explique l'utilisation de l'espace Agent de sûreté. Connectez-vous avec votre compte pour accéder au suivi du véhicule et à la fiche de bord journalière."
+  },
+  {
+    "passage": 2,
+    "ecran": "Accueil",
+    "debut": 17,
+    "fin_parole": 21.063,
+    "limite_ecran": 22,
+    "acceleration": 1.0,
+    "texte": "Deux onglets donnent accès à la fiche de bord et au suivi GPS."
+  },
+  {
+    "passage": 3,
+    "ecran": "Carte GPS",
+    "debut": 22.2,
+    "fin_parole": 30.755,
+    "limite_ecran": 31.5,
+    "acceleration": 1.0,
+    "texte": "Dans Suivi GPS, la carte permet de consulter les positions disponibles. Les boutons donnent aussi accès aux distances et à l'historique."
+  },
+  {
+    "passage": 4,
+    "ecran": "Journal GPS",
+    "debut": 32,
+    "fin_parole": 35.169,
+    "limite_ecran": 36.5,
+    "acceleration": 1.0,
+    "texte": "Le journal des données est vide dans cet exemple."
+  },
+  {
+    "passage": 5,
+    "ecran": "Identification",
+    "debut": 37,
+    "fin_parole": 48.126,
+    "limite_ecran": 49,
+    "acceleration": 1.0,
+    "texte": "Revenons à la fiche de bord journalière. Renseignez le début de la mission, puis vérifiez la fin prévue. Le nom de l'agent et l'immatriculation permettent d'identifier la fiche."
+  },
+  {
+    "passage": 6,
+    "ecran": "État au départ",
+    "debut": 51,
+    "fin_parole": 61.482,
+    "limite_ecran": 63,
+    "acceleration": 1.0,
+    "texte": "Dans la partie Départ, relevez l'heure, le kilométrage du compteur et le niveau de carburant. Ces informations constituent le point de référence avant l'utilisation du véhicule."
+  },
+  {
+    "passage": 7,
+    "ecran": "Contrôles au départ",
+    "debut": 64,
+    "fin_parole": 71.286,
+    "limite_ecran": 74,
+    "acceleration": 1.0,
+    "texte": "Indiquez ensuite l'état de la carrosserie et des pneus, des feux, du gyrophare et de la radio, ainsi que la propreté constatée."
+  },
+  {
+    "passage": 8,
+    "ecran": "État au retour",
+    "debut": 76,
+    "fin_parole": 85.492,
+    "limite_ecran": 89,
+    "acceleration": 1.0,
+    "texte": "La partie Retour sert à relever les mêmes informations en fin de mission. Saisissez l'heure réelle et le nouveau kilométrage, puis comparez-les aux valeurs du départ."
+  },
+  {
+    "passage": 9,
+    "ecran": "Relevés réels",
+    "debut": 94,
+    "fin_parole": 103.833,
+    "limite_ecran": 106,
+    "acceleration": 1.0,
+    "texte": "Les valeurs saisies dans cette démonstration sont des exemples. En exploitation, les relevés doivent correspondre au compteur du véhicule et aux horaires réellement constatés."
+  },
+  {
+    "passage": 10,
+    "ecran": "Contrôles au retour",
+    "debut": 108,
+    "fin_parole": 117.092,
+    "limite_ecran": 119,
+    "acceleration": 1.0,
+    "texte": "Complétez le carburant restant et l'état du véhicule au retour. Signalez les différences observées pour conserver une trace précise de son utilisation."
+  },
+  {
+    "passage": 11,
+    "ecran": "Recherche du chauffeur",
+    "debut": 121,
+    "fin_parole": 130.228,
+    "limite_ecran": 132,
+    "acceleration": 1.0,
+    "texte": "La section suivante détaille les trajets. Recherchez le chauffeur dans le champ prévu, puis sélectionnez la personne correspondante dans les résultats proposés."
+  },
+  {
+    "passage": 12,
+    "ecran": "Départ du trajet",
+    "debut": 135,
+    "fin_parole": 143.542,
+    "limite_ecran": 145,
+    "acceleration": 1.0,
+    "texte": "Pour ce trajet, renseignez la date et l'heure de départ, le lieu de départ et la destination. Chaque déplacement doit être décrit séparément."
+  },
+  {
+    "passage": 13,
+    "ecran": "Arrivée du trajet",
+    "debut": 149,
+    "fin_parole": 158.351,
+    "limite_ecran": 160,
+    "acceleration": 1.0,
+    "texte": "Indiquez ensuite la date et l'heure d'arrivée, ainsi que les kilométrages de départ et d'arrivée. Vérifiez la cohérence des horaires et des compteurs avant d'enregistrer."
+  },
+  {
+    "passage": 14,
+    "ecran": "Motif et distance",
+    "debut": 166,
+    "fin_parole": 178.179,
+    "limite_ecran": 179.5,
+    "acceleration": 1.0,
+    "texte": "Précisez le motif du déplacement, ici une patrouille. Le total parcouru est calculé à partir des kilomètres saisis. Le bouton Enregistrer le trajet permet de sauvegarder ce déplacement."
+  },
+  {
+    "passage": 15,
+    "ecran": "Trajet enregistré",
+    "debut": 181,
+    "fin_parole": 189.777,
+    "limite_ecran": 190,
+    "acceleration": 1.017,
+    "texte": "Le message vert confirme l'enregistrement. Le trajet peut être modifié, et Ajouter un trajet permet de saisir un déplacement supplémentaire."
+  },
+  {
+    "passage": 16,
+    "ecran": "Carburant",
+    "debut": 192,
+    "fin_parole": 200.85,
+    "limite_ecran": 204,
+    "acceleration": 1.0,
+    "texte": "Dans Carburant, indiquez si un plein a été effectué. Si c'est le cas, renseignez la quantité ajoutée, puis le montant correspondant à l'achat."
+  },
+  {
+    "passage": 17,
+    "ecran": "Justificatif carburant",
+    "debut": 207,
+    "fin_parole": 216.968,
+    "limite_ecran": 220,
+    "acceleration": 1.0,
+    "texte": "Ajoutez le numéro du bon ou de la facture, puis le lieu du ravitaillement. Ces éléments permettent de rapprocher la consommation déclarée des justificatifs disponibles."
+  },
+  {
+    "passage": 18,
+    "ecran": "Type d'incident",
+    "debut": 223,
+    "fin_parole": 233.355,
+    "limite_ecran": 234,
+    "acceleration": 1.0,
+    "texte": "La section Incidents, anomalies ou observations permet de signaler une panne, un accident, un incident de sûreté ou un autre événement. Cochez la catégorie adaptée."
+  },
+  {
+    "passage": 19,
+    "ecran": "Description de l'incident",
+    "debut": 244,
+    "fin_parole": 251.614,
+    "limite_ecran": 254,
+    "acceleration": 1.0,
+    "texte": "Décrivez précisément le problème constaté. Dans cet exemple, l'agent signale un pneu crevé dans la catégorie Autre."
+  },
+  {
+    "passage": 20,
+    "ecran": "Heure et lieu",
+    "debut": 256,
+    "fin_parole": 261.322,
+    "limite_ecran": 265,
+    "acceleration": 1.0,
+    "texte": "Renseignez l'heure et le lieu de l'événement pour permettre de retrouver les circonstances de l'incident."
+  },
+  {
+    "passage": 21,
+    "ecran": "Mesures prises",
+    "debut": 267,
+    "fin_parole": 274.446,
+    "limite_ecran": 275.5,
+    "acceleration": 1.0,
+    "texte": "Indiquez aussi les mesures prises, comme le remplacement du pneu dans cet exemple. Relisez la fiche avant de la clôturer."
+  },
+  {
+    "passage": 22,
+    "ecran": "Confirmation de clôture",
+    "debut": 277,
+    "fin_parole": 284.778,
+    "limite_ecran": 285,
+    "acceleration": 1.076,
+    "texte": "Clôturer la mission ouvre une confirmation. La fiche finale ne sera plus modifiable. Vérifiez-la avant de valider."
+  },
+  {
+    "passage": 23,
+    "ecran": "Fiche enregistrée",
+    "debut": 287,
+    "fin_parole": 297.778,
+    "limite_ecran": 298,
+    "acceleration": 1.044,
+    "texte": "La fiche apparaît ensuite dans les fiches de bord enregistrées. Le bouton Fermer la fiche permet de quitter sa consultation. Les informations enregistrées restent consultables."
+  },
+  {
+    "passage": 24,
+    "ecran": "Consultation finale",
+    "debut": 300,
+    "fin_parole": 311.419,
+    "limite_ecran": 312,
+    "acceleration": 1.0,
+    "texte": "L'Agent de sûreté assure ainsi la traçabilité du véhicule : état au départ et au retour, trajets, carburant et incidents. Une saisie fidèle aux faits permet un suivi fiable de chaque mission."
+  }
+]

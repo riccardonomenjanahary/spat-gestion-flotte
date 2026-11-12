@@ -1,0 +1,155 @@
+[
+  {
+    "passage": 1,
+    "ecran": "Connexion",
+    "debut": 1,
+    "fin_parole": 10.582,
+    "limite_ecran": 13,
+    "acceleration": 1.0,
+    "texte": "Cette présentation explique l'utilisation de l'espace Assistant de direction pour les missions en ville. Connectez-vous avec votre matricule et votre mot de passe."
+  },
+  {
+    "passage": 2,
+    "ecran": "Accès au portail",
+    "debut": 15,
+    "fin_parole": 20.477,
+    "limite_ecran": 22,
+    "acceleration": 1.0,
+    "texte": "Après connexion, le portail ouvre l'espace correspondant à votre rôle et à votre direction."
+  },
+  {
+    "passage": 3,
+    "ecran": "Calendrier",
+    "debut": 23,
+    "fin_parole": 30.278,
+    "limite_ecran": 30.5,
+    "acceleration": 1.037,
+    "texte": "Le calendrier permet de consulter les missions. Les boutons donnent accès à la création, à l'historique et aux autres démarches."
+  },
+  {
+    "passage": 4,
+    "ecran": "Habilitation moto",
+    "debut": 31,
+    "fin_parole": 35.78,
+    "limite_ecran": 36,
+    "acceleration": 1.083,
+    "texte": "Habilitation moto ouvre la préparation d'un dossier de conducteur, avec son permis."
+  },
+  {
+    "passage": 5,
+    "ecran": "Demande d'entretien",
+    "debut": 37,
+    "fin_parole": 44.887,
+    "limite_ecran": 46,
+    "acceleration": 1.0,
+    "texte": "Demande d'entretien permet de choisir le véhicule et de préciser la panne ou l'anomalie. Ici, la fenêtre est fermée sans envoi."
+  },
+  {
+    "passage": 6,
+    "ecran": "Navigation",
+    "debut": 47,
+    "fin_parole": 53.779,
+    "limite_ecran": 54,
+    "acceleration": 1.101,
+    "texte": "Le bouton Annuler ferme un formulaire sans transmettre de demande. Revenons au calendrier pour préparer le déplacement."
+  },
+  {
+    "passage": 7,
+    "ecran": "Avis d'indisponibilité",
+    "debut": 55,
+    "fin_parole": 62.778,
+    "limite_ecran": 63,
+    "acceleration": 1.065,
+    "texte": "Avis d'indisponibilité permet de saisir une période et un motif, puis de transmettre l'avis. Ici, aucun avis n'est envoyé."
+  },
+  {
+    "passage": 8,
+    "ecran": "Nouvelle mission",
+    "debut": 65,
+    "fin_parole": 74.778,
+    "limite_ecran": 75,
+    "acceleration": 1.057,
+    "texte": "Cliquez sur Nouvelle mission. La zone est limitée à la ville de Toamasina. Choisissez le type de véhicule, puis utilisez Continuer pour ouvrir le formulaire."
+  },
+  {
+    "passage": 9,
+    "ecran": "Choix du demandeur",
+    "debut": 76,
+    "fin_parole": 84.142,
+    "limite_ecran": 85,
+    "acceleration": 1.0,
+    "texte": "Recherchez le demandeur et sélectionnez la bonne personne. Le véhicule affecté à la direction et sa disponibilité apparaissent en haut."
+  },
+  {
+    "passage": 10,
+    "ecran": "Conducteur et motif",
+    "debut": 86,
+    "fin_parole": 93.779,
+    "limite_ecran": 94,
+    "acceleration": 1.104,
+    "texte": "Le champ Conducteur présente les personnes habilitées disponibles. Ici, aucun résultat. Choisissez ensuite le motif."
+  },
+  {
+    "passage": 11,
+    "ecran": "Destination et création",
+    "debut": 94.2,
+    "fin_parole": 101.78,
+    "limite_ecran": 102,
+    "acceleration": 1.12,
+    "texte": "Renseignez le départ, la destination et la durée estimée en minutes. Complétez les observations, puis cliquez sur Créer la mission."
+  },
+  {
+    "passage": 12,
+    "ecran": "Mission créée",
+    "debut": 103,
+    "fin_parole": 107.397,
+    "limite_ecran": 108,
+    "acceleration": 1.0,
+    "texte": "La mission est créée. Ouvrez son détail dans le calendrier."
+  },
+  {
+    "passage": 13,
+    "ecran": "Retour et clôture",
+    "debut": 108.2,
+    "fin_parole": 116.125,
+    "limite_ecran": 117,
+    "acceleration": 1.0,
+    "texte": "Au retour, indiquez la durée réelle dans le champ prévu. Le bouton Valider le retour et clôturer enregistre la fin du déplacement."
+  },
+  {
+    "passage": 14,
+    "ecran": "Historique",
+    "debut": 118,
+    "fin_parole": 126.779,
+    "limite_ecran": 127,
+    "acceleration": 1.097,
+    "texte": "La confirmation affiche le résultat de la clôture. Historique du mois permet de retrouver les sorties enregistrées et de vérifier les informations de la mission."
+  },
+  {
+    "passage": 15,
+    "ecran": "Dossier d'habilitation",
+    "debut": 129,
+    "fin_parole": 139.778,
+    "limite_ecran": 140,
+    "acceleration": 1.029,
+    "texte": "Revenons à Habilitation moto. Recherchez le personnel concerné, renseignez le poste et joignez le permis demandé. Vérifiez les pièces avant toute transmission du dossier."
+  },
+  {
+    "passage": 16,
+    "ecran": "Entretien du véhicule",
+    "debut": 141,
+    "fin_parole": 149.28,
+    "limite_ecran": 149.5,
+    "acceleration": 1.086,
+    "texte": "Pour une demande d'entretien, choisissez le bon véhicule et décrivez précisément la panne. Envoyer la demande transmet le formulaire une fois complété."
+  },
+  {
+    "passage": 17,
+    "ecran": "Incident et repères",
+    "debut": 151,
+    "fin_parole": 163.78,
+    "limite_ecran": 164,
+    "acceleration": 1.108,
+    "texte": "Signaler un incident sert à déclarer une anomalie sur un véhicule. Vérifiez toujours le véhicule concerné et les informations saisies. Pour chaque mission, contrôlez la confirmation de création, puis enregistrez le retour réel."
+  }
+]

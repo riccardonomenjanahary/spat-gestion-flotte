@@ -1,0 +1,149 @@
+{
+  "duration": 312.466667,
+  "segments": [
+    {
+      "start": 1,
+      "end": 14.5,
+      "screen": "Connexion",
+      "text": "Cette présentation explique l'utilisation de l'espace Agent de sûreté. Connectez-vous avec votre compte pour accéder au suivi du véhicule et à la fiche de bord journalière."
+    },
+    {
+      "start": 17,
+      "end": 22,
+      "screen": "Accueil",
+      "text": "Deux onglets donnent accès à la fiche de bord et au suivi GPS."
+    },
+    {
+      "start": 22.2,
+      "end": 31.5,
+      "screen": "Carte GPS",
+      "text": "Dans Suivi GPS, la carte permet de consulter les positions disponibles. Les boutons donnent aussi accès aux distances et à l'historique."
+    },
+    {
+      "start": 32,
+      "end": 36.5,
+      "screen": "Journal GPS",
+      "text": "Le journal des données est vide dans cet exemple."
+    },
+    {
+      "start": 37,
+      "end": 49,
+      "screen": "Identification",
+      "text": "Revenons à la fiche de bord journalière. Renseignez le début de la mission, puis vérifiez la fin prévue. Le nom de l'agent et l'immatriculation permettent d'identifier la fiche."
+    },
+    {
+      "start": 51,
+      "end": 63,
+      "screen": "État au départ",
+      "text": "Dans la partie Départ, relevez l'heure, le kilométrage du compteur et le niveau de carburant. Ces informations constituent le point de référence avant l'utilisation du véhicule."
+    },
+    {
+      "start": 64,
+      "end": 74,
+      "screen": "Contrôles au départ",
+      "text": "Indiquez ensuite l'état de la carrosserie et des pneus, des feux, du gyrophare et de la radio, ainsi que la propreté constatée."
+    },
+    {
+      "start": 76,
+      "end": 89,
+      "screen": "État au retour",
+      "text": "La partie Retour sert à relever les mêmes informations en fin de mission. Saisissez l'heure réelle et le nouveau kilométrage, puis comparez-les aux valeurs du départ."
+    },
+    {
+      "start": 94,
+      "end": 106,
+      "screen": "Relevés réels",
+      "text": "Les valeurs saisies dans cette démonstration sont des exemples. En exploitation, les relevés doivent correspondre au compteur du véhicule et aux horaires réellement constatés."
+    },
+    {
+      "start": 108,
+      "end": 119,
+      "screen": "Contrôles au retour",
+      "text": "Complétez le carburant restant et l'état du véhicule au retour. Signalez les différences observées pour conserver une trace précise de son utilisation."
+    },
+    {
+      "start": 121,
+      "end": 132,
+      "screen": "Recherche du chauffeur",
+      "text": "La section suivante détaille les trajets. Recherchez le chauffeur dans le champ prévu, puis sélectionnez la personne correspondante dans les résultats proposés."
+    },
+    {
+      "start": 135,
+      "end": 145,
+      "screen": "Départ du trajet",
+      "text": "Pour ce trajet, renseignez la date et l'heure de départ, le lieu de départ et la destination. Chaque déplacement doit être décrit séparément."
+    },
+    {
+      "start": 149,
+      "end": 160,
+      "screen": "Arrivée du trajet",
+      "text": "Indiquez ensuite la date et l'heure d'arrivée, ainsi que les kilométrages de départ et d'arrivée. Vérifiez la cohérence des horaires et des compteurs avant d'enregistrer."
+    },
+    {
+      "start": 166,
+      "end": 179.5,
+      "screen": "Motif et distance",
+      "text": "Précisez le motif du déplacement, ici une patrouille. Le total parcouru est calculé à partir des kilomètres saisis. Le bouton Enregistrer le trajet permet de sauvegarder ce déplacement."
+    },
+    {
+      "start": 181,
+      "end": 190,
+      "screen": "Trajet enregistré",
+      "text": "Le message vert confirme l'enregistrement. Le trajet peut être modifié, et Ajouter un trajet permet de saisir un déplacement supplémentaire."
+    },
+    {
+      "start": 192,
+      "end": 204,
+      "screen": "Carburant",
+      "text": "Dans Carburant, indiquez si un plein a été effectué. Si c'est le cas, renseignez la quantité ajoutée, puis le montant correspondant à l'achat."
+    },
+    {
+      "start": 207,
+      "end": 220,
+      "screen": "Justificatif carburant",
+      "text": "Ajoutez le numéro du bon ou de la facture, puis le lieu du ravitaillement. Ces éléments permettent de rapprocher la consommation déclarée des justificatifs disponibles."
+    },
+    {
+      "start": 223,
+      "end": 234,
+      "screen": "Type d'incident",
+      "text": "La section Incidents, anomalies ou observations permet de signaler une panne, un accident, un incident de sûreté ou un autre événement. Cochez la catégorie adaptée."
+    },
+    {
+      "start": 244,
+      "end": 254,
+      "screen": "Description de l'incident",
+      "text": "Décrivez précisément le problème constaté. Dans cet exemple, l'agent signale un pneu crevé dans la catégorie Autre."
+    },
+    {
+      "start": 256,
+      "end": 265,
+      "screen": "Heure et lieu",
+      "text": "Renseignez l'heure et le lieu de l'événement pour permettre de retrouver les circonstances de l'incident."
+    },
+    {
+      "start": 267,
+      "end": 275.5,
+      "screen": "Mesures prises",
+      "text": "Indiquez aussi les mesures prises, comme le remplacement du pneu dans cet exemple. Relisez la fiche avant de la clôturer."
+    },
+    {
+      "start": 277,
+      "end": 285,
+      "screen": "Confirmation de clôture",
+      "text": "Clôturer la mission ouvre une confirmation. La fiche finale ne sera plus modifiable. Vérifiez-la avant de valider."
+    },
+    {
+      "start": 287,
+      "end": 298,
+      "screen": "Fiche enregistrée",
+      "text": "La fiche apparaît ensuite dans les fiches de bord enregistrées. Le bouton Fermer la fiche permet de quitter sa consultation. Les informations enregistrées restent consultables."
+    },
+    {
+      "start": 300,
+      "end": 312,
+      "screen": "Consultation finale",
+      "text": "L'Agent de sûreté assure ainsi la traçabilité du véhicule : état au départ et au retour, trajets, carburant et incidents. Une saisie fidèle aux faits permet un suivi fiable de chaque mission."
+    }
+  ]
+}

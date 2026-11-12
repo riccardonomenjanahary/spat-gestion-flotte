@@ -1,0 +1,27 @@
+;FFMETADATA1
+title=GPA SPAT - Missions hors ville
+[CHAPTER]
+TIMEBASE=1/1000
+START=0
+END=75000
+title=1. Logistique - Création de la mission
+[CHAPTER]
+TIMEBASE=1/1000
+START=75000
+END=185000
+title=2. Mécanicien DID - Inspection avant mission
+[CHAPTER]
+TIMEBASE=1/1000
+START=185000
+END=234000
+title=3. Logistique - Validation N°1 et ordre de mission
+[CHAPTER]
+TIMEBASE=1/1000
+START=234000
+END=346000
+title=4. Chef DGAL - Pièce signée et validation N°2
+[CHAPTER]
+TIMEBASE=1/1000
+START=346000
+END=448333
+title=5. Agent flotte - Suivi opérationnel
