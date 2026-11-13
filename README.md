@@ -22,3 +22,5 @@ Portail numérique composé de `vehicule.spat-frontend` (Next.js) et `vehicule.s
 - [README frontend et mode d'emploi](vehicule.spat-frontend/README.md)
 - [Documentation officielle](vehicule.spat-frontend/docs/DOCUMENTATION_OFFICIELLE.md)
 Les données officielles, les jours fériés, les identifiants GPS, la configuration SMTP et la recette avec les équipes doivent être renseignés avant la mise en service.
+
+Le bouton des notifications par e-mail utilise par défaut l’adresse intranet du Parc Auto `http://192.168.1.109:3000` et y ajoute le chemin de l’espace concerné, par exemple `/chef-service-logistique`. Si l’adresse du serveur change, configurez `SPAT_EMAIL_FRONTEND_URL` sur le backend puis redémarrez-le.

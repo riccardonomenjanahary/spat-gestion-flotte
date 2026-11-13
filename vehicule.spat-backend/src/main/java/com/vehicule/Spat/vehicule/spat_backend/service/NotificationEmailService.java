@@ -19,7 +19,7 @@ public class NotificationEmailService {
     @Value("${app.mail.from:${spring.mail.username:}}")
     private String adresseExpediteur;
 
-    @Value("${app.frontend.url:http://localhost:3000}")
+    @Value("${app.notifications.email.frontend-url}")
     private String frontendUrl;
 
     public NotificationEmailService(JavaMailSender mailSender) {

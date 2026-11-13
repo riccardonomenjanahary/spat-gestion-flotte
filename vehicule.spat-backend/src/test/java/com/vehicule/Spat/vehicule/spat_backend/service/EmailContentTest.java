@@ -5,9 +5,15 @@ import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.io.support.ResourcePropertySource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -31,6 +37,40 @@ class EmailContentTest {
         assertTrue(contenu.contains("&lt;script&gt;indesirable&lt;/script&gt; &amp; contrôle"));
         assertTrue(contenu.contains("https://parc.example.invalid/chef-service-logistique"));
         assertFalse(contenu.contains("<script>"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void notificationUtiliseAdresseDestinataireDistincteDuFrontendLocal(boolean adressePersonnalisee) throws Exception {
+        when(sender.createMimeMessage()).thenReturn(mime);
+        try (var contexte = new AnnotationConfigApplicationContext()) {
+            contexte.getEnvironment().getPropertySources().remove("systemEnvironment");
+            contexte.getEnvironment().getPropertySources().addLast(
+                    new ResourcePropertySource("classpath:application.properties"));
+            contexte.getEnvironment().getPropertySources().addFirst(new MapPropertySource("test", Map.of(
+                    "SPAT_FRONTEND_URL", "http://localhost:3000",
+                    "app.mail.from", "recette@example.invalid"
+            )));
+            if (adressePersonnalisee) {
+                contexte.getEnvironment().getPropertySources().addFirst(new MapPropertySource("adresse", Map.of(
+                        "SPAT_EMAIL_FRONTEND_URL", "https://parc.example.invalid/"
+                )));
+            }
+            contexte.registerBean(JavaMailSender.class, () -> sender);
+            contexte.register(NotificationEmailService.class);
+            contexte.refresh();
+
+            var notification = new Notification();
+            notification.setDestinataireEmail("destinataire@example.invalid");
+            notification.setTitre("Inspection à valider");
+            notification.setLien("/chef-service-logistique");
+            contexte.getBean(NotificationEmailService.class).envoyer(notification);
+
+            String contenu = (String) mime.getContent();
+            String adresse = adressePersonnalisee ? "https://parc.example.invalid" : "http://192.168.1.109:3000";
+            assertTrue(contenu.contains("href=\"" + adresse + "/chef-service-logistique\""));
+            assertFalse(contenu.contains("localhost"));
+        }
     }
 
     @Test void ordreMissionContientLePdfEnPieceJointe() throws Exception {
